@@ -1,0 +1,26 @@
+# IntelliJ
+.idea/
+*.iml
+
+# Maven build output
+target/
+
+# Java
+*.class
+
+# Logs
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# SQLite temporary files
+*.db-wal
+*.db-shm
+
+# Runtime folder (created by packaged app)
+runtime/

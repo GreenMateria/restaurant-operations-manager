@@ -1,0 +1,390 @@
+package ca.foodinventory.ui;
+
+import ca.foodinventory.dao.InvoiceDao;
+import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.model.InvoiceLine;
+import ca.foodinventory.model.Product;
+import javafx.collections.FXCollections;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+import javafx.util.StringConverter;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ManualInvoiceView {
+
+    private final InvoiceDao invoiceDao = new InvoiceDao();
+    private final ProductDao productDao = new ProductDao();
+
+    private final List<InvoiceLine> lines = new ArrayList<>();
+    private final TableView<InvoiceLine> table = new TableView<>();
+
+    private final TextField supplierField = new TextField();
+    private final TextField invoiceNumberField = new TextField();
+    private final DatePicker invoiceDatePicker = new DatePicker(LocalDate.now());
+
+    private final ComboBox<Product> productComboBox = new ComboBox<>();
+    private final TextField caseQtyField = new TextField("0");
+    private final TextField splitQtyField = new TextField("0");
+    private final TextField caseCostField = new TextField("0.00");
+    private final TextField eachCostField = new TextField("0.00");
+
+    private final Label totalLabel = new Label("$0.00");
+    private boolean showConfirmSaveDialog(
+            String supplier,
+            String invoiceNumber,
+            String invoiceDate,
+            int lineCount,
+            BigDecimal total
+    ) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirm Manual Invoice");
+        alert.setHeaderText("Review invoice before saving.");
+
+        alert.setContentText(
+                "Supplier: " + supplier + "\n" +
+                        "Invoice #: " + invoiceNumber + "\n" +
+                        "Date: " + invoiceDate + "\n" +
+                        "Lines: " + lineCount + "\n" +
+                        "Costing Total: $" + total.setScale(2, RoundingMode.HALF_UP) + "\n\n" +
+                        "This total should exclude HST, deposits, and non-inventory charges."
+        );
+
+        ButtonType saveButton = new ButtonType("Save Invoice", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        alert.getButtonTypes().setAll(saveButton, cancelButton);
+
+        return alert.showAndWait()
+                .filter(button -> button == saveButton)
+                .isPresent();
+    }
+    private boolean showDuplicateInvoiceDialog(String invoiceNumber) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Duplicate Invoice");
+        alert.setHeaderText("This invoice number already exists.");
+
+        alert.setContentText(
+                "Invoice #: " + invoiceNumber + "\n\n" +
+                        "Do you want to overwrite the existing invoice?"
+        );
+
+        ButtonType overwriteButton = new ButtonType("Overwrite Existing", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        alert.getButtonTypes().setAll(overwriteButton, cancelButton);
+
+        return alert.showAndWait()
+                .filter(button -> button == overwriteButton)
+                .isPresent();
+    }
+
+    public BorderPane getView() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-dark");
+
+        Label title = new Label("Manual Invoice Entry");
+        title.getStyleClass().add("page-title");
+        Label noteLabel = new Label(
+                "Enter product costs before HST and deposits. " +
+                        "Do not include taxes, bottle deposits, keg deposits, " +
+                        "or environmental fees in inventory costs."
+        );
+
+        noteLabel.setWrapText(true);
+        noteLabel.setStyle(
+                "-fx-text-fill: orange;" +
+                        "-fx-font-size: 12px;" +
+                        "-fx-font-weight: bold;"
+        );
+
+        setupProductComboBox();
+        setupTable();
+
+        Button addLineButton = new Button("Add Line");
+        addLineButton.getStyleClass().add("primary-button");
+        addLineButton.setOnAction(e -> addLine());
+
+        Button removeLineButton = new Button("Remove Selected Line");
+        removeLineButton.getStyleClass().add("primary-button");
+        removeLineButton.setOnAction(e -> removeSelectedLine());
+
+        Button saveButton = new Button("Save Invoice");
+        saveButton.getStyleClass().add("primary-button");
+        saveButton.setOnAction(e -> saveInvoice());
+
+        GridPane invoiceGrid = new GridPane();
+        invoiceGrid.setHgap(12);
+        invoiceGrid.setVgap(10);
+
+        supplierField.setPromptText("LCBO / Beer Store / Supplier");
+        invoiceNumberField.setPromptText("Invoice Number");
+
+        invoiceGrid.add(new Label("Supplier:"), 0, 0);
+        invoiceGrid.add(supplierField, 1, 0);
+
+        invoiceGrid.add(new Label("Invoice #:"), 0, 1);
+        invoiceGrid.add(invoiceNumberField, 1, 1);
+
+        invoiceGrid.add(new Label("Invoice Date:"), 0, 2);
+        invoiceGrid.add(invoiceDatePicker, 1, 2);
+
+        GridPane lineGrid = new GridPane();
+        lineGrid.setHgap(12);
+        lineGrid.setVgap(10);
+
+        lineGrid.add(new Label("Product:"), 0, 0);
+        lineGrid.add(productComboBox, 1, 0, 3, 1);
+
+        lineGrid.add(new Label("Case Qty:"), 0, 1);
+        lineGrid.add(caseQtyField, 1, 1);
+
+        lineGrid.add(new Label("Split Qty:"), 2, 1);
+        lineGrid.add(splitQtyField, 3, 1);
+
+        lineGrid.add(new Label("Case Cost:"), 0, 2);
+        lineGrid.add(caseCostField, 1, 2);
+
+        lineGrid.add(new Label("Each Cost:"), 2, 2);
+        lineGrid.add(eachCostField, 3, 2);
+
+        lineGrid.add(addLineButton, 1, 3);
+
+        HBox totalBox = new HBox(10, new Label("Invoice Total:"), totalLabel, removeLineButton, saveButton);
+
+        VBox top = new VBox(20, title,noteLabel, invoiceGrid, lineGrid, totalBox);
+        top.getStyleClass().add("top-bar");
+
+        root.setTop(top);
+        root.setCenter(table);
+
+        return root;
+    }
+
+    private void setupProductComboBox() {
+        productComboBox.setItems(FXCollections.observableArrayList(productDao.findAll()));
+        productComboBox.setPrefWidth(500);
+
+        productComboBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(Product product) {
+                if (product == null) {
+                    return "";
+                }
+
+                return "[" + product.getReportingCategory() + "] "
+                        + product.getDescription()
+                        + " (" + product.getSku() + ")";
+            }
+
+            @Override
+            public Product fromString(String string) {
+                return null;
+            }
+        });
+    }
+
+    private void setupTable() {
+        TableColumn<InvoiceLine, String> skuCol = new TableColumn<>("SKU");
+        skuCol.setCellValueFactory(new PropertyValueFactory<>("sku"));
+
+        TableColumn<InvoiceLine, String> descCol = new TableColumn<>("Description");
+        descCol.setCellValueFactory(new PropertyValueFactory<>("description"));
+        descCol.setPrefWidth(300);
+
+        TableColumn<InvoiceLine, Double> caseQtyCol = new TableColumn<>("Case Qty");
+        caseQtyCol.setCellValueFactory(new PropertyValueFactory<>("caseQty"));
+
+        TableColumn<InvoiceLine, Double> splitQtyCol = new TableColumn<>("Split Qty");
+        splitQtyCol.setCellValueFactory(new PropertyValueFactory<>("splitQty"));
+
+        TableColumn<InvoiceLine, String> packCol = new TableColumn<>("Pack/Size");
+        packCol.setCellValueFactory(new PropertyValueFactory<>("packSize"));
+
+        TableColumn<InvoiceLine, BigDecimal> caseCostCol = new TableColumn<>("Case Cost");
+        caseCostCol.setCellValueFactory(new PropertyValueFactory<>("caseCost"));
+
+        TableColumn<InvoiceLine, BigDecimal> eachCostCol = new TableColumn<>("Each Cost");
+        eachCostCol.setCellValueFactory(new PropertyValueFactory<>("eachCost"));
+
+        TableColumn<InvoiceLine, BigDecimal> extendedCol = new TableColumn<>("Extended Cost");
+        extendedCol.setCellValueFactory(new PropertyValueFactory<>("extendedCost"));
+
+        table.getColumns().setAll(
+                skuCol,
+                descCol,
+                caseQtyCol,
+                splitQtyCol,
+                packCol,
+                caseCostCol,
+                eachCostCol,
+                extendedCol
+        );
+
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+    }
+
+    private void addLine() {
+        Product product = productComboBox.getValue();
+
+        if (product == null) {
+            showAlert(Alert.AlertType.WARNING, "No Product Selected", "Please select a product.");
+            return;
+        }
+
+        try {
+            double caseQty = parseDouble(caseQtyField.getText());
+            double splitQty = parseDouble(splitQtyField.getText());
+
+            BigDecimal caseCost = parseMoney(caseCostField.getText());
+            BigDecimal eachCost = parseMoney(eachCostField.getText());
+
+            BigDecimal extendedCost =
+                    caseCost.multiply(BigDecimal.valueOf(caseQty))
+                            .add(eachCost.multiply(BigDecimal.valueOf(splitQty)))
+                            .setScale(2, RoundingMode.HALF_UP);
+
+            InvoiceLine line = new InvoiceLine(
+                    product.getSku(),
+                    product.getDescription(),
+                    caseQty,
+                    splitQty,
+                    product.getPackSize(),
+                    caseCost,
+                    eachCost,
+                    extendedCost
+            );
+
+            lines.add(line);
+            table.setItems(FXCollections.observableArrayList(lines));
+            updateTotal();
+
+            productComboBox.setValue(null);
+            caseQtyField.setText("0");
+            splitQtyField.setText("0");
+            caseCostField.setText("0.00");
+            eachCostField.setText("0.00");
+
+        } catch (Exception ex) {
+            showAlert(Alert.AlertType.ERROR, "Invalid Entry", "Please check quantities and costs.");
+        }
+    }
+
+    private void saveInvoice() {
+        if (supplierField.getText().isBlank()) {
+            showAlert(Alert.AlertType.WARNING, "Missing Supplier", "Please enter a supplier.");
+            return;
+        }
+
+        if (invoiceNumberField.getText().isBlank()) {
+            showAlert(Alert.AlertType.WARNING, "Missing Invoice Number", "Please enter an invoice number.");
+            return;
+        }
+
+        if (lines.isEmpty()) {
+            showAlert(Alert.AlertType.WARNING, "No Lines", "Please add at least one product line.");
+            return;
+        }
+
+        String supplier = supplierField.getText().trim();
+        String invoiceNumber = invoiceNumberField.getText().trim();
+        String invoiceDate = invoiceDatePicker.getValue().toString();
+        BigDecimal total = calculateTotal();
+
+        boolean confirmed = showConfirmSaveDialog(
+                supplier,
+                invoiceNumber,
+                invoiceDate,
+                lines.size(),
+                total
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        if (invoiceDao.invoiceExists(invoiceNumber)) {
+            boolean overwrite = showDuplicateInvoiceDialog(invoiceNumber);
+
+            if (!overwrite) {
+                return;
+            }
+
+            invoiceDao.deleteInvoice(invoiceNumber);
+        }
+
+        invoiceDao.saveInvoice(
+                supplier,
+                invoiceNumber,
+                invoiceDate,
+                total,
+                lines
+        );
+
+        showAlert(Alert.AlertType.INFORMATION, "Invoice Saved", "Manual invoice saved successfully.");
+
+        lines.clear();
+        table.setItems(FXCollections.observableArrayList(lines));
+        updateTotal();
+
+        invoiceNumberField.clear();
+        supplierField.clear();
+        invoiceDatePicker.setValue(LocalDate.now());
+    }
+
+    private void updateTotal() {
+        totalLabel.setText("$" + calculateTotal());
+    }
+
+    private BigDecimal calculateTotal() {
+        return lines.stream()
+                .map(InvoiceLine::getExtendedCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private double parseDouble(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+
+        return Double.parseDouble(value.trim());
+    }
+
+    private BigDecimal parseMoney(String value) {
+        if (value == null || value.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+
+        return new BigDecimal(value.trim()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    private void removeSelectedLine() {
+        InvoiceLine selectedLine = table.getSelectionModel().getSelectedItem();
+
+        if (selectedLine == null) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "No Line Selected",
+                    "Please select a line to remove."
+            );
+            return;
+        }
+
+        lines.remove(selectedLine);
+        table.setItems(FXCollections.observableArrayList(lines));
+        updateTotal();
+    }
+}
