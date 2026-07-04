@@ -6,12 +6,10 @@ $AppName = "ESM Operations Manager"
 $MainJar = "FoodInventory.jar"
 $MainClass = "ca.foodinventory.Launcher"
 $Icon = "FoodInventory.ico"
+$PomPath = "$ProjectDir\pom.xml"
 
 function Invoke-Step {
-    param(
-        [string]$Name,
-        [scriptblock]$Command
-    )
+    param([string]$Name, [scriptblock]$Command)
 
     Write-Host ""
     Write-Host "=== $Name ===" -ForegroundColor Yellow
@@ -24,14 +22,39 @@ function Invoke-Step {
 }
 
 function Remove-FolderSafe {
-    param(
-        [string]$Path
-    )
+    param([string]$Path)
 
     if (Test-Path $Path) {
         Write-Host "Removing: $Path" -ForegroundColor DarkYellow
         Remove-Item -Recurse -Force $Path
     }
+}
+
+function Get-PomVersion {
+    [xml]$pom = Get-Content $PomPath
+
+    $versionNode = $pom.SelectSingleNode("/*[local-name()='project']/*[local-name()='version']")
+
+    if ($null -eq $versionNode) {
+        throw "Could not find project version in pom.xml."
+    }
+
+    return $versionNode.InnerText
+}
+
+function Set-PomVersion {
+    param([string]$Version)
+
+    [xml]$pom = Get-Content $PomPath
+
+    $versionNode = $pom.SelectSingleNode("/*[local-name()='project']/*[local-name()='version']")
+
+    if ($null -eq $versionNode) {
+        throw "Could not find project version in pom.xml."
+    }
+
+    $versionNode.InnerText = $Version
+    $pom.Save($PomPath)
 }
 
 try {
@@ -43,13 +66,18 @@ try {
     Write-Host "===================================" -ForegroundColor Cyan
     Write-Host ""
 
-    $CurrentVersion = Read-Host "Current version, example 1.8.1"
-    $NewVersion = Read-Host "New version, example 1.8.2"
+    $CurrentVersion = Get-PomVersion
+
+    Write-Host "Current version detected from pom.xml: $CurrentVersion" -ForegroundColor Green
+    Write-Host ""
+
+    $NewVersion = Read-Host "New version, example 1.8.3"
     $ReleaseNotes = Read-Host "Release notes, example Added invoice category breakdown"
 
     $TargetInstallerDir = "$ProjectDir\target\installer"
     $InstallerDir = "$ProjectDir\installer-$NewVersion"
     $ReleaseDir = "$ProjectDir\Releases"
+    $ReleaseHistoryPath = "$ReleaseDir\ReleaseHistory.md"
     $FinalInstallerPath = "$ReleaseDir\$AppName-$NewVersion.exe"
 
     Write-Host ""
@@ -80,6 +108,29 @@ try {
     }
 
     Start-Sleep -Seconds 2
+
+    Write-Host ""
+    Write-Host "Updating pom.xml version..." -ForegroundColor Yellow
+    Set-PomVersion $NewVersion
+
+    Write-Host ""
+    Write-Host "Preparing release history..." -ForegroundColor Yellow
+
+    if (!(Test-Path $ReleaseDir)) {
+        New-Item -ItemType Directory -Path $ReleaseDir | Out-Null
+    }
+
+    if (!(Test-Path $ReleaseHistoryPath)) {
+        Set-Content -Path $ReleaseHistoryPath -Value "# Release History`n"
+    }
+
+    $ReleaseDate = Get-Date -Format "yyyy-MM-dd HH:mm"
+
+    Add-Content -Path $ReleaseHistoryPath -Value ""
+    Add-Content -Path $ReleaseHistoryPath -Value "## v$NewVersion"
+    Add-Content -Path $ReleaseHistoryPath -Value "Date: $ReleaseDate"
+    Add-Content -Path $ReleaseHistoryPath -Value ""
+    Add-Content -Path $ReleaseHistoryPath -Value "- $ReleaseNotes"
 
     Invoke-Step "Git status" {
         git status
@@ -129,10 +180,6 @@ try {
     Write-Host ""
     Write-Host "Copying installer to Releases folder..." -ForegroundColor Yellow
 
-    if (!(Test-Path $ReleaseDir)) {
-        New-Item -ItemType Directory -Path $ReleaseDir | Out-Null
-    }
-
     $InstallerFile = Get-ChildItem $InstallerDir -Filter "*.exe" | Select-Object -First 1
 
     if ($null -eq $InstallerFile) {
@@ -159,6 +206,9 @@ try {
     Write-Host ""
     Write-Host "Git tag created:"
     Write-Host "v$NewVersion" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Release history updated:"
+    Write-Host $ReleaseHistoryPath -ForegroundColor Cyan
 }
 catch {
     Write-Host ""

@@ -80,7 +80,26 @@ public class InventoryCountEntryView {
             private final TextField textField = new TextField();
 
             {
-                textField.setOnAction(e -> commitEdit(textField.getText()));
+                textField.setOnAction(e -> {
+
+                    commitEdit(textField.getText());
+
+                    int nextRow = getIndex() + 1;
+
+                    if (nextRow < getTableView().getItems().size()) {
+
+                        getTableView().getSelectionModel().select(nextRow);
+
+                        getTableView().scrollTo(nextRow);
+
+                        getTableView().edit(
+                                nextRow,
+                                getTableColumn()
+                        );
+
+                    }
+
+                });
 
                 textField.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
                     if (!isFocused) {

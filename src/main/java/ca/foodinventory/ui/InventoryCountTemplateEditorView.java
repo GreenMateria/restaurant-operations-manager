@@ -6,21 +6,29 @@ import ca.foodinventory.model.InventoryCountTemplate;
 import ca.foodinventory.model.InventoryCountTemplateLine;
 import ca.foodinventory.model.Product;
 import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.print.*;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
-import javafx.geometry.Insets;
-import javafx.print.*;
-import javafx.scene.Node;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.util.ArrayList;
-
 import java.util.List;
 
 public class InventoryCountTemplateEditorView {
-    private static final int LINES_PER_PAGE = 28;
+
+    private static final int LINES_PER_PAGE = 30;
+
+    private static final double PRODUCT_COL_WIDTH = 315;
+    private static final double UNIT_COL_WIDTH = 65;
+    private static final double COUNT_COL_WIDTH = 150;
+    private static final double SHEET_WIDTH =
+            PRODUCT_COL_WIDTH + UNIT_COL_WIDTH + COUNT_COL_WIDTH;
+
     private final InventoryCountTemplate template;
     private final InventoryCountTemplateLineDao lineDao = new InventoryCountTemplateLineDao();
     private final ProductDao productDao = new ProductDao();
@@ -56,6 +64,7 @@ public class InventoryCountTemplateEditorView {
                 renumberButton,
                 printBlankButton
         );
+
         VBox top = new VBox(10, title, buttons);
         top.setStyle("-fx-padding: 15;");
 
@@ -78,23 +87,14 @@ public class InventoryCountTemplateEditorView {
     }
 
     private void setupTable() {
-        TableColumn<InventoryCountTemplateLine, String> skuCol =
-                new TableColumn<>("SKU");
-
-        skuCol.setCellValueFactory(
-                new PropertyValueFactory<>("sku")
-        );
-
+        TableColumn<InventoryCountTemplateLine, String> skuCol = new TableColumn<>("SKU");
+        skuCol.setCellValueFactory(new PropertyValueFactory<>("sku"));
         skuCol.setPrefWidth(120);
 
-        TableColumn<InventoryCountTemplateLine, String> productDescCol =
-                new TableColumn<>("Product");
-
-        productDescCol.setCellValueFactory(
-                new PropertyValueFactory<>("productDescription")
-        );
-
+        TableColumn<InventoryCountTemplateLine, String> productDescCol = new TableColumn<>("Product");
+        productDescCol.setCellValueFactory(new PropertyValueFactory<>("productDescription"));
         productDescCol.setPrefWidth(250);
+
         TableColumn<InventoryCountTemplateLine, String> sectionCol = new TableColumn<>("Section");
         sectionCol.setCellValueFactory(new PropertyValueFactory<>("sectionName"));
         sectionCol.setPrefWidth(180);
@@ -149,7 +149,6 @@ public class InventoryCountTemplateEditorView {
         productBox.setVisibleRowCount(12);
 
         productSearchField.textProperty().addListener((obs, oldValue, newValue) -> {
-
             String search = newValue == null ? "" : newValue.toLowerCase().trim();
 
             List<Product> filteredProducts = allProducts.stream()
@@ -187,7 +186,6 @@ public class InventoryCountTemplateEditorView {
         });
 
         ComboBox<String> sectionBox = new ComboBox<>();
-
         sectionBox.setItems(FXCollections.observableArrayList(
                 "Walk-In Cooler",
                 "Freezer",
@@ -213,16 +211,11 @@ public class InventoryCountTemplateEditorView {
 
         TextField conversionFactorField = new TextField("1");
 
-        TextField sortOrderField =
-                new TextField(
-                        String.valueOf(
-                                (table.getItems().size() + 1)
-                        )
-                );
-
+        TextField sortOrderField = new TextField(String.valueOf(table.getItems().size() + 1));
 
         productBox.setOnAction(e -> {
             Product selected = productBox.getSelectionModel().getSelectedItem();
+
             if (selected != null) {
                 displayNameField.setText(selected.getDescription());
                 countUnitField.setText(selected.getUnit());
@@ -283,21 +276,17 @@ public class InventoryCountTemplateEditorView {
         });
 
         dialog.showAndWait().ifPresent(line -> {
-
             if (lineDao.productExistsInTemplate(line.getTemplateId(), line.getProductId())) {
-
                 Alert alert = new Alert(Alert.AlertType.WARNING);
                 alert.setTitle("Duplicate Product");
                 alert.setHeaderText(null);
                 alert.setContentText("This product is already in this count template.");
-
                 alert.showAndWait();
                 return;
             }
 
             lineDao.add(line);
             refreshTable();
-
         });
     }
 
@@ -311,31 +300,23 @@ public class InventoryCountTemplateEditorView {
         lineDao.deactivate(selected.getId());
         refreshTable();
     }
-    private void editSelectedLine() {
 
-        InventoryCountTemplateLine selected =
-                table.getSelectionModel().getSelectedItem();
+    private void editSelectedLine() {
+        InventoryCountTemplateLine selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
-
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("No Product Selected");
             alert.setHeaderText(null);
             alert.setContentText("Please select a product to edit.");
             alert.showAndWait();
-
             return;
         }
 
         Dialog<InventoryCountTemplateLine> dialog = new Dialog<>();
-
         dialog.setTitle("Edit Template Product");
 
-        ButtonType saveButtonType =
-                new ButtonType(
-                        "Save",
-                        ButtonBar.ButtonData.OK_DONE
-                );
+        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
 
         dialog.getDialogPane().getButtonTypes().addAll(
                 saveButtonType,
@@ -343,7 +324,6 @@ public class InventoryCountTemplateEditorView {
         );
 
         ComboBox<String> sectionBox = new ComboBox<>();
-
         sectionBox.setItems(FXCollections.observableArrayList(
                 "Walk-In Cooler",
                 "Freezer",
@@ -361,43 +341,18 @@ public class InventoryCountTemplateEditorView {
         sectionBox.setPrefWidth(350);
         sectionBox.getEditor().setText(selected.getSectionName());
 
-        TextField displayNameField =
-                new TextField(selected.getDisplayName());
-
-        TextField countUnitField =
-                new TextField(selected.getCountUnit());
-
-        TextField conversionFactorField =
-                new TextField(
-                        String.valueOf(
-                                selected.getConversionFactorToBase()
-                        )
-                );
-
-        TextField sortOrderField =
-                new TextField(
-                        String.valueOf(
-                                selected.getSortOrder()
-                        )
-                );
+        TextField displayNameField = new TextField(selected.getDisplayName());
+        TextField countUnitField = new TextField(selected.getCountUnit());
+        TextField conversionFactorField = new TextField(String.valueOf(selected.getConversionFactorToBase()));
+        TextField sortOrderField = new TextField(String.valueOf(selected.getSortOrder()));
 
         GridPane grid = new GridPane();
-
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setStyle("-fx-padding: 15;");
 
         grid.add(new Label("Product:"), 0, 0);
-
-        grid.add(
-                new Label(
-                        selected.getSku()
-                                + " - "
-                                + selected.getProductDescription()
-                ),
-                1,
-                0
-        );
+        grid.add(new Label(selected.getSku() + " - " + selected.getProductDescription()), 1, 0);
 
         grid.add(new Label("Section:"), 0, 1);
         grid.add(sectionBox, 1, 1);
@@ -417,32 +372,12 @@ public class InventoryCountTemplateEditorView {
         dialog.getDialogPane().setContent(grid);
 
         dialog.setResultConverter(button -> {
-
             if (button == saveButtonType) {
-
-                selected.setSectionName(
-                        sectionBox.getEditor().getText().trim()
-                );
-
-                selected.setDisplayName(
-                        displayNameField.getText().trim()
-                );
-
-                selected.setCountUnit(
-                        countUnitField.getText().trim()
-                );
-
-                selected.setConversionFactorToBase(
-                        Double.parseDouble(
-                                conversionFactorField.getText().trim()
-                        )
-                );
-
-                selected.setSortOrder(
-                        Integer.parseInt(
-                                sortOrderField.getText().trim()
-                        )
-                );
+                selected.setSectionName(sectionBox.getEditor().getText().trim());
+                selected.setDisplayName(displayNameField.getText().trim());
+                selected.setCountUnit(countUnitField.getText().trim());
+                selected.setConversionFactorToBase(Double.parseDouble(conversionFactorField.getText().trim()));
+                selected.setSortOrder(Integer.parseInt(sortOrderField.getText().trim()));
 
                 return selected;
             }
@@ -451,15 +386,13 @@ public class InventoryCountTemplateEditorView {
         });
 
         dialog.showAndWait().ifPresent(line -> {
-
             lineDao.update(line);
-
             refreshTable();
         });
     }
+
     private void moveSelectedLine(int direction) {
-        InventoryCountTemplateLine selected =
-                table.getSelectionModel().getSelectedItem();
+        InventoryCountTemplateLine selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
             return;
@@ -489,16 +422,16 @@ public class InventoryCountTemplateEditorView {
         lineDao.updateSortOrders(table.getItems());
         refreshTable();
     }
-    private void printBlankCountSheet() {
 
+    private void printBlankCountSheet() {
         List<InventoryCountTemplateLine> lines = lineDao.findByTemplate(template.getId());
 
         if (lines.isEmpty()) {
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Blank Count Sheet");
-            alert.setHeaderText(null);
-            alert.setContentText("This template has no active products to print.");
-            alert.showAndWait();
+            showSimpleAlert(
+                    Alert.AlertType.INFORMATION,
+                    "Blank Count Sheet",
+                    "This template has no active products to print."
+            );
             return;
         }
 
@@ -513,7 +446,7 @@ public class InventoryCountTemplateEditorView {
         PageLayout pageLayout = printer.createPageLayout(
                 Paper.NA_LETTER,
                 PageOrientation.PORTRAIT,
-                Printer.MarginType.DEFAULT
+                Printer.MarginType.HARDWARE_MINIMUM
         );
 
         job.getJobSettings().setPageLayout(pageLayout);
@@ -522,7 +455,8 @@ public class InventoryCountTemplateEditorView {
             return;
         }
 
-        List<Node> pages = buildBlankCountSheetPages(lines);
+        List<List<PrintRow>> pageRows = paginateCountSheet(lines);
+        List<Node> pages = buildCountSheetPages(pageRows);
 
         boolean success = true;
 
@@ -539,86 +473,205 @@ public class InventoryCountTemplateEditorView {
         }
     }
 
-    private List<Node> buildBlankCountSheetPages(List<InventoryCountTemplateLine> lines) {
-
-        List<Node> pages = new ArrayList<>();
+    private List<List<PrintRow>> paginateCountSheet(List<InventoryCountTemplateLine> lines) {
+        List<List<PrintRow>> pages = new ArrayList<>();
 
         int index = 0;
-        int pageNumber = 1;
-        int totalPages = (int) Math.ceil(lines.size() / (double) LINES_PER_PAGE);
 
         while (index < lines.size()) {
+            List<PrintRow> page = new ArrayList<>();
+            int rowsUsed = 0;
+            String currentSectionOnPage = null;
 
-            VBox page = new VBox(6);
-            page.setPadding(new Insets(30));
-            page.setStyle("-fx-background-color: white;");
-
-            Label title = new Label("INVENTORY COUNT SHEET");
-            title.setFont(Font.font("Arial", FontWeight.BOLD, 18));
-            title.setStyle("-fx-text-fill: black;");
-
-            Label templateLabel = new Label("Template: " + template.getName());
-            templateLabel.setFont(Font.font("Arial", 11));
-            templateLabel.setStyle("-fx-text-fill: black;");
-
-            Label pageLabel = new Label("Page " + pageNumber + " of " + totalPages);
-            pageLabel.setFont(Font.font("Arial", 10));
-            pageLabel.setStyle("-fx-text-fill: black;");
-
-            page.getChildren().addAll(title, templateLabel, pageLabel, createBlankSheetHeaderRow());
-
-            String currentSection = null;
-            int linesOnPage = 0;
-
-            while (index < lines.size() && linesOnPage < LINES_PER_PAGE) {
-
+            while (index < lines.size() && rowsUsed < LINES_PER_PAGE) {
                 InventoryCountTemplateLine line = lines.get(index);
+                String section = cleanSectionName(line.getSectionName());
 
-                if (currentSection == null || !currentSection.equals(line.getSectionName())) {
-                    currentSection = line.getSectionName();
+                boolean needsSectionHeader =
+                        currentSectionOnPage == null || !currentSectionOnPage.equals(section);
 
-                    Label sectionLabel = new Label(
-                            currentSection == null || currentSection.isBlank()
-                                    ? "OTHER"
-                                    : currentSection.toUpperCase()
-                    );
+                if (needsSectionHeader) {
+                    int sectionItemCount = countRemainingItemsInSection(lines, index, section);
+                    int minimumRowsNeeded = 1 + Math.min(sectionItemCount, 3);
 
-                    sectionLabel.setFont(Font.font("Arial", FontWeight.BOLD, 11));
-                    sectionLabel.setStyle("-fx-text-fill: black;");
-                    sectionLabel.setPadding(new Insets(8, 0, 2, 0));
+                    if (!page.isEmpty() && rowsUsed + minimumRowsNeeded > LINES_PER_PAGE) {
+                        break;
+                    }
 
-                    page.getChildren().add(sectionLabel);
-                    linesOnPage++;
+                    page.add(PrintRow.section(section));
+                    rowsUsed++;
+                    currentSectionOnPage = section;
                 }
 
-                page.getChildren().add(createBlankSheetDataRow(line));
-                linesOnPage++;
+                if (rowsUsed >= LINES_PER_PAGE) {
+                    break;
+                }
+
+                page.add(PrintRow.item(line));
+                rowsUsed++;
                 index++;
             }
 
             pages.add(page);
-            pageNumber++;
         }
 
         return pages;
     }
 
-    private GridPane createBlankSheetHeaderRow() {
+    private int countRemainingItemsInSection(
+            List<InventoryCountTemplateLine> lines,
+            int startIndex,
+            String section
+    ) {
+        int count = 0;
 
-        GridPane grid = createBlankSheetBaseGrid();
-        grid.setStyle("-fx-border-color: black; -fx-border-width: 0 0 1 0;");
+        for (int i = startIndex; i < lines.size(); i++) {
+            String lineSection = cleanSectionName(lines.get(i).getSectionName());
 
-        addBlankSheetHeaderCell(grid, "Product", 0);
-        addBlankSheetHeaderCell(grid, "Unit", 1);
-        addBlankSheetHeaderCell(grid, "Count", 2);
+            if (!section.equals(lineSection)) {
+                break;
+            }
+
+            count++;
+        }
+
+        return count;
+    }
+
+    private List<Node> buildCountSheetPages(List<List<PrintRow>> pageRows) {
+        List<Node> pages = new ArrayList<>();
+        int totalPages = pageRows.size();
+
+        for (int i = 0; i < pageRows.size(); i++) {
+            pages.add(createCountSheetPage(
+                    pageRows.get(i),
+                    i + 1,
+                    totalPages,
+                    i == pageRows.size() - 1
+            ));
+        }
+
+        return pages;
+    }
+
+    private Node createCountSheetPage(
+            List<PrintRow> rows,
+            int pageNumber,
+            int totalPages,
+            boolean lastPage
+    ) {
+        VBox page = new VBox(4);
+        page.setPadding(new Insets(18));
+        page.setPrefWidth(SHEET_WIDTH + 36);
+        page.setMaxWidth(SHEET_WIDTH + 36);
+        page.setStyle("-fx-background-color: white;");
+
+        VBox header = createCountSheetHeader(pageNumber, totalPages);
+        GridPane tableHeader = createCountSheetTableHeader();
+
+        VBox body = new VBox(0);
+
+        for (PrintRow row : rows) {
+            if (row.sectionHeader()) {
+                body.getChildren().add(createSectionHeader(row.sectionName()));
+            } else {
+                body.getChildren().add(createCountSheetDataRow(row.line()));
+            }
+        }
+
+        Region spacer = new Region();
+        VBox.setVgrow(spacer, Priority.ALWAYS);
+
+        page.getChildren().addAll(header, tableHeader, body, spacer);
+
+        if (lastPage) {
+            page.getChildren().add(createSignatureArea());
+        }
+
+        page.getChildren().add(createPageFooter(pageNumber, totalPages));
+
+        return page;
+    }
+
+    private VBox createCountSheetHeader(int pageNumber, int totalPages) {
+        VBox header = new VBox(3);
+        header.setAlignment(Pos.CENTER);
+        header.setPrefWidth(SHEET_WIDTH);
+
+        Label company = new Label("EAST SIDE MARIO'S");
+        company.setFont(Font.font("Arial", FontWeight.BOLD, 17));
+        company.setStyle("-fx-text-fill: black;");
+
+        Label title = new Label("INVENTORY COUNT SHEET");
+        title.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+        title.setStyle("-fx-text-fill: black;");
+
+        Label templateLabel = new Label("Template: " + template.getName());
+        templateLabel.setFont(Font.font("Arial", 9));
+        templateLabel.setStyle("-fx-text-fill: black;");
+
+        GridPane infoGrid = new GridPane();
+        infoGrid.setHgap(14);
+        infoGrid.setVgap(3);
+        infoGrid.setPadding(new Insets(6, 0, 6, 0));
+        infoGrid.setAlignment(Pos.CENTER);
+
+        addInfoLabel(infoGrid, "Count Date: __________________", 0, 0);
+        addInfoLabel(infoGrid, "Manager: __________________", 1, 0);
+        addInfoLabel(infoGrid, "Completed By: ________________", 0, 1);
+        addInfoLabel(infoGrid, "Page " + pageNumber + " of " + totalPages, 1, 1);
+
+        header.getChildren().addAll(company, title, templateLabel, infoGrid);
+
+        return header;
+    }
+
+    private void addInfoLabel(GridPane grid, String text, int column, int row) {
+        Label label = new Label(text);
+        label.setFont(Font.font("Arial", 8.5));
+        label.setStyle("-fx-text-fill: black;");
+        grid.add(label, column, row);
+    }
+
+    private GridPane createCountSheetTableHeader() {
+        GridPane grid = createCountSheetBaseGrid();
+
+        grid.setStyle(
+                "-fx-background-color: #f2f2f2;" +
+                        "-fx-border-color: black;" +
+                        "-fx-border-width: 1;"
+        );
+
+        addHeaderCell(grid, "Product", 0, Pos.CENTER_LEFT);
+        addHeaderCell(grid, "Unit", 1, Pos.CENTER);
+        addHeaderCell(grid, "Count", 2, Pos.CENTER);
 
         return grid;
     }
 
-    private GridPane createBlankSheetDataRow(InventoryCountTemplateLine line) {
+    private Label createSectionHeader(String sectionName) {
+        Label label = new Label(sectionName);
+        label.setPrefWidth(SHEET_WIDTH);
+        label.setMaxWidth(SHEET_WIDTH);
+        label.setFont(Font.font("Arial", FontWeight.BOLD, 10));
+        label.setStyle(
+                "-fx-background-color: #008EAA;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-padding: 4 6 4 6;" +
+                        "-fx-border-color: black;" +
+                        "-fx-border-width: 1 1 0 1;"
+        );
 
-        GridPane grid = createBlankSheetBaseGrid();
-        grid.setStyle("-fx-border-color: #999999; -fx-border-width: 0 0 1 0;");
+        return label;
+    }
+
+    private GridPane createCountSheetDataRow(InventoryCountTemplateLine line) {
+        GridPane grid = createCountSheetBaseGrid();
+
+        grid.setStyle(
+                "-fx-border-color: black;" +
+                        "-fx-border-width: 0 1 1 1;"
+        );
 
         String productName = line.getDisplayName();
 
@@ -626,39 +679,155 @@ public class InventoryCountTemplateEditorView {
             productName = line.getProductDescription();
         }
 
-        addBlankSheetDataCell(grid, productName, 0);
-        addBlankSheetDataCell(grid, line.getCountUnit(), 1);
-        addBlankSheetDataCell(grid, "________________", 2);
+        addDataCell(grid, productName, 0, Pos.CENTER_LEFT);
+        addDataCell(grid, line.getCountUnit(), 1, Pos.CENTER);
+        addDataCell(grid, "", 2, Pos.CENTER);
 
         return grid;
     }
 
-    private GridPane createBlankSheetBaseGrid() {
-
+    private GridPane createCountSheetBaseGrid() {
         GridPane grid = new GridPane();
-        grid.setHgap(8);
-        grid.setPadding(new Insets(3, 0, 3, 0));
+        grid.setPrefWidth(SHEET_WIDTH);
+        grid.setMaxWidth(SHEET_WIDTH);
 
-        ColumnConstraints product = new ColumnConstraints(360);
-        ColumnConstraints unit = new ColumnConstraints(80);
-        ColumnConstraints count = new ColumnConstraints(130);
+        ColumnConstraints product = new ColumnConstraints(PRODUCT_COL_WIDTH);
+        ColumnConstraints unit = new ColumnConstraints(UNIT_COL_WIDTH);
+        ColumnConstraints count = new ColumnConstraints(COUNT_COL_WIDTH);
+
+        product.setMinWidth(PRODUCT_COL_WIDTH);
+        product.setMaxWidth(PRODUCT_COL_WIDTH);
+
+        unit.setMinWidth(UNIT_COL_WIDTH);
+        unit.setMaxWidth(UNIT_COL_WIDTH);
+
+        count.setMinWidth(COUNT_COL_WIDTH);
+        count.setMaxWidth(COUNT_COL_WIDTH);
 
         grid.getColumnConstraints().addAll(product, unit, count);
 
         return grid;
     }
 
-    private void addBlankSheetHeaderCell(GridPane grid, String text, int column) {
+    private void addHeaderCell(
+            GridPane grid,
+            String text,
+            int column,
+            Pos alignment
+    ) {
         Label label = new Label(text);
-        label.setFont(Font.font("Arial", FontWeight.BOLD, 10));
-        label.setStyle("-fx-text-fill: black;");
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setMinHeight(20);
+        label.setFont(Font.font("Arial", FontWeight.BOLD, 9));
+        label.setAlignment(alignment);
+        label.setStyle(
+                "-fx-text-fill: black;" +
+                        "-fx-padding: 3 5 3 5;" +
+                        "-fx-border-color: black;" +
+                        "-fx-border-width: 0 1 0 0;"
+        );
+
         grid.add(label, column, 0);
     }
 
-    private void addBlankSheetDataCell(GridPane grid, String text, int column) {
+    private void addDataCell(
+            GridPane grid,
+            String text,
+            int column,
+            Pos alignment
+    ) {
         Label label = new Label(text == null ? "" : text);
-        label.setFont(Font.font("Arial", 9));
-        label.setStyle("-fx-text-fill: black;");
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setMinHeight(20);
+        label.setFont(Font.font("Arial", 8.5));
+        label.setAlignment(alignment);
+        label.setStyle(
+                "-fx-text-fill: black;" +
+                        "-fx-padding: 2 5 2 5;" +
+                        "-fx-border-color: black;" +
+                        "-fx-border-width: 0 1 0 0;"
+        );
+
         grid.add(label, column, 0);
+    }
+
+    private HBox createSignatureArea() {
+        HBox signatures = new HBox(26);
+        signatures.setPadding(new Insets(12, 0, 4, 0));
+        signatures.setAlignment(Pos.CENTER);
+        signatures.setPrefWidth(SHEET_WIDTH);
+
+        signatures.getChildren().addAll(
+                createSignatureBox("Completed By"),
+                createSignatureBox("Verified By"),
+                createSignatureBox("Date")
+        );
+
+        return signatures;
+    }
+
+    private VBox createSignatureBox(String labelText) {
+        VBox box = new VBox(4);
+        box.setAlignment(Pos.CENTER);
+
+        Label line = new Label("______________________");
+        line.setFont(Font.font("Arial", 9));
+        line.setStyle("-fx-text-fill: black;");
+
+        Label label = new Label(labelText);
+        label.setFont(Font.font("Arial", 8));
+        label.setStyle("-fx-text-fill: black;");
+
+        box.getChildren().addAll(line, label);
+
+        return box;
+    }
+
+    private HBox createPageFooter(int pageNumber, int totalPages) {
+        HBox footer = new HBox();
+        footer.setAlignment(Pos.CENTER_RIGHT);
+        footer.setPrefWidth(SHEET_WIDTH);
+
+        Label label = new Label("Page " + pageNumber + " of " + totalPages);
+        label.setFont(Font.font("Arial", 8));
+        label.setStyle("-fx-text-fill: black;");
+
+        footer.getChildren().add(label);
+
+        return footer;
+    }
+
+    private String cleanSectionName(String sectionName) {
+        if (sectionName == null || sectionName.isBlank()) {
+            return "OTHER";
+        }
+
+        return sectionName.trim().toUpperCase();
+    }
+
+    private void showSimpleAlert(
+            Alert.AlertType type,
+            String title,
+            String message
+    ) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private record PrintRow(
+            boolean sectionHeader,
+            String sectionName,
+            InventoryCountTemplateLine line
+    ) {
+        static PrintRow section(String sectionName) {
+            return new PrintRow(true, sectionName, null);
+        }
+
+        static PrintRow item(InventoryCountTemplateLine line) {
+            return new PrintRow(false, null, line);
+        }
     }
 }
