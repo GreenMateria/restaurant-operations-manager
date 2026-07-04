@@ -537,4 +537,39 @@ public class InvoiceDao {
                 "Unsupported invoice date format: " + invoiceDate
         );
     }
+    public List<InvoiceCategoryBreakdownLine> getCategoryBreakdown(int invoiceId) {
+        List<InvoiceCategoryBreakdownLine> breakdown = new ArrayList<>();
+
+        String sql = """
+        SELECT
+            COALESCE(p.reporting_category, 'OTHER') AS reporting_category,
+            COALESCE(SUM(il.extended_cost), 0) AS total
+        FROM invoice_lines il
+        JOIN products p ON il.product_id = p.id
+        WHERE il.invoice_id = ?
+        GROUP BY COALESCE(p.reporting_category, 'OTHER')
+        ORDER BY reporting_category
+        """;
+
+        try (
+                Connection conn = DatabaseManager.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)
+        ) {
+            ps.setInt(1, invoiceId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    breakdown.add(new InvoiceCategoryBreakdownLine(
+                            rs.getString("reporting_category"),
+                            rs.getBigDecimal("total")
+                    ));
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load invoice category breakdown", e);
+        }
+
+        return breakdown;
+    }
 }

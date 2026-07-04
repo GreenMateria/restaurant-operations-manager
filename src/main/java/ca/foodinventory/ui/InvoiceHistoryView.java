@@ -9,6 +9,9 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
+import javafx.scene.control.cell.PropertyValueFactory;
+import java.text.NumberFormat;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -19,6 +22,7 @@ public class InvoiceHistoryView {
 
     private final TableView<Invoice> invoiceTable = new TableView<>();
     private final TableView<InvoiceLine> lineTable = new TableView<>();
+    private final TableView<InvoiceCategoryBreakdownLine> breakdownTable = new TableView<>();
 
     public BorderPane getView() {
         BorderPane root = new BorderPane();
@@ -158,6 +162,8 @@ public class InvoiceHistoryView {
         TableColumn<InvoiceLine, BigDecimal> extendedCostColumn = new TableColumn<>("Extended Cost");
         extendedCostColumn.setCellValueFactory(new PropertyValueFactory<>("extendedCost"));
 
+
+
         lineTable.getColumns().addAll(
                 skuColumn,
                 descriptionColumn,
@@ -178,5 +184,30 @@ public class InvoiceHistoryView {
         alert.setHeaderText(title);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+    private TableView<InvoiceCategoryBreakdownLine> createBreakdownTable() {
+        TableColumn<InvoiceCategoryBreakdownLine, String> categoryCol = new TableColumn<>("Category");
+        categoryCol.setCellValueFactory(new PropertyValueFactory<>("reportingCategory"));
+        categoryCol.setPrefWidth(160);
+
+        TableColumn<InvoiceCategoryBreakdownLine, BigDecimal> totalCol = new TableColumn<>("Total");
+        totalCol.setCellValueFactory(new PropertyValueFactory<>("total"));
+        totalCol.setPrefWidth(100);
+
+        NumberFormat currency = NumberFormat.getCurrencyInstance();
+
+        totalCol.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(BigDecimal value, boolean empty) {
+                super.updateItem(value, empty);
+                setText(empty || value == null ? "" : currency.format(value));
+            }
+        });
+
+        breakdownTable.getColumns().setAll(categoryCol, totalCol);
+        breakdownTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        breakdownTable.setPlaceholder(new Label("Select an invoice"));
+
+        return breakdownTable;
     }
 }
