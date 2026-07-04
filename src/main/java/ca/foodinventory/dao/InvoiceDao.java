@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
 
 public class InvoiceDao {
 
@@ -548,7 +549,22 @@ public class InvoiceDao {
         JOIN products p ON il.product_id = p.id
         WHERE il.invoice_id = ?
         GROUP BY COALESCE(p.reporting_category, 'OTHER')
-        ORDER BY reporting_category
+                        ORDER BY
+                                   CASE p.reporting_category
+                                       WHEN 'FOOD' THEN 1
+                                       WHEN 'LIQUOR' THEN 2
+                                       WHEN 'WINE' THEN 3
+                                       WHEN 'BEER' THEN 4
+                                       WHEN 'DRAUGHT' THEN 5
+                                       WHEN 'IMPORT DRAUGHT' THEN 6
+                                       WHEN 'PAPER' THEN 7
+                                       WHEN 'TAKE OUT' THEN 8
+                                       WHEN 'CLEANING' THEN 9
+                                       WHEN 'GUEST SUPPLIES' THEN 10
+                                       WHEN 'DISHWASHING' THEN 11
+                                       WHEN 'OFFICE SUPPLIES' THEN 12
+                                       ELSE 99
+                                   END
         """;
 
         try (
@@ -572,4 +588,5 @@ public class InvoiceDao {
 
         return breakdown;
     }
+
 }

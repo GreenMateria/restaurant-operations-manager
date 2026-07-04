@@ -2,18 +2,18 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.model.Invoice;
+import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
 import ca.foodinventory.model.InvoiceLine;
 import javafx.collections.FXCollections;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
-import javafx.scene.control.cell.PropertyValueFactory;
-import java.text.NumberFormat;
 
 import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.util.Optional;
 
 public class InvoiceHistoryView {
@@ -40,6 +40,7 @@ public class InvoiceHistoryView {
 
         setupInvoiceTable();
         setupLineTable();
+        setupBreakdownTable();
 
         loadInvoices();
 
@@ -50,14 +51,39 @@ public class InvoiceHistoryView {
                         lineTable.setItems(FXCollections.observableArrayList(
                                 invoiceDao.findInvoiceLines(selectedInvoice.getId())
                         ));
+
+                        breakdownTable.setItems(FXCollections.observableArrayList(
+                                invoiceDao.getCategoryBreakdown(selectedInvoice.getId())
+                        ));
+                    } else {
+                        lineTable.setItems(FXCollections.observableArrayList());
+                        breakdownTable.setItems(FXCollections.observableArrayList());
                     }
                 });
 
         Label linesTitle = new Label("Selected Invoice Lines");
         linesTitle.getStyleClass().add("section-title");
 
-        VBox content = new VBox(10, topBar, invoiceTable, linesTitle, lineTable);
+        Label breakdownTitle = new Label("Category Breakdown");
+        breakdownTitle.getStyleClass().add("section-title");
+
+        VBox linesBox = new VBox(8, linesTitle, lineTable);
+        VBox breakdownBox = new VBox(8, breakdownTitle, breakdownTable);
+
+        breakdownBox.setPrefWidth(300);
+        breakdownBox.setMinWidth(260);
+
+        HBox detailArea = new HBox(12, linesBox, breakdownBox);
+
+        HBox.setHgrow(linesBox, Priority.ALWAYS);
+        VBox.setVgrow(lineTable, Priority.ALWAYS);
+        VBox.setVgrow(breakdownTable, Priority.ALWAYS);
+
+        VBox content = new VBox(10, topBar, invoiceTable, detailArea);
         content.getStyleClass().add("content-area");
+
+        VBox.setVgrow(invoiceTable, Priority.ALWAYS);
+        VBox.setVgrow(detailArea, Priority.ALWAYS);
 
         root.setCenter(content);
 
@@ -67,6 +93,7 @@ public class InvoiceHistoryView {
     private void loadInvoices() {
         invoiceTable.setItems(FXCollections.observableArrayList(invoiceDao.findAllInvoices()));
         lineTable.setItems(FXCollections.observableArrayList());
+        breakdownTable.setItems(FXCollections.observableArrayList());
     }
 
     private void deleteSelectedInvoice() {
@@ -135,12 +162,24 @@ public class InvoiceHistoryView {
         TableColumn<Invoice, BigDecimal> totalColumn = new TableColumn<>("Total");
         totalColumn.setCellValueFactory(new PropertyValueFactory<>("invoiceTotal"));
 
-        invoiceTable.getColumns().addAll(
+        NumberFormat currency = NumberFormat.getCurrencyInstance();
+
+        totalColumn.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(BigDecimal value, boolean empty) {
+                super.updateItem(value, empty);
+                setText(empty || value == null ? "" : currency.format(value));
+            }
+        });
+
+        invoiceTable.getColumns().setAll(
                 invoiceNumberColumn,
                 dateColumn,
                 supplierColumn,
                 totalColumn
         );
+
+        invoiceTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
     }
 
     private void setupLineTable() {
@@ -162,9 +201,25 @@ public class InvoiceHistoryView {
         TableColumn<InvoiceLine, BigDecimal> extendedCostColumn = new TableColumn<>("Extended Cost");
         extendedCostColumn.setCellValueFactory(new PropertyValueFactory<>("extendedCost"));
 
+        NumberFormat currency = NumberFormat.getCurrencyInstance();
 
+        caseCostColumn.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(BigDecimal value, boolean empty) {
+                super.updateItem(value, empty);
+                setText(empty || value == null ? "" : currency.format(value));
+            }
+        });
 
-        lineTable.getColumns().addAll(
+        extendedCostColumn.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(BigDecimal value, boolean empty) {
+                super.updateItem(value, empty);
+                setText(empty || value == null ? "" : currency.format(value));
+            }
+        });
+
+        lineTable.getColumns().setAll(
                 skuColumn,
                 descriptionColumn,
                 quantityColumn,
@@ -172,27 +227,16 @@ public class InvoiceHistoryView {
                 caseCostColumn,
                 extendedCostColumn
         );
+
+        lineTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
     }
 
-    private void showAlert(
-            Alert.AlertType type,
-            String title,
-            String message
-    ) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(title);
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
-    private TableView<InvoiceCategoryBreakdownLine> createBreakdownTable() {
+    private void setupBreakdownTable() {
         TableColumn<InvoiceCategoryBreakdownLine, String> categoryCol = new TableColumn<>("Category");
         categoryCol.setCellValueFactory(new PropertyValueFactory<>("reportingCategory"));
-        categoryCol.setPrefWidth(160);
 
         TableColumn<InvoiceCategoryBreakdownLine, BigDecimal> totalCol = new TableColumn<>("Total");
         totalCol.setCellValueFactory(new PropertyValueFactory<>("total"));
-        totalCol.setPrefWidth(100);
 
         NumberFormat currency = NumberFormat.getCurrencyInstance();
 
@@ -207,7 +251,17 @@ public class InvoiceHistoryView {
         breakdownTable.getColumns().setAll(categoryCol, totalCol);
         breakdownTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         breakdownTable.setPlaceholder(new Label("Select an invoice"));
+    }
 
-        return breakdownTable;
+    private void showAlert(
+            Alert.AlertType type,
+            String title,
+            String message
+    ) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(title);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 }
