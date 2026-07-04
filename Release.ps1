@@ -1,14 +1,20 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-function Invoke-CommandStep {
+$ProjectDir = "C:\Food Inventory"
+$AppName = "ESM Operations Manager"
+$MainJar = "FoodInventory.jar"
+$MainClass = "ca.foodinventory.Launcher"
+$Icon = "FoodInventory.ico"
+
+function Invoke-Step {
     param(
         [string]$Name,
         [scriptblock]$Command
     )
 
     Write-Host ""
-    Write-Host $Name -ForegroundColor Yellow
+    Write-Host "=== $Name ===" -ForegroundColor Yellow
 
     & $Command
 
@@ -17,16 +23,21 @@ function Invoke-CommandStep {
     }
 }
 
-$ProjectDir = "C:\Food Inventory"
-$AppName = "ESM Operations Manager"
-$MainJar = "FoodInventory.jar"
-$MainClass = "ca.foodinventory.Launcher"
-$Icon = "FoodInventory.ico"
+function Remove-FolderSafe {
+    param(
+        [string]$Path
+    )
+
+    if (Test-Path $Path) {
+        Write-Host "Removing: $Path" -ForegroundColor DarkYellow
+        Remove-Item -Recurse -Force $Path
+    }
+}
 
 try {
     Set-Location $ProjectDir
-
     Clear-Host
+
     Write-Host "===================================" -ForegroundColor Cyan
     Write-Host " ESM Operations Manager Release Tool" -ForegroundColor Cyan
     Write-Host "===================================" -ForegroundColor Cyan
@@ -34,8 +45,9 @@ try {
 
     $CurrentVersion = Read-Host "Current version, example 1.8.1"
     $NewVersion = Read-Host "New version, example 1.8.2"
-    $ReleaseNotes = Read-Host "Release notes, example Added editable invoice import"
+    $ReleaseNotes = Read-Host "Release notes, example Added invoice category breakdown"
 
+    $TargetInstallerDir = "$ProjectDir\target\installer"
     $InstallerDir = "$ProjectDir\installer-$NewVersion"
     $ReleaseDir = "$ProjectDir\Releases"
     $FinalInstallerPath = "$ReleaseDir\$AppName-$NewVersion.exe"
@@ -54,38 +66,51 @@ try {
         exit
     }
 
-    Invoke-CommandStep "Checking Git status..." {
+    Write-Host ""
+    Write-Host "Closing possible locked app/installer processes..." -ForegroundColor Yellow
+
+    Get-Process | Where-Object {
+        $_.ProcessName -like "ESM Operations Manager*" -or
+        $_.ProcessName -eq "FoodInventory" -or
+        $_.ProcessName -eq "java" -or
+        $_.ProcessName -eq "javaw"
+    } | ForEach-Object {
+        Write-Host "Stopping process: $($_.ProcessName) [$($_.Id)]"
+        Stop-Process -Id $_.Id -Force
+    }
+
+    Start-Sleep -Seconds 2
+
+    Invoke-Step "Git status" {
         git status
     }
 
-    Invoke-CommandStep "Adding files to Git..." {
+    Invoke-Step "Git add" {
         git add .
     }
 
-    Invoke-CommandStep "Creating Git commit..." {
+    Invoke-Step "Git commit" {
         git commit -m "v$NewVersion - $ReleaseNotes"
     }
 
-    Invoke-CommandStep "Pushing to GitHub..." {
+    Invoke-Step "Git push" {
         git push
     }
 
-    Invoke-CommandStep "Cleaning Maven project..." {
+    Write-Host ""
+    Write-Host "Cleaning old installer folders before Maven..." -ForegroundColor Yellow
+    Remove-FolderSafe $TargetInstallerDir
+    Remove-FolderSafe $InstallerDir
+
+    Invoke-Step "Maven clean" {
         mvn clean
     }
 
-    Invoke-CommandStep "Building Maven package..." {
+    Invoke-Step "Maven package" {
         mvn package
     }
 
-    Write-Host ""
-    Write-Host "Removing previous installer folder..." -ForegroundColor Yellow
-
-    if (Test-Path $InstallerDir) {
-        Remove-Item -Recurse -Force $InstallerDir
-    }
-
-    Invoke-CommandStep "Creating Windows installer..." {
+    Invoke-Step "Create Windows installer" {
         jpackage `
             --type exe `
             --name "$AppName" `
@@ -116,11 +141,11 @@ try {
 
     Copy-Item $InstallerFile.FullName $FinalInstallerPath -Force
 
-    Invoke-CommandStep "Creating Git tag..." {
+    Invoke-Step "Git tag" {
         git tag "v$NewVersion"
     }
 
-    Invoke-CommandStep "Pushing Git tag..." {
+    Invoke-Step "Push Git tag" {
         git push origin "v$NewVersion"
     }
 
@@ -134,7 +159,6 @@ try {
     Write-Host ""
     Write-Host "Git tag created:"
     Write-Host "v$NewVersion" -ForegroundColor Cyan
-    Write-Host ""
 }
 catch {
     Write-Host ""
@@ -142,8 +166,8 @@ catch {
     Write-Host " Release Failed" -ForegroundColor Red
     Write-Host "===================================" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host ""
 }
 finally {
+    Write-Host ""
     Read-Host "Press ENTER to close"
 }
