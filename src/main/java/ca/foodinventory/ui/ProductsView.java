@@ -104,6 +104,21 @@ public class ProductsView {
         TableColumn<Product, String> reportingCatCol = new TableColumn<>("Reporting Category");
         reportingCatCol.setCellValueFactory(new PropertyValueFactory<>("reportingCategory"));
 
+        TableColumn<Product, String> alcoholSetupCol = new TableColumn<>("Alcohol Setup");
+        alcoholSetupCol.setCellValueFactory(cellData -> {
+            Product product = cellData.getValue();
+
+            if (!product.isAlcoholProduct()) {
+                return new javafx.beans.property.SimpleStringProperty("—");
+            }
+
+            if (product.hasAlcoholProfile()) {
+                return new javafx.beans.property.SimpleStringProperty("✓ Complete");
+            }
+
+            return new javafx.beans.property.SimpleStringProperty("⚠ Needs Setup");
+        });
+
         TableColumn<Product, String> unitCol = new TableColumn<>("Unit");
         unitCol.setCellValueFactory(new PropertyValueFactory<>("unit"));
 
@@ -137,6 +152,7 @@ public class ProductsView {
                 descCol,
                 catCol,
                 reportingCatCol,
+                alcoholSetupCol,
                 unitCol,
                 packCountCol,
                 packSizeCol,
@@ -147,6 +163,18 @@ public class ProductsView {
         );
 
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        table.setRowFactory(tv -> {
+            TableRow<Product> row = new TableRow<>();
+
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2 && !row.isEmpty()) {
+                    new ProductEditorView(row.getItem(), this::loadProducts).show();
+                }
+            });
+
+            return row;
+        });
     }
 
     private void setupHistoryTable() {
@@ -232,12 +260,7 @@ public class ProductsView {
     }
 
     private void openAddProductDialog() {
-        ProductDialog dialog = new ProductDialog();
-
-        dialog.showAndWait().ifPresent(product -> {
-            productDao.add(product);
-            loadProducts();
-        });
+        new ProductEditorView(null, this::loadProducts).show();
     }
 
     private void editSelectedProduct() {
@@ -252,7 +275,7 @@ public class ProductsView {
             return;
         }
 
-        showEditProductDialog(selected);
+        new ProductEditorView(selected, this::loadProducts).show();
     }
 
     private void showEditProductDialog(Product product) {

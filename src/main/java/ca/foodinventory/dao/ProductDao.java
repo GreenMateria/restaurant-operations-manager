@@ -1,6 +1,7 @@
 package ca.foodinventory.dao;
 
 import ca.foodinventory.database.DatabaseManager;
+import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.model.Product;
 
@@ -11,8 +12,27 @@ import java.util.List;
 
 public class ProductDao {
 
+    private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
+
     public List<Product> findAll() {
         return getAllActiveProducts();
+    }
+
+    public void save(Product product) {
+        if (product.getId() == 0) {
+            addProduct(product);
+
+            Integer productId = findIdBySku(product.getSku());
+            if (productId != null && product.isAlcoholProduct() && product.getAlcoholProfile() != null) {
+                product.getAlcoholProfile().setProductId(productId);
+                alcoholProfileDao.saveOrUpdate(product.getAlcoholProfile());
+            }
+
+            return;
+        }
+
+        updateProduct(product);
+        saveAlcoholProfileIfNeeded(product);
     }
 
     public void add(Product product) {
@@ -103,6 +123,60 @@ public class ProductDao {
         }
     }
 
+    private void updateProduct(Product product) {
+        String sql = """
+            UPDATE products
+            SET sku = ?,
+                description = ?,
+                category = ?,
+                reporting_category = ?,
+                unit = ?,
+                conversion_factor = ?,
+                pack_size = ?,
+                pack_count = ?,
+                last_case_cost = ?,
+                active = ?
+            WHERE id = ?
+        """;
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, product.getSku());
+            ps.setString(2, product.getDescription());
+            ps.setString(3, product.getCategory());
+            ps.setString(4, normalizeReportingCategory(product.getReportingCategory()));
+            ps.setString(5, product.getUnit());
+            ps.setDouble(6, product.getConversionFactor());
+            ps.setString(7, product.getPackSize());
+            ps.setString(8, product.getPackCount());
+            ps.setString(9, moneyToString(product.getLastCaseCost()));
+            ps.setInt(10, product.isActive() ? 1 : 0);
+            ps.setInt(11, product.getId());
+
+            ps.executeUpdate();
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to update product", e);
+        }
+    }
+
+    private void saveAlcoholProfileIfNeeded(Product product) {
+        if (!product.isAlcoholProduct()) {
+            alcoholProfileDao.deactivateByProductId(product.getId());
+            return;
+        }
+
+        AlcoholProductProfile profile = product.getAlcoholProfile();
+
+        if (profile == null) {
+            return;
+        }
+
+        profile.setProductId(product.getId());
+        alcoholProfileDao.saveOrUpdate(profile);
+    }
+
     public void deactivateProduct(int productId) {
         String sql = """
             UPDATE products
@@ -115,6 +189,7 @@ public class ProductDao {
 
             ps.setInt(1, productId);
             ps.executeUpdate();
+            alcoholProfileDao.deactivateByProductId(productId);
 
         } catch (Exception ex) {
             throw new RuntimeException("Failed to deactivate product", ex);
@@ -217,7 +292,7 @@ public class ProductDao {
     }
 
     private Product mapProduct(ResultSet rs) throws SQLException {
-        return new Product(
+        Product product = new Product(
                 rs.getInt("id"),
                 rs.getString("sku"),
                 rs.getString("description"),
@@ -231,6 +306,11 @@ public class ProductDao {
                 rs.getString("last_purchased_date"),
                 rs.getInt("active") == 1
         );
+
+        AlcoholProductProfile profile = alcoholProfileDao.findByProductId(product.getId());
+        product.setAlcoholProfile(profile);
+
+        return product;
     }
 
     public void updateLastCaseCost(int productId, BigDecimal cost) {
@@ -300,7 +380,6 @@ public class ProductDao {
         } catch (Exception ex) {
             throw new RuntimeException("Failed to find product ID for SKU or alias: " + sku, ex);
         }
-
 
         return null;
     }

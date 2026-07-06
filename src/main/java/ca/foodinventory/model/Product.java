@@ -17,6 +17,8 @@ public class Product {
     private String lastPurchasedDate;
     private boolean active;
 
+    private AlcoholProductProfile alcoholProfile;
+
     public Product(
             int id,
             String sku,
@@ -97,5 +99,28 @@ public class Product {
 
     public String getActiveText() {
         return active ? "Yes" : "No";
+    }
+
+    public AlcoholProductProfile getAlcoholProfile() {
+        return alcoholProfile;
+    }
+
+    public void setAlcoholProfile(AlcoholProductProfile alcoholProfile) {
+        this.alcoholProfile = alcoholProfile;
+    }
+
+    public boolean hasAlcoholProfile() {
+        return alcoholProfile != null && alcoholProfile.isActive();
+    }
+
+    public boolean isAlcoholProduct() {
+        return switch (reportingCategory) {
+            case "LIQUOR",
+                 "WINE",
+                 "BEER",
+                 "DRAUGHT",
+                 "IMPORT DRAUGHT" -> true;
+            default -> false;
+        };
     }
 }

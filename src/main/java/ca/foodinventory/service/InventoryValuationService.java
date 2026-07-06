@@ -37,6 +37,13 @@ public class InventoryValuationService {
                     WHERE il.product_id = icl.product_id
                       AND i.invoice_date BETWEEN ic.period_start_date AND ic.period_end_date
                 ) AS period_total_quantity,
+                (
+                    SELECT SUM(il.quantity)
+                    FROM invoice_lines il
+                    JOIN invoices i ON i.id = il.invoice_id
+                    WHERE il.product_id = icl.product_id
+                      AND i.invoice_date BETWEEN ic.period_start_date AND ic.period_end_date
+                ) AS period_purchase_quantity,
                 p.last_case_cost,
                 p.conversion_factor
             FROM inventory_count_lines icl
@@ -58,12 +65,13 @@ public class InventoryValuationService {
                     String category = normalizeText(rs.getString("category"), "Uncategorized");
                     String reportingCategory = normalizeText(rs.getString("reporting_category"), "OTHER");
 
-                    BigDecimal countedQuantity = BigDecimal.valueOf(
-                            rs.getDouble("counted_quantity")
-                    );
+                    BigDecimal countedQuantity = BigDecimal.valueOf(rs.getDouble("counted_quantity"));
 
                     BigDecimal periodTotalCost = getNullableMoney(rs, "period_total_cost");
                     BigDecimal periodTotalQuantity = getNullableDecimal(rs, "period_total_quantity");
+                    BigDecimal periodPurchaseQuantity = getNullableDecimal(rs, "period_purchase_quantity");
+
+                    BigDecimal conversionFactor = BigDecimal.valueOf(rs.getDouble("conversion_factor"));
 
                     BigDecimal averageCost;
                     String costSource;
@@ -72,8 +80,14 @@ public class InventoryValuationService {
                             && periodTotalQuantity != null
                             && periodTotalQuantity.compareTo(BigDecimal.ZERO) > 0) {
 
-                        averageCost = periodTotalCost.divide(
+                        BigDecimal normalizedPeriodQuantity = normalizePeriodQuantity(
                                 periodTotalQuantity,
+                                periodPurchaseQuantity,
+                                conversionFactor
+                        );
+
+                        averageCost = periodTotalCost.divide(
+                                normalizedPeriodQuantity,
                                 6,
                                 RoundingMode.HALF_UP
                         );
@@ -82,9 +96,6 @@ public class InventoryValuationService {
 
                     } else {
                         BigDecimal lastCaseCost = getNullableMoney(rs, "last_case_cost");
-                        BigDecimal conversionFactor = BigDecimal.valueOf(
-                                rs.getDouble("conversion_factor")
-                        );
 
                         if (lastCaseCost != null
                                 && conversionFactor.compareTo(BigDecimal.ZERO) > 0) {
@@ -125,6 +136,26 @@ public class InventoryValuationService {
         }
 
         return lines;
+    }
+
+    private BigDecimal normalizePeriodQuantity(
+            BigDecimal periodTotalQuantity,
+            BigDecimal periodPurchaseQuantity,
+            BigDecimal conversionFactor
+    ) {
+        if (conversionFactor == null || conversionFactor.compareTo(BigDecimal.ONE) <= 0) {
+            return periodTotalQuantity;
+        }
+
+        if (periodPurchaseQuantity == null || periodPurchaseQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+            return periodTotalQuantity;
+        }
+
+        if (periodTotalQuantity.compareTo(periodPurchaseQuantity) <= 0) {
+            return periodPurchaseQuantity.multiply(conversionFactor);
+        }
+
+        return periodTotalQuantity;
     }
 
     private BigDecimal getNullableMoney(ResultSet rs, String columnName) throws SQLException {
