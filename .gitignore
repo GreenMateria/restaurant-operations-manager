@@ -5,6 +5,10 @@
 # Maven build output
 target/
 
+# Generated installers and release binaries
+installer*/
+Releases/*.exe
+
 # Java
 *.class
 
