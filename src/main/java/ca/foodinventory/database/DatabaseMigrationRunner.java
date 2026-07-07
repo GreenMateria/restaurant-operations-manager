@@ -14,9 +14,9 @@ public class DatabaseMigrationRunner {
         int currentVersion = getCurrentVersion(conn);
 
         if (currentVersion == 0) {
-            setCurrentVersion(conn, CURRENT_SCHEMA_VERSION);
-            System.out.println("Schema version initialized to " + CURRENT_SCHEMA_VERSION);
-            return;
+            currentVersion = 1;
+            setCurrentVersion(conn, currentVersion);
+            System.out.println("Schema version initialized to " + currentVersion);
         }
 
         List<Migration> migrations = List.of(
@@ -34,6 +34,8 @@ public class DatabaseMigrationRunner {
                 setCurrentVersion(conn, migration.getVersion());
             }
         }
+
+        repairMissingSchemas(conn);
     }
 
     private static void createSchemaVersionTable(Connection conn) throws SQLException {
@@ -69,6 +71,49 @@ public class DatabaseMigrationRunner {
                 """)) {
             ps.setInt(1, version);
             ps.executeUpdate();
+        }
+    }
+
+    private static void repairMissingSchemas(Connection conn) throws SQLException {
+        int currentVersion = getCurrentVersion(conn);
+
+        if (currentVersion >= 5 && !tableExists(conn, "alcohol_product_profiles")) {
+            System.out.println("Repairing missing migration 5 schema");
+            new Migration5().migrate(conn);
+        }
+
+        if (currentVersion >= 6 && isMigration6SchemaMissing(conn)) {
+            System.out.println("Repairing missing migration 6 schema");
+            new Migration6().migrate(conn);
+        }
+    }
+
+    private static boolean isMigration6SchemaMissing(Connection conn) throws SQLException {
+        return !tableExists(conn, "production_stations")
+                || !tableExists(conn, "production_items")
+                || !tableExists(conn, "production_profiles")
+                || !tableExists(conn, "production_profile_lines")
+                || !tableExists(conn, "pos_menu_items")
+                || !tableExists(conn, "production_item_product_mappings")
+                || !tableExists(conn, "production_weeks")
+                || !tableExists(conn, "production_week_days")
+                || !tableExists(conn, "production_week_lines");
+    }
+
+    private static boolean tableExists(Connection conn, String tableName) throws SQLException {
+        String sql = """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                  AND name = ?
+                """;
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, tableName);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
         }
     }
 }

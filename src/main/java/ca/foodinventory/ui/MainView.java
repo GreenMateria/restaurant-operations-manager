@@ -14,11 +14,16 @@ import ca.foodinventory.dao.SettingsDao;
 import javafx.scene.control.*;
 
 import java.io.InputStream;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 public class MainView {
 
     private final BorderPane root = new BorderPane();
     private final SettingsDao settingsDao = new SettingsDao();
+
+    private final Deque<Node> navigationHistory = new ArrayDeque<>();
+    private Button backButton;
 
     public BorderPane getView() {
         root.getStyleClass().add("root-dark");
@@ -48,17 +53,28 @@ public class MainView {
         logoBox.setAlignment(Pos.CENTER);
         logoBox.setPadding(new Insets(0, 0, 15, 0));
 
-        Button homeButton = createMenuButton("Home", this::showHomeScreen);
+        Button homeButton = createMenuButton("Home", this::goHome);
+
+        backButton = createMenuButton("Back", this::goBack);
+        backButton.setDisable(true);
 
         menu.getChildren().addAll(
                 logoBox,
-                homeButton
+                homeButton,
+                backButton
         );
 
         return menu;
     }
 
     private void showHomeScreen() {
+        navigationHistory.clear();
+
+        VBox page = buildHomeScreen();
+        showView(page, false);
+    }
+
+    private VBox buildHomeScreen() {
 
         VBox page = new VBox(25);
         page.setPadding(new Insets(40));
@@ -81,6 +97,14 @@ public class MainView {
         Button suppliesButton =
                 createDashboardButton("Supplies Inventory", this::showSuppliesMenu);
 
+        createDashboardButton(
+                "Production Stations",
+                () -> showView(new ProductionStationsView())
+        );
+
+        Button productionButton =
+                createDashboardButton("Production", this::showProductionMenu);
+
         Button reportingButton =
                 createDashboardButton("Reporting", this::showReportingMenu);
 
@@ -90,12 +114,13 @@ public class MainView {
         dashboard.add(foodButton, 0, 0);
         dashboard.add(alcoholButton, 1, 0);
         dashboard.add(suppliesButton, 0, 1);
-        dashboard.add(reportingButton, 1, 1);
-        dashboard.add(systemButton, 0, 2);
+        dashboard.add(productionButton, 1, 1);
+        dashboard.add(reportingButton, 0, 2);
+        dashboard.add(systemButton, 1, 2);
 
         page.getChildren().addAll(title, dashboard);
 
-        showView(page);
+        return page;
     }
 
     private void showFoodMenu() {
@@ -112,6 +137,7 @@ public class MainView {
                         "Import Invoice",
                         () -> showView(new ImportInvoiceView().getView())
                 ),
+
                 createDashboardButton(
                         "Manual Invoice",
                         () -> showView(new ManualInvoiceView().getView())
@@ -198,6 +224,48 @@ public class MainView {
         );
     }
 
+    private void showProductionMenu() {
+
+        showSectionMenu(
+                "Production",
+
+                createDashboardButton(
+                        "Production Items",
+                        () -> showView(new ProductionItemsView())
+                ),
+
+                createDashboardButton(
+                        "Production Stations",
+                        () -> showView(new ProductionStationsView())
+                ),
+
+                createDashboardButton(
+                        "POS Menu Items",
+                        () -> showView(new PosMenuItemsView())
+                ),
+
+                createDashboardButton(
+                        "Production Profiles",
+                        () -> showView(new ProductionProfilesView())
+                ),
+
+                createDashboardButton(
+                        "Product Mappings",
+                        () -> showView(new ProductionItemProductMappingsView())
+                ),
+
+                createDashboardButton(
+                        "Weekly Production",
+                        () -> showComingSoon("Weekly Production")
+                ),
+
+                createDashboardButton(
+                        "Variance Reports",
+                        () -> showComingSoon("Variance Reports")
+                )
+        );
+    }
+
     private void showReportingMenu() {
 
         showSectionMenu(
@@ -278,6 +346,15 @@ public class MainView {
 
         return button;
     }
+
+    private void showComingSoon(String featureName) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(featureName);
+        alert.setHeaderText(featureName);
+        alert.setContentText(featureName + " will be added in a future Production module update.");
+        alert.showAndWait();
+    }
+
     private void showSystemMenu() {
 
         if (!settingsDao.isPasswordInitialized()) {
@@ -357,7 +434,40 @@ public class MainView {
         });
     }
 
+    private void goHome() {
+        navigationHistory.clear();
+        showView(buildHomeScreen(), false);
+    }
+
+    private void goBack() {
+        if (navigationHistory.isEmpty()) {
+            updateBackButton();
+            return;
+        }
+
+        Node previousView = navigationHistory.pop();
+        root.setCenter(previousView);
+        updateBackButton();
+    }
+
     private void showView(Node view) {
+        showView(view, true);
+    }
+
+    private void showView(Node view, boolean rememberCurrentView) {
+        Node currentView = root.getCenter();
+
+        if (rememberCurrentView && currentView != null) {
+            navigationHistory.push(currentView);
+        }
+
         root.setCenter(view);
+        updateBackButton();
+    }
+
+    private void updateBackButton() {
+        if (backButton != null) {
+            backButton.setDisable(navigationHistory.isEmpty());
+        }
     }
 }
