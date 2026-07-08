@@ -13,6 +13,9 @@ import java.util.*;
 
 public class ProductionUsageReportImportService {
 
+    private static final String KDS_SECTION_START_MARKER = "kds dnu.esm";
+    private static final String KDS_SECTION_END_MARKER = "gifts and selling suppli.esm";
+
     private static final int SKU_COLUMN = 1;
     private static final int MONDAY_QUANTITY_COLUMN = 3;
     private static final int TUESDAY_QUANTITY_COLUMN = 5;
@@ -34,11 +37,28 @@ public class ProductionUsageReportImportService {
             Set<String> activePosSkus = loadActivePosSkus();
 
             List<ImportedUsageReportLine> lines = new ArrayList<>();
+            boolean skippingKdsSection = false;
 
             for (int rowIndex = 0; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
 
                 if (row == null) {
+                    continue;
+                }
+
+                String rowText = getRowText(row);
+
+                if (containsMarker(rowText, KDS_SECTION_START_MARKER)) {
+                    skippingKdsSection = true;
+                    continue;
+                }
+
+                if (containsMarker(rowText, KDS_SECTION_END_MARKER)) {
+                    skippingKdsSection = false;
+                    continue;
+                }
+
+                if (skippingKdsSection) {
                     continue;
                 }
 
@@ -108,6 +128,23 @@ public class ProductionUsageReportImportService {
 
         String normalized = trimmed.toLowerCase();
         return !normalized.contains("sku") && !normalized.contains("plu");
+    }
+
+    private String getRowText(Row row) {
+        StringBuilder rowText = new StringBuilder();
+
+        short lastCellNum = row.getLastCellNum();
+
+        for (int cellIndex = 0; cellIndex < lastCellNum; cellIndex++) {
+            rowText.append(' ')
+                    .append(getCellText(row.getCell(cellIndex)));
+        }
+
+        return rowText.toString();
+    }
+
+    private boolean containsMarker(String rowText, String marker) {
+        return rowText != null && rowText.toLowerCase().contains(marker);
     }
 
     private String getCellText(Cell cell) {

@@ -3,7 +3,6 @@ package ca.foodinventory.ui;
 import ca.foodinventory.dao.ProductionProfileDao;
 import ca.foodinventory.model.PosMenuItem;
 import ca.foodinventory.model.ProductionProfile;
-import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -85,9 +84,7 @@ public class PosMenuItemDialog extends Dialog<PosMenuItem> {
     }
 
     private void loadProductionProfiles() {
-        productionProfileComboBox.setItems(FXCollections.observableArrayList(productionProfileDao.findAll()));
-
-        productionProfileComboBox.setConverter(new StringConverter<>() {
+        SearchableComboBoxSupport.makeSearchable(productionProfileComboBox, productionProfileDao.findAll(), new StringConverter<>() {
             @Override
             public String toString(ProductionProfile profile) {
                 return profile == null ? "" : profile.getName();
@@ -96,22 +93,6 @@ public class PosMenuItemDialog extends Dialog<PosMenuItem> {
             @Override
             public ProductionProfile fromString(String string) {
                 return null;
-            }
-        });
-
-        productionProfileComboBox.setCellFactory(comboBox -> new ListCell<>() {
-            @Override
-            protected void updateItem(ProductionProfile profile, boolean empty) {
-                super.updateItem(profile, empty);
-                setText(empty || profile == null ? null : profile.getName());
-            }
-        });
-
-        productionProfileComboBox.setButtonCell(new ListCell<>() {
-            @Override
-            protected void updateItem(ProductionProfile profile, boolean empty) {
-                super.updateItem(profile, empty);
-                setText(empty || profile == null ? null : profile.getName());
             }
         });
     }

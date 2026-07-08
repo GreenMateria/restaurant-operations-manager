@@ -6,6 +6,7 @@ import ca.foodinventory.model.PosMenuItem;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class PosMenuItemDao {
 
@@ -115,6 +116,53 @@ public class PosMenuItemDao {
         }
     }
 
+    public boolean upsertFromSetupImport(PosMenuItem item) {
+        PosMenuItem existing = findByPosSku(item.getPosSku());
+
+        if (existing == null) {
+            insert(item);
+            return true;
+        }
+
+        existing.setName(item.getName());
+        existing.setActive(true);
+        update(existing);
+        return false;
+    }
+
+    private PosMenuItem findByPosSku(String posSku) {
+        String sql = """
+            SELECT
+                pmi.id,
+                pmi.pos_sku,
+                pmi.name,
+                pmi.category,
+                pmi.production_profile_id,
+                pp.name AS production_profile_name,
+                pmi.active
+            FROM pos_menu_items pmi
+            LEFT JOIN production_profiles pp ON pmi.production_profile_id = pp.id
+            WHERE lower(pmi.pos_sku) = lower(?)
+        """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setString(1, posSku);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return mapRow(resultSet);
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to find POS menu item by SKU", e);
+        }
+
+        return null;
+    }
+
     private void insert(PosMenuItem item) {
         String sql = """
             INSERT INTO pos_menu_items (
@@ -184,6 +232,43 @@ public class PosMenuItemDao {
 
         } catch (SQLException e) {
             throw new RuntimeException("Failed to deactivate POS menu item", e);
+        }
+    }
+
+    public int deleteByPosSkus(Set<String> posSkus) {
+        if (posSkus == null || posSkus.isEmpty()) {
+            return 0;
+        }
+
+        String sql = """
+            DELETE FROM pos_menu_items
+            WHERE lower(pos_sku) = lower(?)
+        """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            for (String posSku : posSkus) {
+                if (posSku == null || posSku.isBlank()) {
+                    continue;
+                }
+
+                statement.setString(1, posSku.trim());
+                statement.addBatch();
+            }
+
+            int deletedCount = 0;
+
+            for (int result : statement.executeBatch()) {
+                if (result > 0) {
+                    deletedCount += result;
+                }
+            }
+
+            return deletedCount;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to delete POS menu items by SKU", e);
         }
     }
 

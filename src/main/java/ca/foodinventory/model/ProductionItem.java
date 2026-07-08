@@ -5,6 +5,7 @@ public class ProductionItem {
     private int id;
     private String name;
     private String unit;
+    private String shelfLife;
     private int stationId;
     private String stationName;
     private int printOrder;
@@ -17,6 +18,7 @@ public class ProductionItem {
             int id,
             String name,
             String unit,
+            String shelfLife,
             int stationId,
             String stationName,
             int printOrder,
@@ -25,6 +27,7 @@ public class ProductionItem {
         this.id = id;
         this.name = name;
         this.unit = unit;
+        this.shelfLife = shelfLife;
         this.stationId = stationId;
         this.stationName = stationName;
         this.printOrder = printOrder;
@@ -34,12 +37,14 @@ public class ProductionItem {
     public ProductionItem(
             String name,
             String unit,
+            String shelfLife,
             int stationId,
             int printOrder,
             boolean active
     ) {
         this.name = name;
         this.unit = unit;
+        this.shelfLife = shelfLife;
         this.stationId = stationId;
         this.printOrder = printOrder;
         this.active = active;
@@ -71,6 +76,13 @@ public class ProductionItem {
         this.unit = unit;
     }
 
+    public String getShelfLife() {
+        return shelfLife;
+    }
+
+    public void setShelfLife(String shelfLife) {
+        this.shelfLife = shelfLife;
+    }
 
     public int getStationId() {
         return stationId;

@@ -13,7 +13,7 @@ public class ProductionStationDao {
         List<ProductionStation> stations = new ArrayList<>();
 
         String sql = """
-            SELECT id, name, sort_order, active
+            SELECT id, name, prep_sheet, sort_order, active
             FROM production_stations
             ORDER BY sort_order, name
         """;
@@ -37,7 +37,7 @@ public class ProductionStationDao {
         List<ProductionStation> stations = new ArrayList<>();
 
         String sql = """
-            SELECT id, name, sort_order, active
+            SELECT id, name, prep_sheet, sort_order, active
             FROM production_stations
             WHERE active = 1
             ORDER BY sort_order, name
@@ -60,7 +60,7 @@ public class ProductionStationDao {
 
     public ProductionStation findById(int id) {
         String sql = """
-            SELECT id, name, sort_order, active
+            SELECT id, name, prep_sheet, sort_order, active
             FROM production_stations
             WHERE id = ?
         """;
@@ -93,16 +93,17 @@ public class ProductionStationDao {
 
     private void insert(ProductionStation station) {
         String sql = """
-            INSERT INTO production_stations (name, sort_order, active)
-            VALUES (?, ?, ?)
+            INSERT INTO production_stations (name, prep_sheet, sort_order, active)
+            VALUES (?, ?, ?, ?)
         """;
 
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setString(1, station.getName());
-            statement.setInt(2, station.getSortOrder());
-            statement.setInt(3, station.isActive() ? 1 : 0);
+            statement.setString(2, station.getPrepSheet());
+            statement.setInt(3, station.getSortOrder());
+            statement.setInt(4, station.isActive() ? 1 : 0);
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -114,6 +115,7 @@ public class ProductionStationDao {
         String sql = """
             UPDATE production_stations
             SET name = ?,
+                prep_sheet = ?,
                 sort_order = ?,
                 active = ?
             WHERE id = ?
@@ -123,9 +125,10 @@ public class ProductionStationDao {
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setString(1, station.getName());
-            statement.setInt(2, station.getSortOrder());
-            statement.setInt(3, station.isActive() ? 1 : 0);
-            statement.setInt(4, station.getId());
+            statement.setString(2, station.getPrepSheet());
+            statement.setInt(3, station.getSortOrder());
+            statement.setInt(4, station.isActive() ? 1 : 0);
+            statement.setInt(5, station.getId());
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -155,6 +158,7 @@ public class ProductionStationDao {
         return new ProductionStation(
                 resultSet.getInt("id"),
                 resultSet.getString("name"),
+                resultSet.getString("prep_sheet"),
                 resultSet.getInt("sort_order"),
                 resultSet.getInt("active") == 1
         );

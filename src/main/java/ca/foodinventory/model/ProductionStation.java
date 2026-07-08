@@ -4,21 +4,24 @@ public class ProductionStation {
 
     private int id;
     private String name;
+    private String prepSheet;
     private int sortOrder;
     private boolean active;
 
     public ProductionStation() {
     }
 
-    public ProductionStation(int id, String name, int sortOrder, boolean active) {
+    public ProductionStation(int id, String name, String prepSheet, int sortOrder, boolean active) {
         this.id = id;
         this.name = name;
+        this.prepSheet = prepSheet;
         this.sortOrder = sortOrder;
         this.active = active;
     }
 
-    public ProductionStation(String name, int sortOrder, boolean active) {
+    public ProductionStation(String name, String prepSheet, int sortOrder, boolean active) {
         this.name = name;
+        this.prepSheet = prepSheet;
         this.sortOrder = sortOrder;
         this.active = active;
     }
@@ -40,6 +43,17 @@ public class ProductionStation {
         this.name = name;
     }
 
+    public String getPrepSheet() {
+        if (prepSheet == null || prepSheet.isBlank()) {
+            return "Main Line";
+        }
+
+        return prepSheet;
+    }
+
+    public void setPrepSheet(String prepSheet) {
+        this.prepSheet = prepSheet;
+    }
 
     public int getSortOrder() {
         return sortOrder;

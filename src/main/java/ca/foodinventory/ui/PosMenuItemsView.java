@@ -3,6 +3,10 @@ package ca.foodinventory.ui;
 import ca.foodinventory.dao.PosMenuItemDao;
 import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.PosMenuItem;
+import ca.foodinventory.model.PosMenuItemImportSummary;
+import ca.foodinventory.model.ProductionReportSummary;
+import ca.foodinventory.service.PosMenuItemImportService;
+import ca.foodinventory.service.ProductionReportService;
 import ca.foodinventory.service.ProductionUsageReportImportService;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
@@ -14,12 +18,16 @@ import javafx.stage.FileChooser;
 
 import java.io.File;
 import java.util.Optional;
+import java.util.Set;
 
 public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
     private final PosMenuItemDao dao = new PosMenuItemDao();
     private final ProductionUsageReportImportService usageReportImportService =
             new ProductionUsageReportImportService();
+    private final PosMenuItemImportService posMenuItemImportService =
+            new PosMenuItemImportService();
+    private final ProductionReportService productionReportService = new ProductionReportService();
     private FilteredList<PosMenuItem> filteredItems;
 
     public PosMenuItemsView() {
@@ -39,9 +47,11 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         Button addButton = createPrimaryButton("Add", this::addItem);
         Button editButton = createPrimaryButton("Edit", this::editSelectedItem);
         Button deactivateButton = createPrimaryButton("Deactivate", this::deactivateSelectedItem);
+        Button setupImportButton = createPrimaryButton("Import Menu Items", this::importMenuItems);
+        Button deleteKdsButton = createPrimaryButton("Delete KDS Items", this::deleteKdsItems);
         Button importButton = createPrimaryButton("Import Usage Report", this::importUsageReport);
 
-        return new HBox(10, addButton, editButton, deactivateButton, importButton);
+        return new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton, importButton);
     }
 
     private void setupTable() {
@@ -187,20 +197,118 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         }
 
         try {
-            ImportedUsageReportSummary summary = usageReportImportService.importUsageReport(file);
+            ImportedUsageReportSummary usageSummary = usageReportImportService.importUsageReport(file);
+            ProductionReportSummary productionSummary =
+                    productionReportService.generateReport(usageSummary);
 
             showAlert(
                     Alert.AlertType.INFORMATION,
                     "Usage Report Imported",
-                    "Imported " + summary.getTotalRows()
-                            + " configured POS item rows from " + summary.getSheetName() + ".\n"
-                            + "Weekly quantity sold: " + formatNumber(summary.getWeeklyQuantitySold())
+                    "Imported " + usageSummary.getTotalRows()
+                            + " configured POS item rows from " + usageSummary.getSheetName() + ".\n"
+                            + "Weekly quantity sold: " + formatNumber(usageSummary.getWeeklyQuantitySold())
+                            + "\nProduction items generated: " + productionSummary.getLineCount()
+            );
+
+            new ProductionReportDialog(productionSummary).showAndWait();
+
+        } catch (RuntimeException e) {
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Import Failed",
+                    e.getMessage()
+            );
+        }
+    }
+
+    private void importMenuItems() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Import POS Menu Items");
+
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx")
+        );
+
+        File file = chooser.showOpenDialog(null);
+
+        if (file == null) {
+            return;
+        }
+
+        try {
+            PosMenuItemImportSummary summary = posMenuItemImportService.importMenuItems(file);
+            loadItems();
+
+            showAlert(
+                    Alert.AlertType.INFORMATION,
+                    "POS Menu Items Imported",
+                    "Read " + summary.getRowsRead() + " menu item rows from " + summary.getSheetName() + ".\n"
+                            + "Inserted: " + summary.getInsertedCount() + "\n"
+                            + "Updated: " + summary.getUpdatedCount() + "\n"
+                            + "Skipped: " + summary.getSkippedCount()
             );
 
         } catch (RuntimeException e) {
             showAlert(
                     Alert.AlertType.ERROR,
                     "Import Failed",
+                    e.getMessage()
+            );
+        }
+    }
+
+    private void deleteKdsItems() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select Salesmix With KDS Section");
+
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx")
+        );
+
+        File file = chooser.showOpenDialog(null);
+
+        if (file == null) {
+            return;
+        }
+
+        try {
+            Set<String> kdsPosSkus = posMenuItemImportService.findKdsSectionPosSkus(file);
+
+            if (kdsPosSkus.isEmpty()) {
+                showAlert(
+                        Alert.AlertType.INFORMATION,
+                        "No KDS Items Found",
+                        "No PLU/SKU values were found between the KDS marker rows."
+                );
+                return;
+            }
+
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Delete KDS POS Menu Items");
+            confirm.setHeaderText(null);
+            confirm.setContentText(
+                    "Found " + kdsPosSkus.size()
+                            + " PLU/SKU values in the KDS section.\n\n"
+                            + "Delete matching POS menu items from this app?"
+            );
+
+            confirm.showAndWait().ifPresent(button -> {
+                if (button == ButtonType.OK) {
+                    int deletedCount = dao.deleteByPosSkus(kdsPosSkus);
+                    loadItems();
+
+                    showAlert(
+                            Alert.AlertType.INFORMATION,
+                            "KDS Items Deleted",
+                            "Deleted " + deletedCount + " matching POS menu items."
+                    );
+                }
+            });
+
+        } catch (RuntimeException e) {
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Delete Failed",
                     e.getMessage()
             );
         }

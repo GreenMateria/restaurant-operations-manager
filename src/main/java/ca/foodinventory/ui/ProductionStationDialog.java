@@ -9,6 +9,7 @@ import javafx.scene.layout.GridPane;
 public class ProductionStationDialog extends Dialog<ProductionStation> {
 
     private final TextField nameField = new TextField();
+    private final ComboBox<String> prepSheetComboBox = new ComboBox<>();
     private final TextField sortOrderField = new TextField();
     private final CheckBox activeCheckBox = new CheckBox("Active");
 
@@ -37,6 +38,9 @@ public class ProductionStationDialog extends Dialog<ProductionStation> {
         getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
 
         nameField.setPromptText("Example: Line");
+        prepSheetComboBox.setEditable(true);
+        prepSheetComboBox.getItems().setAll("Main Line", "Pizza Salad");
+        prepSheetComboBox.setPromptText("Example: Main Line");
         sortOrderField.setPromptText("Example: 10");
 
         GridPane grid = new GridPane();
@@ -47,11 +51,14 @@ public class ProductionStationDialog extends Dialog<ProductionStation> {
         grid.add(new Label("Name:"), 0, 0);
         grid.add(nameField, 1, 0);
 
-        grid.add(new Label("Sort Order:"), 0, 1);
-        grid.add(sortOrderField, 1, 1);
+        grid.add(new Label("Prep Sheet:"), 0, 1);
+        grid.add(prepSheetComboBox, 1, 1);
 
-        grid.add(new Label("Status:"), 0, 2);
-        grid.add(activeCheckBox, 1, 2);
+        grid.add(new Label("Sort Order:"), 0, 2);
+        grid.add(sortOrderField, 1, 2);
+
+        grid.add(new Label("Status:"), 0, 3);
+        grid.add(activeCheckBox, 1, 3);
 
         getDialogPane().setContent(grid);
 
@@ -65,12 +72,14 @@ public class ProductionStationDialog extends Dialog<ProductionStation> {
 
     private void populateFields() {
         if (existingStation == null) {
+            prepSheetComboBox.setValue("Main Line");
             sortOrderField.setText("0");
             activeCheckBox.setSelected(true);
             return;
         }
 
         nameField.setText(existingStation.getName());
+        prepSheetComboBox.setValue(existingStation.getPrepSheet());
         sortOrderField.setText(String.valueOf(existingStation.getSortOrder()));
         activeCheckBox.setSelected(existingStation.isActive());
     }
@@ -83,6 +92,12 @@ public class ProductionStationDialog extends Dialog<ProductionStation> {
 
         if (sortOrderField.getText() == null || sortOrderField.getText().trim().isEmpty()) {
             showValidationError("Sort order is required.");
+            return false;
+        }
+
+        String prepSheet = prepSheetComboBox.getEditor().getText();
+        if (prepSheet == null || prepSheet.trim().isEmpty()) {
+            showValidationError("Prep sheet is required.");
             return false;
         }
 
@@ -101,6 +116,7 @@ public class ProductionStationDialog extends Dialog<ProductionStation> {
                 existingStation == null ? new ProductionStation() : existingStation;
 
         station.setName(nameField.getText().trim());
+        station.setPrepSheet(prepSheetComboBox.getEditor().getText().trim());
         station.setSortOrder(Integer.parseInt(sortOrderField.getText().trim()));
         station.setActive(activeCheckBox.isSelected());
 

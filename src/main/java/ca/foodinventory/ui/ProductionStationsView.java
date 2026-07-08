@@ -41,6 +41,9 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
         TableColumn<ProductionStation, String> nameCol = new TableColumn<>("Name");
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
 
+        TableColumn<ProductionStation, String> prepSheetCol = new TableColumn<>("Prep Sheet");
+        prepSheetCol.setCellValueFactory(new PropertyValueFactory<>("prepSheet"));
+
         TableColumn<ProductionStation, Integer> sortOrderCol = new TableColumn<>("Sort Order");
         sortOrderCol.setCellValueFactory(new PropertyValueFactory<>("sortOrder"));
 
@@ -49,6 +52,7 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
 
         table.getColumns().setAll(
                 nameCol,
+                prepSheetCol,
                 sortOrderCol,
                 activeCol
         );
@@ -99,6 +103,7 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
             }
 
             return containsIgnoreCase(station.getName(), search)
+                    || containsIgnoreCase(station.getPrepSheet(), search)
                     || String.valueOf(station.getSortOrder()).contains(search);
         });
     }

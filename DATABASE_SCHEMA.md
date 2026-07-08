@@ -1,0 +1,513 @@
+# DATABASE_SCHEMA.md
+
+_Last Updated: July 2026_
+
+This file documents the current SQLite database structure for the Food Inventory / ESM Operations Manager application.
+
+Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting, inventory, or production features.
+
+---
+
+# General Rules
+
+- Database engine: SQLite.
+- Runtime database path is controlled by `DatabaseManager`.
+- Runtime database is under:
+
+```text
+%LOCALAPPDATA%/FoodInventory/food_inventory.db
+```
+
+- A root-level `food_inventory.db` may exist in the project directory, but it is not necessarily the active runtime database.
+- Database setup and migrations live in:
+
+```text
+src/main/java/ca/foodinventory/database
+```
+
+- Current migration version: **8**.
+- Do not manually edit user databases unless explicitly asked.
+- Prefer adding schema changes through a new migration.
+
+---
+
+# Migration Files
+
+Current known migration files:
+
+- `Migration2`
+- `Migration3`
+- `Migration4`
+- `Migration5`
+- `Migration6`
+- `Migration7`
+- `Migration8`
+
+Migration responsibilities:
+
+- `Migration6`
+  - Added production module tables.
+- `Migration7`
+  - Added `production_items.shelf_life`.
+- `Migration8`
+  - Added `production_stations.prep_sheet`.
+
+---
+
+# Core Inventory Tables
+
+## products
+
+Stores inventory products.
+
+Important fields:
+
+- `id`
+- `sku`
+- `description`
+- `category`
+- `reporting_category`
+- `unit`
+- `conversion_factor`
+- `pack_size`
+- `pack_count`
+- `last_case_cost`
+- `last_purchased_date`
+- `active`
+
+Notes:
+
+- `sku` should be unique.
+- `reporting_category` drives department/reporting grouping.
+- `last_case_cost` is used as a fallback for valuation when no period purchase cost exists.
+
+---
+
+## product_sku_aliases
+
+Maps supplier-specific SKUs to products.
+
+Important fields:
+
+- `id`
+- `product_id`
+- `supplier`
+- `sku`
+- `description`
+- `pack_size`
+- `active`
+
+Used by invoice imports to connect supplier CSV lines to existing products.
+
+---
+
+## invoices
+
+Stores invoice headers.
+
+Important fields:
+
+- `id`
+- `invoice_number`
+- `supplier`
+- `invoice_date`
+- `invoice_total`
+
+Notes:
+
+- Invoice duplicate handling relies on `invoice_number`.
+
+---
+
+## invoice_lines
+
+Stores invoice line items.
+
+Important fields:
+
+- `id`
+- `invoice_id`
+- `product_id`
+- `quantity`
+- `base_quantity`
+- `pack_size`
+- `case_cost`
+- `extended_cost`
+
+Notes:
+
+- `base_quantity` is used for usage and valuation calculations.
+- GFS import calculates base quantity from cases and splits.
+
+---
+
+# Inventory Count Tables
+
+## inventory_count_templates
+
+Stores count sheet templates.
+
+Important fields:
+
+- `id`
+- `name`
+- `department`
+- `active`
+
+---
+
+## inventory_count_template_lines
+
+Stores products and layout settings for count templates.
+
+Important fields:
+
+- `id`
+- `template_id`
+- `product_id`
+- `section_name`
+- `sort_order`
+- `count_unit`
+- `conversion_factor_to_base`
+- `display_name`
+- `active`
+
+Notes:
+
+- `section_name` and `sort_order` control printed count sheet/order guide layout.
+- `conversion_factor_to_base` converts counted units to product base units.
+
+---
+
+## inventory_counts
+
+Stores completed or in-progress inventory counts.
+
+Important fields:
+
+- `id`
+- `template_id`
+- `count_date`
+- `period_start_date`
+- `period_end_date`
+- `notes`
+- `completed`
+
+---
+
+## inventory_count_lines
+
+Stores individual counted quantities.
+
+Important fields:
+
+- `id`
+- `count_id`
+- `product_id`
+- `quantity`
+- `count_unit`
+- `converted_quantity`
+
+Notes:
+
+- `converted_quantity` is the calculated quantity in product base units.
+
+---
+
+# Sales Tables
+
+## sales_periods
+
+Stores sales totals by period.
+
+Important fields:
+
+- `id`
+- `period_start_date`
+- `period_end_date`
+- `food_sales`
+- `beer_sales`
+- `wine_sales`
+- `draught_sales`
+- `import_draught_sales`
+- `liquor_sales`
+
+Notes:
+
+- Imported from POS sales `.xlsx`.
+- Weekly/category cost reporting uses these values.
+
+---
+
+# Settings Tables
+
+## settings
+
+Stores application settings such as admin password state.
+
+Known setting use cases:
+
+- Admin/system password hash.
+- Password initialization flag.
+
+---
+
+# Production Tables
+
+Production tables were introduced by Migration 6.
+
+## production_stations
+
+Stores kitchen/prep stations.
+
+Important fields:
+
+- `id`
+- `name`
+- `active`
+- `prep_sheet`
+
+Notes:
+
+- `prep_sheet` controls which printable prep sheet a station belongs to.
+- Default assignments:
+  - `Pizza` and `Salad` -> `Pizza Salad`
+  - Other stations -> `Main Line`
+
+---
+
+## production_items
+
+Stores prep/production items.
+
+Important fields:
+
+- `id`
+- `name`
+- `unit`
+- `station_id`
+- `active`
+- `shelf_life`
+
+Notes:
+
+- `shelf_life` is printed in the LIFE column on prep sheets.
+- Freezer Pull items use pull-style units.
+
+---
+
+## production_profiles
+
+Stores production profile headers.
+
+Important fields:
+
+- `id`
+- `name`
+- `active`
+
+Notes:
+
+- A production profile is the recipe/build list for a sold POS item.
+
+---
+
+## production_profile_lines
+
+Stores production item quantities per production profile.
+
+Important fields:
+
+- `id`
+- `profile_id`
+- `production_item_id`
+- `quantity`
+- `unit`
+- `active`
+
+Notes:
+
+- These lines determine how POS item sales convert into production quantities.
+- Freezer Pull line units can differ from normal prep units.
+
+---
+
+## pos_menu_items
+
+Stores POS menu items and their assigned production profile.
+
+Important fields:
+
+- `id`
+- `pos_sku`
+- `name`
+- `production_profile_id`
+- `active`
+
+Notes:
+
+- `pos_sku` maps to the PLU/SKU in POS Usage Report files.
+- Existing POS items should preserve profile assignment during import/update.
+
+---
+
+## production_item_product_mappings
+
+Maps production items to inventory products.
+
+Important fields:
+
+- `id`
+- `production_item_id`
+- `product_id`
+- conversion/quantity fields if present in current implementation
+- `active`
+
+Purpose:
+
+- Future production variance reporting.
+- Connect theoretical production usage to inventory product usage.
+
+---
+
+## production_weeks
+
+Stores generated weekly production headers.
+
+Important fields:
+
+- `id`
+- `week_start_date`
+- `week_end_date`
+- `par_multiplier`
+- created/updated fields if present
+
+Notes:
+
+- Re-importing the same week replaces the existing generated week.
+
+---
+
+## production_week_days
+
+Stores each day inside a generated production week.
+
+Important fields:
+
+- `id`
+- `production_week_id`
+- `day_name`
+- `prep_date`
+
+Notes:
+
+- Weekly Production displays each day as a separate tab.
+
+---
+
+## production_week_lines
+
+Stores generated and overridden production lines for each day.
+
+Important fields:
+
+- `id`
+- `production_week_day_id`
+- `production_item_id`
+- `production_item_name`
+- `station_name`
+- `prep_sheet`
+- `unit`
+- `shelf_life`
+- `previous_sales_quantity`
+- `generated_par`
+- `override_par`
+- `final_par`
+
+Notes:
+
+- `previous_sales_quantity` stores the generated quantity from prior POS usage.
+- `generated_par` is calculated from prior sales and multiplier.
+- `override_par` is user-editable.
+- `final_par` is override par when present, otherwise generated par.
+- Weekly Production print uses `final_par`.
+
+---
+
+# Reporting Rules
+
+## Inventory Cost
+
+Formula:
+
+```text
+Usage = Opening Inventory + Purchases - Closing Inventory
+Cost % = Usage / Sales
+```
+
+Rules:
+
+- Food cost uses food sales.
+- Alcohol categories use their own alcohol sales category.
+- Supplies categories are costed against total revenue.
+- Multi-week reports can use opening and closing counts with sales between dates.
+
+---
+
+# Department / Reporting Categories
+
+Known reporting categories:
+
+- `FOOD`
+- `PAPER`
+- `TAKE OUT`
+- `CLEANING`
+- `DISHWASHING`
+- `GUEST SUPPLIES`
+- `WINE`
+- `BEER`
+- `DRAUGHT`
+- `IMPORT DRAUGHT`
+- `LIQUOR`
+- `OTHER`
+
+Department filters:
+
+Food:
+
+```text
+FOOD
+```
+
+Alcohol:
+
+```text
+WINE, BEER, DRAUGHT, IMPORT DRAUGHT, LIQUOR
+```
+
+Supplies:
+
+```text
+PAPER, TAKE OUT, CLEANING, DISHWASHING, GUEST SUPPLIES, OTHER
+```
+
+---
+
+# Schema Change Rules
+
+When adding schema:
+
+1. Add a new `MigrationX` class.
+2. Increment the current schema version in `DatabaseMigrationRunner`.
+3. Make the migration safe to run once.
+4. Use `CREATE TABLE IF NOT EXISTS` where practical.
+5. Use repair logic only when needed.
+6. Run:
+
+```bash
+mvn clean test
+```
+
+7. Manually launch the app and verify startup migration succeeds.
+
+Do not silently reset or delete the runtime database.

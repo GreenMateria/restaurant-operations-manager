@@ -256,7 +256,12 @@ public class MainView {
 
                 createDashboardButton(
                         "Weekly Production",
-                        () -> showComingSoon("Weekly Production")
+                        () -> showView(new WeeklyProductionView())
+                ),
+
+                createDashboardButton(
+                        "Freezer Pull",
+                        () -> showView(new FreezerPullView())
                 ),
 
                 createDashboardButton(

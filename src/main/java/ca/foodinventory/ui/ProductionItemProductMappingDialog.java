@@ -5,7 +5,6 @@ import ca.foodinventory.dao.ProductionItemDao;
 import ca.foodinventory.model.Product;
 import ca.foodinventory.model.ProductionItem;
 import ca.foodinventory.model.ProductionItemProductMapping;
-import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -87,9 +86,7 @@ public class ProductionItemProductMappingDialog extends Dialog<ProductionItemPro
     }
 
     private void loadProductionItems() {
-        productionItemComboBox.setItems(FXCollections.observableArrayList(productionItemDao.findActive()));
-
-        productionItemComboBox.setConverter(new StringConverter<>() {
+        SearchableComboBoxSupport.makeSearchable(productionItemComboBox, productionItemDao.findActive(), new StringConverter<>() {
             @Override
             public String toString(ProductionItem item) {
                 return item == null ? "" : item.getName();
@@ -103,9 +100,7 @@ public class ProductionItemProductMappingDialog extends Dialog<ProductionItemPro
     }
 
     private void loadProducts() {
-        productComboBox.setItems(FXCollections.observableArrayList(productDao.getAllActiveProducts()));
-
-        productComboBox.setConverter(new StringConverter<>() {
+        SearchableComboBoxSupport.makeSearchable(productComboBox, productDao.getAllActiveProducts(), new StringConverter<>() {
             @Override
             public String toString(Product product) {
                 if (product == null) {

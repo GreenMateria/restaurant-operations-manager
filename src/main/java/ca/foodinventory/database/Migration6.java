@@ -19,6 +19,7 @@ public class Migration6 implements Migration {
                 CREATE TABLE IF NOT EXISTS production_stations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL UNIQUE,
+                    prep_sheet TEXT NOT NULL DEFAULT 'Main Line',
                     sort_order INTEGER NOT NULL DEFAULT 0,
                     active INTEGER NOT NULL DEFAULT 1
                 )
@@ -29,6 +30,7 @@ public class Migration6 implements Migration {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL UNIQUE,
                     unit TEXT NOT NULL,
+                    shelf_life TEXT,
                     station_id INTEGER,
                     print_order INTEGER NOT NULL DEFAULT 0,
                     active INTEGER NOT NULL DEFAULT 1,
@@ -128,15 +130,15 @@ public class Migration6 implements Migration {
             """);
 
             stmt.execute("""
-                INSERT OR IGNORE INTO production_stations (name, sort_order, active)
+                INSERT OR IGNORE INTO production_stations (name, prep_sheet, sort_order, active)
                 VALUES
-                    ('Line', 10, 1),
-                    ('Pasta', 20, 1),
-                    ('Prep', 30, 1),
-                    ('Pizza', 40, 1),
-                    ('Salad', 50, 1),
-                    ('Dessert', 60, 1),
-                    ('Freezer Pull', 70, 1)
+                    ('Line', 'Main Line', 10, 1),
+                    ('Pasta', 'Main Line', 20, 1),
+                    ('Prep', 'Main Line', 30, 1),
+                    ('Pizza', 'Pizza Salad', 40, 1),
+                    ('Salad', 'Pizza Salad', 50, 1),
+                    ('Dessert', 'Main Line', 60, 1),
+                    ('Freezer Pull', 'Main Line', 70, 1)
             """);
 
         } catch (SQLException e) {

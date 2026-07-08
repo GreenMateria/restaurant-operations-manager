@@ -17,6 +17,7 @@ public class ProductionItemDao {
                 pi.id,
                 pi.name,
                 pi.unit,
+                pi.shelf_life,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -49,6 +50,7 @@ public class ProductionItemDao {
                 pi.id,
                 pi.name,
                 pi.unit,
+                pi.shelf_life,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -80,6 +82,7 @@ public class ProductionItemDao {
                 pi.id,
                 pi.name,
                 pi.unit,
+                pi.shelf_life,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -113,6 +116,7 @@ public class ProductionItemDao {
                 pi.id,
                 pi.name,
                 pi.unit,
+                pi.shelf_life,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -153,11 +157,12 @@ public class ProductionItemDao {
             INSERT INTO production_items (
                 name,
                 unit,
+                shelf_life,
                 station_id,
                 print_order,
                 active
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
         """;
 
         try (Connection connection = DatabaseManager.getConnection();
@@ -165,9 +170,10 @@ public class ProductionItemDao {
 
             statement.setString(1, item.getName());
             statement.setString(2, item.getUnit());
-            setNullableInt(statement, 3, item.getStationId());
-            statement.setInt(4, item.getPrintOrder());
-            statement.setInt(5, item.isActive() ? 1 : 0);
+            statement.setString(3, item.getShelfLife());
+            setNullableInt(statement, 4, item.getStationId());
+            statement.setInt(5, item.getPrintOrder());
+            statement.setInt(6, item.isActive() ? 1 : 0);
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -180,6 +186,7 @@ public class ProductionItemDao {
             UPDATE production_items
             SET name = ?,
                 unit = ?,
+                shelf_life = ?,
                 station_id = ?,
                 print_order = ?,
                 active = ?
@@ -191,10 +198,11 @@ public class ProductionItemDao {
 
             statement.setString(1, item.getName());
             statement.setString(2, item.getUnit());
-            setNullableInt(statement, 3, item.getStationId());
-            statement.setInt(4, item.getPrintOrder());
-            statement.setInt(5, item.isActive() ? 1 : 0);
-            statement.setInt(6, item.getId());
+            statement.setString(3, item.getShelfLife());
+            setNullableInt(statement, 4, item.getStationId());
+            statement.setInt(5, item.getPrintOrder());
+            statement.setInt(6, item.isActive() ? 1 : 0);
+            statement.setInt(7, item.getId());
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -233,6 +241,7 @@ public class ProductionItemDao {
                 resultSet.getInt("id"),
                 resultSet.getString("name"),
                 resultSet.getString("unit"),
+                resultSet.getString("shelf_life"),
                 resultSet.getInt("station_id"),
                 resultSet.getString("station_name"),
                 resultSet.getInt("print_order"),

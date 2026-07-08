@@ -6,7 +6,7 @@ import java.util.List;
 
 public class DatabaseMigrationRunner {
 
-    private static final int CURRENT_SCHEMA_VERSION = 6;
+    private static final int CURRENT_SCHEMA_VERSION = 8;
 
     public static void runMigrations(Connection conn) throws SQLException {
         createSchemaVersionTable(conn);
@@ -24,7 +24,9 @@ public class DatabaseMigrationRunner {
                 new Migration3(),
                 new Migration4(),
                 new Migration5(),
-                new Migration6()
+                new Migration6(),
+                new Migration7(),
+                new Migration8()
         );
 
         for (Migration migration : migrations) {
@@ -86,6 +88,16 @@ public class DatabaseMigrationRunner {
             System.out.println("Repairing missing migration 6 schema");
             new Migration6().migrate(conn);
         }
+
+        if (currentVersion >= 7 && !columnExists(conn, "production_items", "shelf_life")) {
+            System.out.println("Repairing missing migration 7 schema");
+            new Migration7().migrate(conn);
+        }
+
+        if (currentVersion >= 8 && !columnExists(conn, "production_stations", "prep_sheet")) {
+            System.out.println("Repairing missing migration 8 schema");
+            new Migration8().migrate(conn);
+        }
     }
 
     private static boolean isMigration6SchemaMissing(Connection conn) throws SQLException {
@@ -115,5 +127,23 @@ public class DatabaseMigrationRunner {
                 return rs.next();
             }
         }
+    }
+
+    private static boolean columnExists(
+            Connection conn,
+            String tableName,
+            String columnName
+    ) throws SQLException {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + tableName + ")")) {
+
+            while (rs.next()) {
+                if (columnName.equalsIgnoreCase(rs.getString("name"))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

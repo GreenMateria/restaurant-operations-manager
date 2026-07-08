@@ -20,6 +20,8 @@ import java.util.List;
 
 public class ProductionProfileDialog extends Dialog<ProductionProfileDialog.Result> {
 
+    private static final String FREEZER_PULL_STATION = "Freezer Pull";
+
     public record Result(ProductionProfile profile, List<ProductionProfileLine> lines) {
     }
 
@@ -178,9 +180,7 @@ public class ProductionProfileDialog extends Dialog<ProductionProfileDialog.Resu
     }
 
     private void loadProductionItems() {
-        productionItemComboBox.setItems(FXCollections.observableArrayList(productionItemDao.findActive()));
-
-        productionItemComboBox.setConverter(new StringConverter<>() {
+        SearchableComboBoxSupport.makeSearchable(productionItemComboBox, productionItemDao.findActive(), new StringConverter<>() {
             @Override
             public String toString(ProductionItem item) {
                 return item == null ? "" : item.getName();
@@ -192,24 +192,14 @@ public class ProductionProfileDialog extends Dialog<ProductionProfileDialog.Resu
             }
         });
 
-        productionItemComboBox.setCellFactory(comboBox -> new ListCell<>() {
-            @Override
-            protected void updateItem(ProductionItem item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.getName());
-            }
-        });
-
-        productionItemComboBox.setButtonCell(new ListCell<>() {
-            @Override
-            protected void updateItem(ProductionItem item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.getName());
-            }
-        });
-
         productionItemComboBox.valueProperty().addListener((obs, oldItem, newItem) -> {
-            if (newItem != null && (unitField.getText() == null || unitField.getText().isBlank())) {
+            if (newItem == null) {
+                return;
+            }
+
+            if (FREEZER_PULL_STATION.equalsIgnoreCase(newItem.getStationName())
+                    || unitField.getText() == null
+                    || unitField.getText().isBlank()) {
                 unitField.setText(newItem.getUnit());
             }
         });

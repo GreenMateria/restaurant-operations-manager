@@ -14,11 +14,14 @@ import java.util.List;
 
 public class ProductionItemDialog extends Dialog<ProductionItem> {
 
+    private static final String FREEZER_PULL_STATION = "Freezer Pull";
+
     private final ProductionStationDao productionStationDao = new ProductionStationDao();
 
     private final TextField nameField = new TextField();
     private final ComboBox<ProductionStation> stationComboBox = new ComboBox<>();
     private final ComboBox<String> unitComboBox = new ComboBox<>();
+    private final TextField shelfLifeField = new TextField();
     private final TextField printOrderField = new TextField();
     private final CheckBox activeCheckBox = new CheckBox("Active");
 
@@ -48,10 +51,12 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
 
         nameField.setPromptText("Example: Alfredo Sauce");
+        shelfLifeField.setPromptText("Example: 3 days");
         printOrderField.setPromptText("Example: 10");
 
         stationComboBox.setPrefWidth(260);
         unitComboBox.setPrefWidth(260);
+        unitComboBox.setTooltip(new Tooltip("Choose a common unit or type a custom unit."));
 
         activeCheckBox.setSelected(true);
 
@@ -69,11 +74,14 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         grid.add(new Label("Unit:"), 0, 2);
         grid.add(unitComboBox, 1, 2);
 
-        grid.add(new Label("Print Order:"), 0, 3);
-        grid.add(printOrderField, 1, 3);
+        grid.add(new Label("Shelf Life:"), 0, 3);
+        grid.add(shelfLifeField, 1, 3);
 
-        grid.add(new Label("Status:"), 0, 4);
-        grid.add(activeCheckBox, 1, 4);
+        grid.add(new Label("Print Order:"), 0, 4);
+        grid.add(printOrderField, 1, 4);
+
+        grid.add(new Label("Status:"), 0, 5);
+        grid.add(activeCheckBox, 1, 5);
 
         getDialogPane().setContent(grid);
 
@@ -122,18 +130,92 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
     private void loadUnits() {
         unitComboBox.setItems(FXCollections.observableArrayList(
                 "EA",
+                "PORTION",
+                "LB",
+                "OZ",
                 "KG",
                 "G",
                 "L",
                 "ML",
-                "PORTION",
-                "PAN",
+                "QT",
+                "GAL",
+                "BATCH",
                 "TRAY",
+                "PAN",
+                "1/9 PAN",
+                "1/6 PAN",
+                "1/3 PAN",
                 "BAG",
                 "BOTTLE"
         ));
 
         unitComboBox.setEditable(true);
+
+        stationComboBox.valueProperty().addListener((obs, oldStation, newStation) -> {
+            if (newStation != null && FREEZER_PULL_STATION.equalsIgnoreCase(newStation.getName())) {
+                loadFreezerPullUnits();
+            } else {
+                loadStandardUnits();
+            }
+        });
+    }
+
+    private void loadStandardUnits() {
+        String currentUnit = getUnitText();
+
+        unitComboBox.setItems(FXCollections.observableArrayList(
+                "EA",
+                "PORTION",
+                "LB",
+                "OZ",
+                "KG",
+                "G",
+                "L",
+                "ML",
+                "QT",
+                "GAL",
+                "BATCH",
+                "TRAY",
+                "PAN",
+                "1/9 PAN",
+                "1/6 PAN",
+                "1/3 PAN",
+                "BAG",
+                "BOTTLE"
+        ));
+
+        unitComboBox.setEditable(true);
+        restoreUnit(currentUnit);
+    }
+
+    private void loadFreezerPullUnits() {
+        String currentUnit = getUnitText();
+
+        unitComboBox.setItems(FXCollections.observableArrayList(
+                "2 KG BAG",
+                "1 KG BAG",
+                "BAG",
+                "BOX",
+                "CASE",
+                "PORTION BAG",
+                "TRAY",
+                "TUB",
+                "PACK"
+        ));
+
+        unitComboBox.setEditable(true);
+
+        if (currentUnit == null || currentUnit.isBlank() || "PORTION".equalsIgnoreCase(currentUnit)) {
+            unitComboBox.setValue("2 KG BAG");
+        } else {
+            restoreUnit(currentUnit);
+        }
+    }
+
+    private void restoreUnit(String unit) {
+        if (unit != null && !unit.isBlank()) {
+            unitComboBox.setValue(unit);
+        }
     }
 
     private void populateFields() {
@@ -145,6 +227,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
 
         nameField.setText(existingItem.getName());
         unitComboBox.setValue(existingItem.getUnit());
+        shelfLifeField.setText(existingItem.getShelfLife());
         printOrderField.setText(String.valueOf(existingItem.getPrintOrder()));
         activeCheckBox.setSelected(existingItem.isActive());
 
@@ -195,6 +278,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
 
         item.setName(nameField.getText().trim());
         item.setUnit(getUnitText().trim().toUpperCase());
+        item.setShelfLife(normalizeOptionalText(shelfLifeField.getText()));
         item.setStationId(selectedStation == null ? 0 : selectedStation.getId());
         item.setStationName(selectedStation == null ? null : selectedStation.getName());
         item.setPrintOrder(Integer.parseInt(printOrderField.getText().trim()));
@@ -211,6 +295,14 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         }
 
         return unitComboBox.getValue();
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        return value.trim();
     }
 
     private void showValidationError(String message) {
