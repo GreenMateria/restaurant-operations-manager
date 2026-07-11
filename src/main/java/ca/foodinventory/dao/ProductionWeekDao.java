@@ -16,6 +16,7 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -143,6 +144,7 @@ public class ProductionWeekDao {
                 reportSummary,
                 includeAllActiveProductionItems
         );
+        Map<Integer, Integer> permanentOverrideByProductionItemId = buildPermanentOverrideMap();
 
         try (Connection connection = DatabaseManager.getConnection()) {
             boolean originalAutoCommit = connection.getAutoCommit();
@@ -167,7 +169,8 @@ public class ProductionWeekDao {
                             dayIndex,
                             parMultiplier,
                             reportLines,
-                            includeAllActiveProductionItems
+                            includeAllActiveProductionItems,
+                            permanentOverrideByProductionItemId
                     );
                 }
 
@@ -220,6 +223,37 @@ public class ProductionWeekDao {
 
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save production line overrides", e);
+        }
+    }
+
+    public void refreshWeekLines(ProductionWeek week, boolean includeAllActiveProductionItems) {
+        Map<Integer, ProductionItem> activeItemsById = buildActiveProductionItemMap();
+
+        try (Connection connection = DatabaseManager.getConnection()) {
+            boolean originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+
+            try {
+                for (ProductionWeekDay day : findDaysByWeekId(week.getId())) {
+                    refreshLinesForDay(
+                            connection,
+                            day.getId(),
+                            week.getParMultiplier(),
+                            activeItemsById,
+                            includeAllActiveProductionItems
+                    );
+                }
+
+                connection.commit();
+            } catch (SQLException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(originalAutoCommit);
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to refresh production week", e);
         }
     }
 
@@ -362,7 +396,8 @@ public class ProductionWeekDao {
             int dayIndex,
             double parMultiplier,
             List<ProductionReportLine> reportLines,
-            boolean includeZeroQuantityLines
+            boolean includeZeroQuantityLines,
+            Map<Integer, Integer> permanentOverrideByProductionItemId
     ) throws SQLException {
         String sql = """
             INSERT INTO production_week_lines (
@@ -388,13 +423,21 @@ public class ProductionWeekDao {
                 }
 
                 int generatedPar = (int) Math.ceil(salesQuantity * parMultiplier);
+                Integer permanentOverridePar = permanentOverrideByProductionItemId.get(
+                        reportLine.getProductionItemId()
+                );
+                int finalPar = permanentOverridePar == null ? generatedPar : permanentOverridePar;
 
                 statement.setInt(1, productionWeekDayId);
                 statement.setInt(2, reportLine.getProductionItemId());
                 statement.setDouble(3, salesQuantity);
                 statement.setInt(4, generatedPar);
-                statement.setNull(5, Types.INTEGER);
-                statement.setInt(6, generatedPar);
+                if (permanentOverridePar == null) {
+                    statement.setNull(5, Types.INTEGER);
+                } else {
+                    statement.setInt(5, permanentOverridePar);
+                }
+                statement.setInt(6, finalPar);
                 statement.setString(7, reportLine.getUnit());
                 setNullableInt(statement, 8, reportLine.getStationId());
                 statement.setInt(9, reportLine.getPrintOrder());
@@ -403,6 +446,159 @@ public class ProductionWeekDao {
 
             statement.executeBatch();
         }
+    }
+
+    private void refreshLinesForDay(
+            Connection connection,
+            int productionWeekDayId,
+            double parMultiplier,
+            Map<Integer, ProductionItem> activeItemsById,
+            boolean includeAllActiveProductionItems
+    ) throws SQLException {
+        Map<Integer, RefreshLine> existingLinesByProductionItemId =
+                findRefreshLinesByProductionItemId(connection, productionWeekDayId);
+
+        String updateSql = """
+            UPDATE production_week_lines
+            SET generated_par = ?,
+                override_par = ?,
+                final_par = ?,
+                unit = ?,
+                station_id = ?,
+                print_order = ?
+            WHERE id = ?
+        """;
+
+        try (PreparedStatement statement = connection.prepareStatement(updateSql)) {
+            for (RefreshLine line : existingLinesByProductionItemId.values()) {
+                ProductionItem item = activeItemsById.get(line.productionItemId());
+
+                if (item == null) {
+                    continue;
+                }
+
+                int generatedPar = (int) Math.ceil(line.previousSalesQuantity() * parMultiplier);
+                Integer overridePar = item.getPermanentOverridePar() == null
+                        ? line.overridePar()
+                        : item.getPermanentOverridePar();
+                int finalPar = overridePar == null ? generatedPar : overridePar;
+
+                statement.setInt(1, generatedPar);
+                setNullableInteger(statement, 2, overridePar);
+                statement.setInt(3, finalPar);
+                statement.setString(4, item.getUnit());
+                setNullableInt(statement, 5, item.getStationId());
+                statement.setInt(6, item.getPrintOrder());
+                statement.setInt(7, line.id());
+                statement.addBatch();
+            }
+
+            statement.executeBatch();
+        }
+
+        if (!includeAllActiveProductionItems) {
+            return;
+        }
+
+        for (ProductionItem item : activeItemsById.values()) {
+            if (!existingLinesByProductionItemId.containsKey(item.getId())) {
+                insertManualRefreshLine(connection, productionWeekDayId, item);
+            }
+        }
+    }
+
+    private Map<Integer, RefreshLine> findRefreshLinesByProductionItemId(
+            Connection connection,
+            int productionWeekDayId
+    ) throws SQLException {
+        Map<Integer, RefreshLine> linesByProductionItemId = new HashMap<>();
+
+        String sql = """
+            SELECT id,
+                   production_item_id,
+                   previous_sales_quantity,
+                   override_par
+            FROM production_week_lines
+            WHERE production_week_day_id = ?
+        """;
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, productionWeekDayId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    int overridePar = resultSet.getInt("override_par");
+                    Integer nullableOverridePar = resultSet.wasNull() ? null : overridePar;
+                    RefreshLine line = new RefreshLine(
+                            resultSet.getInt("id"),
+                            resultSet.getInt("production_item_id"),
+                            resultSet.getDouble("previous_sales_quantity"),
+                            nullableOverridePar
+                    );
+                    linesByProductionItemId.put(line.productionItemId(), line);
+                }
+            }
+        }
+
+        return linesByProductionItemId;
+    }
+
+    private void insertManualRefreshLine(
+            Connection connection,
+            int productionWeekDayId,
+            ProductionItem item
+    ) throws SQLException {
+        String sql = """
+            INSERT INTO production_week_lines (
+                production_week_day_id,
+                production_item_id,
+                previous_sales_quantity,
+                generated_par,
+                override_par,
+                final_par,
+                unit,
+                station_id,
+                print_order
+            )
+            VALUES (?, ?, 0, 0, ?, ?, ?, ?, ?)
+        """;
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            Integer permanentOverridePar = item.getPermanentOverridePar();
+
+            statement.setInt(1, productionWeekDayId);
+            statement.setInt(2, item.getId());
+            setNullableInteger(statement, 3, permanentOverridePar);
+            statement.setInt(4, permanentOverridePar == null ? 0 : permanentOverridePar);
+            statement.setString(5, item.getUnit());
+            setNullableInt(statement, 6, item.getStationId());
+            statement.setInt(7, item.getPrintOrder());
+            statement.executeUpdate();
+        }
+    }
+
+    private Map<Integer, Integer> buildPermanentOverrideMap() {
+        Map<Integer, Integer> permanentOverrideByProductionItemId = new LinkedHashMap<>();
+
+        for (ProductionItem item : productionItemDao.findActive()) {
+            if (item.getPermanentOverridePar() != null) {
+                permanentOverrideByProductionItemId.put(item.getId(), item.getPermanentOverridePar());
+            }
+        }
+
+        return permanentOverrideByProductionItemId;
+    }
+
+    private Map<Integer, ProductionItem> buildActiveProductionItemMap() {
+        Map<Integer, ProductionItem> activeItemsById = new LinkedHashMap<>();
+
+        for (ProductionItem item : productionItemDao.findActive()) {
+            if (!isFreezerPullStation(item.getStationName())) {
+                activeItemsById.put(item.getId(), item);
+            }
+        }
+
+        return activeItemsById;
     }
 
     private List<ProductionReportLine> buildProductionWeekLines(
@@ -467,6 +663,14 @@ public class ProductionWeekDao {
         }
     }
 
+    private void setNullableInteger(PreparedStatement statement, int index, Integer value) throws SQLException {
+        if (value == null) {
+            statement.setNull(index, Types.INTEGER);
+        } else {
+            statement.setInt(index, value);
+        }
+    }
+
     private ProductionWeek mapWeek(ResultSet resultSet) throws SQLException {
         return new ProductionWeek(
                 resultSet.getInt("id"),
@@ -507,5 +711,13 @@ public class ProductionWeekDao {
                 resultSet.getString("prep_sheet"),
                 resultSet.getInt("print_order")
         );
+    }
+
+    private record RefreshLine(
+            int id,
+            int productionItemId,
+            double previousSalesQuantity,
+            Integer overridePar
+    ) {
     }
 }

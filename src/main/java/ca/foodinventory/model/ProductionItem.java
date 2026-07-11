@@ -9,6 +9,7 @@ public class ProductionItem {
     private int stationId;
     private String stationName;
     private int printOrder;
+    private Integer permanentOverridePar;
     private boolean active;
 
     public ProductionItem() {
@@ -22,6 +23,7 @@ public class ProductionItem {
             int stationId,
             String stationName,
             int printOrder,
+            Integer permanentOverridePar,
             boolean active
     ) {
         this.id = id;
@@ -31,6 +33,7 @@ public class ProductionItem {
         this.stationId = stationId;
         this.stationName = stationName;
         this.printOrder = printOrder;
+        this.permanentOverridePar = permanentOverridePar;
         this.active = active;
     }
 
@@ -40,6 +43,7 @@ public class ProductionItem {
             String shelfLife,
             int stationId,
             int printOrder,
+            Integer permanentOverridePar,
             boolean active
     ) {
         this.name = name;
@@ -47,6 +51,7 @@ public class ProductionItem {
         this.shelfLife = shelfLife;
         this.stationId = stationId;
         this.printOrder = printOrder;
+        this.permanentOverridePar = permanentOverridePar;
         this.active = active;
     }
 
@@ -110,6 +115,13 @@ public class ProductionItem {
         this.printOrder = printOrder;
     }
 
+    public Integer getPermanentOverridePar() {
+        return permanentOverridePar;
+    }
+
+    public void setPermanentOverridePar(Integer permanentOverridePar) {
+        this.permanentOverridePar = permanentOverridePar;
+    }
 
     public boolean isActive() {
         return active;

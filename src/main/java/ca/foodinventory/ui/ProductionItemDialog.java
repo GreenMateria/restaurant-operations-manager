@@ -23,6 +23,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
     private final ComboBox<String> unitComboBox = new ComboBox<>();
     private final TextField shelfLifeField = new TextField();
     private final TextField printOrderField = new TextField();
+    private final TextField permanentOverrideParField = new TextField();
     private final CheckBox activeCheckBox = new CheckBox("Active");
 
     private final ProductionItem existingItem;
@@ -53,6 +54,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         nameField.setPromptText("Example: Alfredo Sauce");
         shelfLifeField.setPromptText("Example: 3 days");
         printOrderField.setPromptText("Example: 10");
+        permanentOverrideParField.setPromptText("Blank for usage-based par");
 
         stationComboBox.setPrefWidth(260);
         unitComboBox.setPrefWidth(260);
@@ -80,8 +82,11 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         grid.add(new Label("Print Order:"), 0, 4);
         grid.add(printOrderField, 1, 4);
 
-        grid.add(new Label("Status:"), 0, 5);
-        grid.add(activeCheckBox, 1, 5);
+        grid.add(new Label("Permanent Override Par:"), 0, 5);
+        grid.add(permanentOverrideParField, 1, 5);
+
+        grid.add(new Label("Status:"), 0, 6);
+        grid.add(activeCheckBox, 1, 6);
 
         getDialogPane().setContent(grid);
 
@@ -229,6 +234,9 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         unitComboBox.setValue(existingItem.getUnit());
         shelfLifeField.setText(existingItem.getShelfLife());
         printOrderField.setText(String.valueOf(existingItem.getPrintOrder()));
+        permanentOverrideParField.setText(existingItem.getPermanentOverridePar() == null
+                ? ""
+                : String.valueOf(existingItem.getPermanentOverridePar()));
         activeCheckBox.setSelected(existingItem.isActive());
 
         if (existingItem.getStationId() > 0) {
@@ -245,6 +253,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         String name = nameField.getText();
         String unit = getUnitText();
         String printOrder = printOrderField.getText();
+        String permanentOverridePar = permanentOverrideParField.getText();
 
         if (name == null || name.trim().isEmpty()) {
             showValidationError("Name is required.");
@@ -268,6 +277,20 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
             return false;
         }
 
+        if (permanentOverridePar != null && !permanentOverridePar.trim().isEmpty()) {
+            try {
+                int parsedOverride = Integer.parseInt(permanentOverridePar.trim());
+
+                if (parsedOverride < 0) {
+                    showValidationError("Permanent override par must be zero or greater.");
+                    return false;
+                }
+            } catch (NumberFormatException e) {
+                showValidationError("Permanent override par must be a whole number.");
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -282,6 +305,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         item.setStationId(selectedStation == null ? 0 : selectedStation.getId());
         item.setStationName(selectedStation == null ? null : selectedStation.getName());
         item.setPrintOrder(Integer.parseInt(printOrderField.getText().trim()));
+        item.setPermanentOverridePar(parseOptionalInteger(permanentOverrideParField.getText()));
         item.setActive(activeCheckBox.isSelected());
 
         return item;
@@ -303,6 +327,14 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         }
 
         return value.trim();
+    }
+
+    private Integer parseOptionalInteger(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        return Integer.parseInt(value.trim());
     }
 
     private void showValidationError(String message) {

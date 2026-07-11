@@ -21,6 +21,7 @@ public class ProductionItemDao {
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
+                pi.permanent_override_par,
                 pi.active
             FROM production_items pi
             LEFT JOIN production_stations ps ON pi.station_id = ps.id
@@ -54,6 +55,7 @@ public class ProductionItemDao {
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
+                pi.permanent_override_par,
                 pi.active
             FROM production_items pi
             LEFT JOIN production_stations ps ON pi.station_id = ps.id
@@ -86,6 +88,7 @@ public class ProductionItemDao {
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
+                pi.permanent_override_par,
                 pi.active
             FROM production_items pi
             LEFT JOIN production_stations ps ON pi.station_id = ps.id
@@ -120,6 +123,7 @@ public class ProductionItemDao {
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
+                pi.permanent_override_par,
                 pi.active
             FROM production_items pi
             LEFT JOIN production_stations ps ON pi.station_id = ps.id
@@ -160,9 +164,10 @@ public class ProductionItemDao {
                 shelf_life,
                 station_id,
                 print_order,
+                permanent_override_par,
                 active
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """;
 
         try (Connection connection = DatabaseManager.getConnection();
@@ -173,7 +178,8 @@ public class ProductionItemDao {
             statement.setString(3, item.getShelfLife());
             setNullableInt(statement, 4, item.getStationId());
             statement.setInt(5, item.getPrintOrder());
-            statement.setInt(6, item.isActive() ? 1 : 0);
+            setNullableInteger(statement, 6, item.getPermanentOverridePar());
+            statement.setInt(7, item.isActive() ? 1 : 0);
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -189,6 +195,7 @@ public class ProductionItemDao {
                 shelf_life = ?,
                 station_id = ?,
                 print_order = ?,
+                permanent_override_par = ?,
                 active = ?
             WHERE id = ?
         """;
@@ -201,8 +208,9 @@ public class ProductionItemDao {
             statement.setString(3, item.getShelfLife());
             setNullableInt(statement, 4, item.getStationId());
             statement.setInt(5, item.getPrintOrder());
-            statement.setInt(6, item.isActive() ? 1 : 0);
-            statement.setInt(7, item.getId());
+            setNullableInteger(statement, 6, item.getPermanentOverridePar());
+            statement.setInt(7, item.isActive() ? 1 : 0);
+            statement.setInt(8, item.getId());
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -228,11 +236,38 @@ public class ProductionItemDao {
         }
     }
 
+    public void updatePermanentOverridePar(int id, Integer permanentOverridePar) {
+        String sql = """
+            UPDATE production_items
+            SET permanent_override_par = ?
+            WHERE id = ?
+        """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            setNullableInteger(statement, 1, permanentOverridePar);
+            statement.setInt(2, id);
+            statement.executeUpdate();
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save permanent override par", e);
+        }
+    }
+
     private void setNullableInt(PreparedStatement statement, int index, int value) throws SQLException {
         if (value > 0) {
             statement.setInt(index, value);
         } else {
             statement.setNull(index, Types.INTEGER);
+        }
+    }
+
+    private void setNullableInteger(PreparedStatement statement, int index, Integer value) throws SQLException {
+        if (value == null) {
+            statement.setNull(index, Types.INTEGER);
+        } else {
+            statement.setInt(index, value);
         }
     }
 
@@ -245,7 +280,13 @@ public class ProductionItemDao {
                 resultSet.getInt("station_id"),
                 resultSet.getString("station_name"),
                 resultSet.getInt("print_order"),
+                getNullableInteger(resultSet, "permanent_override_par"),
                 resultSet.getInt("active") == 1
         );
+    }
+
+    private Integer getNullableInteger(ResultSet resultSet, String columnName) throws SQLException {
+        int value = resultSet.getInt(columnName);
+        return resultSet.wasNull() ? null : value;
     }
 }

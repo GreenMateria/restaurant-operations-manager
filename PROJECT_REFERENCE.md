@@ -115,7 +115,7 @@ Use this file to restore context in a new chat. A good prompt is:
 ## Database And Migrations
 
 - `DatabaseManager.initializeDatabase()` creates the base schema and runs `DatabaseMigrationRunner`.
-- Current schema version in `DatabaseMigrationRunner` is `8`.
+- Current schema version in `DatabaseMigrationRunner` is `9`.
 - Migration files:
   - `Migration2`
   - `Migration3`
@@ -124,6 +124,7 @@ Use this file to restore context in a new chat. A good prompt is:
   - `Migration6`
   - `Migration7`
   - `Migration8`
+  - `Migration9`
 - Migration repair logic exists for missing schemas after version upgrades.
 - Migration 6 added production tables:
   - `production_stations`
@@ -142,6 +143,9 @@ Use this file to restore context in a new chat. A good prompt is:
   - Existing/default station prep sheet assignment:
     - `Pizza` and `Salad` default to `Pizza Salad`
     - Other existing stations default to `Main Line`
+- Migration 9 added:
+  - `production_items.permanent_override_par`
+  - Weekly Production generation applies this as the saved override/final par for matching production items.
 
 ## Production Module Status
 
@@ -180,6 +184,7 @@ Use this file to restore context in a new chat. A good prompt is:
 - Weekly Production can preview and print the selected daily production list.
   - Buttons: `Preview Prep Sheet`, `Print Prep Sheet`.
   - A `Prep Sheet` selector filters the selected day table and printout by kitchen area.
+  - `Print All` prints the selected Prep Sheet for every loaded day tab, Monday through Sunday, in one print job.
   - Each day tab keeps all loaded lines internally, so switching prep sheets does not discard override edits.
   - Production Stations have a `Prep Sheet` field, so stations can be assigned to printable areas such as `Main Line` or `Pizza Salad`.
   - Printed layout is based on the `LINE PREP` worksheet from `src/main/resources/2024 - PREP(NEW).xlsm`.
@@ -205,6 +210,7 @@ Use this file to restore context in a new chat. A good prompt is:
   - `2 KG BAG`, `1 KG BAG`, `BAG`, `BOX`, `CASE`, `PORTION BAG`, `TRAY`, `TUB`, `PACK`
 - Production Profile lines automatically use the Freezer Pull item unit when a Freezer Pull item is selected.
 - Production Items have optional `Shelf Life`, used as the cook labeling reminder on printed prep sheets.
+- Production Items have optional `Permanent Override Par`, used for items that should always generate a fixed par instead of usage-based par.
 - Production Stations have a `Prep Sheet` assignment used to split Weekly Production printouts by kitchen area.
 - Variance Reports UI is still a placeholder in `MainView`.
 
@@ -279,6 +285,9 @@ For Freezer Pull:
 - `override_par` is editable in each daily table.
 - `final_par` uses override par when present, otherwise generated par.
 - `Save Overrides` persists `override_par` and `final_par` for all visible day tabs.
+- `Save Permanent Override` saves the selected line's override par back to the Production Item as its default permanent par for future generated weeks.
+- `Refresh Week` updates the selected saved week from current Production Item settings, station/prep sheet assignments, item units, print order, and permanent override pars without reimporting the Usage Report.
+- Refresh uses the already-saved production quantities on the week; it does not recalculate changed POS profile recipe quantities from the original POS rows.
 
 
 
@@ -350,4 +359,3 @@ Build Weekly Production output:
 - Existing untracked release/installer files may be present. Do not delete or reset them unless explicitly asked.
 - WeeklyProductionView print layout has already been rewritten. Treat the current implementation as the baseline and avoid reverting to the older 32-row pagination approach.
 - Keep prep sheets to a single printable page whenever practical.
-

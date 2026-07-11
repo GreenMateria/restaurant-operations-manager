@@ -25,7 +25,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **8**.
+- Current migration version: **9**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -42,6 +42,7 @@ Current known migration files:
 - `Migration6`
 - `Migration7`
 - `Migration8`
+- `Migration9`
 
 Migration responsibilities:
 
@@ -51,6 +52,8 @@ Migration responsibilities:
   - Added `production_items.shelf_life`.
 - `Migration8`
   - Added `production_stations.prep_sheet`.
+- `Migration9`
+  - Added `production_items.permanent_override_par`.
 
 ---
 
@@ -288,10 +291,12 @@ Important fields:
 - `station_id`
 - `active`
 - `shelf_life`
+- `permanent_override_par`
 
 Notes:
 
 - `shelf_life` is printed in the LIFE column on prep sheets.
+- `permanent_override_par`, when set, becomes the default override/final par for generated Weekly Production lines.
 - Freezer Pull items use pull-style units.
 
 ---

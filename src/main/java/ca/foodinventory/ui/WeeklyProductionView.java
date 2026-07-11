@@ -1,6 +1,7 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionWeekDao;
+import ca.foodinventory.dao.ProductionItemDao;
 import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.ProductionReportSummary;
 import ca.foodinventory.model.ProductionWeek;
@@ -38,6 +39,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -58,6 +60,7 @@ public class WeeklyProductionView extends BorderPane {
     private static final double DEFAULT_PAR_MULTIPLIER = 1.25;
 
     private final ProductionWeekDao productionWeekDao = new ProductionWeekDao();
+    private final ProductionItemDao productionItemDao = new ProductionItemDao();
     private final ProductionUsageReportImportService usageReportImportService =
             new ProductionUsageReportImportService();
     private final ProductionReportService productionReportService = new ProductionReportService();
@@ -103,23 +106,36 @@ public class WeeklyProductionView extends BorderPane {
         );
 
         Button importButton = new Button("Import Usage Report");
-        importButton.getStyleClass().add("primary-button");
+        configureToolbarButton(importButton);
         importButton.setOnAction(e -> importUsageReport());
 
+        Button refreshButton = new Button("Refresh Week");
+        configureToolbarButton(refreshButton);
+        refreshButton.setOnAction(e -> refreshSelectedWeek());
+
         Button saveButton = new Button("Save Overrides");
-        saveButton.getStyleClass().add("primary-button");
+        configureToolbarButton(saveButton);
         saveButton.setOnAction(e -> saveOverrides());
 
+        Button savePermanentOverrideButton = new Button("Save Permanent Override");
+        configureToolbarButton(savePermanentOverrideButton);
+        savePermanentOverrideButton.setOnAction(e -> saveSelectedPermanentOverride());
+
         Button previewButton = new Button("Preview Prep Sheet");
-        previewButton.getStyleClass().add("primary-button");
+        configureToolbarButton(previewButton);
         previewButton.setOnAction(e -> previewSelectedDay());
 
         Button printButton = new Button("Print Prep Sheet");
-        printButton.getStyleClass().add("primary-button");
+        configureToolbarButton(printButton);
         printButton.setOnAction(e -> printSelectedDay());
 
-        HBox controls = new HBox(
-                10,
+        Button printAllButton = new Button("Print All");
+        configureToolbarButton(printAllButton);
+        printAllButton.setOnAction(e -> printAllDays());
+
+        FlowPane controls = new FlowPane(
+                6,
+                6,
                 new Label("Week:"),
                 weekComboBox,
                 new Label("New Week Start:"),
@@ -128,12 +144,16 @@ public class WeeklyProductionView extends BorderPane {
                 parMultiplierSpinner,
                 includeAllProductionItemsCheckBox,
                 importButton,
+                refreshButton,
                 saveButton,
+                savePermanentOverrideButton,
                 new Label("Prep Sheet:"),
                 prepSheetComboBox,
                 previewButton,
-                printButton
+                printButton,
+                printAllButton
         );
+        controls.setAlignment(Pos.CENTER_LEFT);
 
         VBox top = new VBox(15, title, controls, summaryLabel);
         top.setPadding(new Insets(20));
@@ -143,6 +163,11 @@ public class WeeklyProductionView extends BorderPane {
 
         setTop(top);
         setCenter(dayTabs);
+    }
+
+    private void configureToolbarButton(Button button) {
+        button.getStyleClass().add("primary-button");
+        button.setStyle("-fx-font-size: 11px; -fx-padding: 4 8 4 8;");
     }
 
     private ListCell<ProductionWeek> weekCell() {
@@ -376,6 +401,99 @@ public class WeeklyProductionView extends BorderPane {
         }
     }
 
+    private void refreshSelectedWeek() {
+        ProductionWeek selectedWeek = weekComboBox.getSelectionModel().getSelectedItem();
+
+        if (selectedWeek == null) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "No Week Selected",
+                    "Select a production week before refreshing."
+            );
+            return;
+        }
+
+        try {
+            int selectedWeekId = selectedWeek.getId();
+            productionWeekDao.refreshWeekLines(
+                    selectedWeek,
+                    includeAllProductionItemsCheckBox.isSelected()
+            );
+            loadWeeks();
+            selectWeek(selectedWeekId);
+
+            showAlert(
+                    Alert.AlertType.INFORMATION,
+                    "Week Refreshed",
+                    "Updated the selected week from current Production Item settings and permanent overrides."
+            );
+        } catch (RuntimeException e) {
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Refresh Failed",
+                    e.getMessage()
+            );
+        }
+    }
+
+    private void saveSelectedPermanentOverride() {
+        ProductionWeekLine selectedLine = getSelectedProductionWeekLine();
+
+        if (selectedLine == null) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "No Line Selected",
+                    "Select a production item line before saving a permanent override."
+            );
+            return;
+        }
+
+        if (selectedLine.getOverridePar() == null) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "No Override Par",
+                    "Enter an Override Par for the selected line before saving it permanently."
+            );
+            return;
+        }
+
+        try {
+            productionItemDao.updatePermanentOverridePar(
+                    selectedLine.getProductionItemId(),
+                    selectedLine.getOverridePar()
+            );
+
+            showAlert(
+                    Alert.AlertType.INFORMATION,
+                    "Permanent Override Saved",
+                    "Saved " + selectedLine.getOverridePar()
+                            + " as the permanent par for " + selectedLine.getProductionItemName() + "."
+            );
+        } catch (RuntimeException e) {
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Save Failed",
+                    e.getMessage()
+            );
+        }
+    }
+
+    private ProductionWeekLine getSelectedProductionWeekLine() {
+        Tab selectedTab = dayTabs.getSelectionModel().getSelectedItem();
+
+        if (selectedTab == null || !(selectedTab.getContent() instanceof TableView<?> rawTable)) {
+            return null;
+        }
+
+        Object selectedItem = rawTable.getSelectionModel().getSelectedItem();
+
+        if (selectedItem instanceof ProductionWeekLine line) {
+            return line;
+        }
+
+        return null;
+    }
+
 
     private DaySheet getSelectedDaySheet() {
         ProductionWeek selectedWeek = weekComboBox.getSelectionModel().getSelectedItem();
@@ -407,6 +525,32 @@ public class WeeklyProductionView extends BorderPane {
                 selectedPrepSheet,
                 filterLinesByPrepSheet(lines, selectedPrepSheet)
         );
+    }
+
+    private List<DaySheet> getAllDaySheets() {
+        ProductionWeek selectedWeek = weekComboBox.getSelectionModel().getSelectedItem();
+
+        if (selectedWeek == null || dayTabs.getTabs().isEmpty()) {
+            return List.of();
+        }
+
+        String selectedPrepSheet = getSelectedPrepSheet();
+        List<DaySheet> daySheets = new ArrayList<>();
+
+        for (Tab tab : dayTabs.getTabs()) {
+            if (!(tab.getUserData() instanceof DayTabData dayTabData)) {
+                continue;
+            }
+
+            daySheets.add(new DaySheet(
+                    tab.getText(),
+                    formatWeek(selectedWeek),
+                    selectedPrepSheet,
+                    filterLinesByPrepSheet(dayTabData.lines(), selectedPrepSheet)
+            ));
+        }
+
+        return daySheets;
     }
 
     private void applyPrepSheetFilterToTabs() {
@@ -518,7 +662,26 @@ public class WeeklyProductionView extends BorderPane {
         printDaySheet(daySheet);
     }
 
+    private void printAllDays() {
+        List<DaySheet> daySheets = getAllDaySheets();
+
+        if (daySheets.isEmpty()) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "No Week Selected",
+                    "Select a production week before printing all prep sheets."
+            );
+            return;
+        }
+
+        printDaySheets(daySheets);
+    }
+
     private void printDaySheet(DaySheet daySheet) {
+        printDaySheets(List.of(daySheet));
+    }
+
+    private void printDaySheets(List<DaySheet> daySheets) {
         PrinterJob job = PrinterJob.createPrinterJob();
 
         if (job == null || !job.showPrintDialog(getScene().getWindow())) {
@@ -528,8 +691,10 @@ public class WeeklyProductionView extends BorderPane {
         PageLayout pageLayout = createPrintPageLayout(job);
         boolean success = true;
 
-        for (VBox page : buildPrintablePages(daySheet)) {
-            success = success && job.printPage(pageLayout, createScaledPrintNode(page, pageLayout));
+        for (DaySheet daySheet : daySheets) {
+            for (VBox page : buildPrintablePages(daySheet)) {
+                success = success && job.printPage(pageLayout, createScaledPrintNode(page, pageLayout));
+            }
         }
 
         if (success) {

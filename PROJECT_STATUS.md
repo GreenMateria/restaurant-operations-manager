@@ -13,7 +13,7 @@ This file is intended to be read **after** `PROJECT_REFERENCE.md`.
 
 **Development Branch:** Production Module
 
-Current database schema version: **8**
+Current database schema version: **9**
 
 Application compiles successfully.
 
@@ -41,16 +41,21 @@ Completed:
 - Product Mappings
 - Weekly Production
 - Freezer Pull
+- Permanent Production Item override pars
 
 Working features:
 
 - Usage Report import
 - Weekly Production generation
+- Refresh Week updates selected Weekly Production weeks from current Production Item settings.
 - Override Par editing
+- Save Permanent Override from selected Weekly Production lines
 - Prep Sheet filtering
 - Prep Sheet preview
 - Prep Sheet printing
+- Print All for the selected Weekly Production prep sheet across Monday through Sunday
 - Freezer Pull generation
+- Production Items can store a permanent override par that Weekly Production applies during generation.
 
 ---
 
