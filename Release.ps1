@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $ProjectDir = "C:\Food Inventory"
@@ -57,6 +57,26 @@ function Set-PomVersion {
     $pom.Save($PomPath)
 }
 
+
+function Assert-GitHubCli {
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        throw "GitHub CLI ('gh') is not installed or is not available in PATH. Install it from https://cli.github.com and reopen PowerShell."
+    }
+
+    & gh auth status *> $null
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitHub CLI is installed but not authenticated. Run: gh auth login"
+    }
+}
+
+function Test-GitHubReleaseExists {
+    param([string]$Tag)
+
+    & gh release view $Tag *> $null
+    return $LASTEXITCODE -eq 0
+}
+
 try {
     Set-Location $ProjectDir
     Clear-Host
@@ -65,6 +85,8 @@ try {
     Write-Host " ESM Operations Manager Release Tool" -ForegroundColor Cyan
     Write-Host "===================================" -ForegroundColor Cyan
     Write-Host ""
+
+    Assert-GitHubCli
 
     $CurrentVersion = Get-PomVersion
 
@@ -196,6 +218,36 @@ try {
         git push origin "v$NewVersion"
     }
 
+    $Tag = "v$NewVersion"
+
+    Write-Host ""
+    Write-Host "Publishing installer to GitHub Releases..." -ForegroundColor Yellow
+
+    if (Test-GitHubReleaseExists $Tag) {
+        Invoke-Step "Upload installer to existing GitHub Release" {
+            gh release upload $Tag "$FinalInstallerPath" --clobber
+        }
+
+        Invoke-Step "Update GitHub Release details" {
+            gh release edit $Tag `
+                --title "$AppName $Tag" `
+                --notes "$ReleaseNotes"
+        }
+    }
+    else {
+        Invoke-Step "Create GitHub Release and upload installer" {
+            gh release create $Tag `
+                "$FinalInstallerPath" `
+                --title "$AppName $Tag" `
+                --notes "$ReleaseNotes" `
+                --verify-tag
+        }
+    }
+
+    Invoke-Step "Verify GitHub Release" {
+        gh release view $Tag
+    }
+
     Write-Host ""
     Write-Host "===================================" -ForegroundColor Green
     Write-Host " Release Successful!" -ForegroundColor Green
@@ -209,6 +261,9 @@ try {
     Write-Host ""
     Write-Host "Release history updated:"
     Write-Host $ReleaseHistoryPath -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "GitHub Release published:"
+    Write-Host "v$NewVersion" -ForegroundColor Cyan
 }
 catch {
     Write-Host ""
