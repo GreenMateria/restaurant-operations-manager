@@ -73,8 +73,27 @@ function Assert-GitHubCli {
 function Test-GitHubReleaseExists {
     param([string]$Tag)
 
-    & gh release view $Tag *> $null
-    return $LASTEXITCODE -eq 0
+    $previousErrorActionPreference = $ErrorActionPreference
+    $nativePreferenceVariableExists =
+        Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+
+    if ($null -ne $nativePreferenceVariableExists) {
+        $previousNativePreference = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    try {
+        $ErrorActionPreference = "Continue"
+        & gh release view $Tag --json tagName 1>$null 2>$null
+        return $LASTEXITCODE -eq 0
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+
+        if ($null -ne $nativePreferenceVariableExists) {
+            $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+        }
+    }
 }
 
 try {

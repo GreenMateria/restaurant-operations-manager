@@ -30,3 +30,8 @@ Date: 2026-07-12 11:50
 Date: 2026-07-12 11:51
 
 - Updated installer updates
+
+## v2.0.4
+Date: 2026-07-12 11:56
+
+- Updated Installer
