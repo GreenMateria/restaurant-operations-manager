@@ -1,179 +1,54 @@
-# PROJECT_STATUS.md
+# PROJECT STATUS
 
-_Last Updated: July 2026_
+## Current Version
 
-This file is intended to be read **after** `PROJECT_REFERENCE.md`.
-
-`PROJECT_REFERENCE.md` contains the permanent architecture and design decisions.
-`PROJECT_STATUS.md` contains the current development state, recent changes, known issues, and next priorities.
-
----
-
-# Current Version
-
-**Development Branch:** Production Module
+**Development Branch:** Alcohol Inventory Module
 
 Current database schema version: **9**
 
 Application compiles successfully.
 
----
-
 # Completed This Session
 
-## Weekly Production Printing
-
-- Reworked the printable prep sheet implementation.
-- Removed the previous hard-coded 32-row pagination.
-- Prep sheets are intended to print as **one page per prep sheet**.
-- Compact printable layout implemented.
-- Current `WeeklyProductionView.java` is the new baseline implementation.
-- Do **not** restore the previous pagination logic unless specifically requested.
-
-## Production Module
+## Alcohol Inventory
 
 Completed:
 
-- Production Stations
-- Production Items
-- Production Profiles
-- POS Menu Items
-- Product Mappings
-- Weekly Production
-- Freezer Pull
-- Permanent Production Item override pars
+-   Alcohol Product Profiles
+-   Weight and Each count methods
+-   Container type support
+-   Automatic measurement unit selection (oz / lb / each)
+-   Manager-entered tare weights
+-   Automatic full-content weight selection by container
+-   Alcohol Count Templates
+-   Alcohol Count Entry
+-   Live decimal bottle calculation
+-   Keyboard-friendly alcohol count entry
+-   Blank Alcohol Count Sheet printing
+-   Started Alcohol Count Sheet printing
+-   Alcohol print pagination improvements
+-   Order Guide print layout improvements
 
-Working features:
+Implemented behaviour:
 
-- Usage Report import
-- Weekly Production generation
-- Refresh Week updates selected Weekly Production weeks from current Production Item settings.
-- Override Par editing
-- Save Permanent Override from selected Weekly Production lines
-- Prep Sheet filtering
-- Prep Sheet preview
-- Prep Sheet printing
-- Print All for the selected Weekly Production prep sheet across Monday through Sunday
-- Freezer Pull generation
-- Production Items can store a permanent override par that Weekly Production applies during generation.
+-   Liquor, wine and kegs are entered using:
+    -   Full Units
+    -   Weight
+-   Decimal quantity is calculated automatically.
+-   Only the calculated decimal quantity is stored in the database.
+-   Existing valuation and reporting remain compatible.
 
----
+Printing:
 
-# Known Issues
-
-## Weekly Production Print Layout
-
-The print system is functional.
-
-Future improvements should focus on:
-
-- Better use of page space.
-- Keeping fonts readable.
-- Matching the restaurant's original Excel prep sheet as closely as practical.
-
-Avoid rewriting the print engine unless there is a clear regression.
-
----
+-   Blank Count Sheets print correctly.
+-   Started Count Sheets print correctly.
+-   Alcohol sheets display Full and Weight columns.
+-   Pagination accounts for section headers.
+-   Order Guide printing no longer clips the final section.
 
 # Next Development Priorities
 
-## 1. Production Variance
-
-Highest priority.
-
-Use:
-
-- Production Item ↔ Inventory Product mappings
-- Weekly Production
-- Inventory counts
-- Invoice history
-
-Goal:
-
-Compare theoretical usage against actual inventory usage.
-
----
-
-## 2. Production Reports
-
-Potential additions:
-
-- Weekly production summary
-- Station summaries
-- Production history
-- Export to PDF
-
----
-
-## 3. Locked Production Weeks
-
-Consider:
-
-- Lock week after approval.
-- Prevent accidental edits.
-- Allow manager override.
-
----
-
-# Build Checklist
-
-After significant code changes:
-
-```bash
-mvn clean test
-```
-
-Verify:
-
-- Application compiles.
-- Weekly Production imports.
-- Prep Sheet preview.
-- Prep Sheet printing.
-- Freezer Pull printing.
-
----
-
-# Notes For Codex
-
-Always read:
-
-1. PROJECT_REFERENCE.md
-2. PROJECT_STATUS.md
-
-before making changes.
-
-When editing:
-
-- Prefer minimal targeted changes.
-- Preserve existing architecture.
-- Do not rewrite large sections unless requested.
-- Maintain SQLite compatibility.
-- Keep JavaFX styling consistent.
-
-If modifying WeeklyProductionView:
-
-- Preserve one-page prep sheet behavior.
-- Preserve Prep Sheet filtering.
-- Preserve Override Par functionality.
-- Preserve ProductionWeekDao workflow.
-
-When uncertain, extend existing code rather than replacing it.
-
----
-
-# Session Starting Prompt
-
-Read:
-
-- PROJECT_REFERENCE.md
-- PROJECT_STATUS.md
-
-Then inspect only the files required for the requested task.
-
-Run:
-
-```bash
-mvn clean test
-```
-
-after Java changes before considering the task complete.
+1.  Alcohol Inventory Valuation
+2.  Alcohol Cost Report
+3.  Alcohol Order Guide
+4.  Resume Production Variance development

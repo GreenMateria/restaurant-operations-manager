@@ -1,15 +1,19 @@
 package ca.foodinventory.ui;
 
+import ca.foodinventory.dao.AlcoholProductProfileDao;
 import ca.foodinventory.dao.InventoryCountDao;
 import ca.foodinventory.dao.InventoryCountLineDao;
+import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.collections.FXCollections;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class InventoryCountEntryView {
@@ -17,8 +21,11 @@ public class InventoryCountEntryView {
     private final InventoryCount count;
     private final InventoryCountLineDao lineDao = new InventoryCountLineDao();
     private final InventoryCountDao countDao = new InventoryCountDao();
+    private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
 
-    private final TableView<InventoryCountLine> table = new TableView<>();
+    private final VBox rowsBox = new VBox(0);
+    private final List<RowBinding> rowBindings = new ArrayList<>();
+    private final List<TextField> navigationFields = new ArrayList<>();
 
     public InventoryCountEntryView(InventoryCount count) {
         this.count = count;
@@ -37,181 +44,395 @@ public class InventoryCountEntryView {
         Button completeButton = new Button("Complete Count");
         Button refreshButton = new Button("Refresh");
 
+        saveButton.getStyleClass().add("primary-button");
+        completeButton.getStyleClass().add("primary-button");
+
         HBox buttons = new HBox(10, saveButton, completeButton, refreshButton);
         VBox top = new VBox(10, title, dateLabel, buttons);
-        top.setStyle("-fx-padding: 15;");
+        top.setPadding(new Insets(15));
 
-        setupTable();
+        rowsBox.setFillWidth(true);
 
-        saveButton.setOnAction(e -> saveQuantities());
+        ScrollPane scrollPane = new ScrollPane(rowsBox);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPannable(true);
+
+        saveButton.setOnAction(e -> saveQuantities(true));
         completeButton.setOnAction(e -> completeCount());
-        refreshButton.setOnAction(e -> refreshTable());
+        refreshButton.setOnAction(e -> refreshRows());
 
         root.setTop(top);
-        root.setCenter(table);
+        root.setCenter(scrollPane);
 
-        refreshTable();
-
+        refreshRows();
         return root;
     }
 
-    private void setupTable() {
-        table.setEditable(true);
+    private void refreshRows() {
+        rowsBox.getChildren().clear();
+        rowBindings.clear();
+        navigationFields.clear();
 
-        TableColumn<InventoryCountLine, String> sectionCol = new TableColumn<>("Section");
-        sectionCol.setCellValueFactory(new PropertyValueFactory<>("sectionName"));
-        sectionCol.setPrefWidth(160);
+        rowsBox.getChildren().add(createHeaderRow());
 
-        TableColumn<InventoryCountLine, String> skuCol = new TableColumn<>("SKU");
-        skuCol.setCellValueFactory(new PropertyValueFactory<>("sku"));
-        skuCol.setPrefWidth(100);
+        List<InventoryCountLine> lines = lineDao.findByCount(count.getId());
+        String currentSection = null;
 
-        TableColumn<InventoryCountLine, String> productCol = new TableColumn<>("Product");
-        productCol.setCellValueFactory(new PropertyValueFactory<>("productDescription"));
-        productCol.setPrefWidth(300);
+        for (InventoryCountLine line : lines) {
+            String section = cleanSection(line.getSectionName());
 
-        TableColumn<InventoryCountLine, String> quantityCol = new TableColumn<>("Quantity");
-        quantityCol.setCellValueFactory(data ->
-                new SimpleStringProperty(String.valueOf(data.getValue().getQuantity()))
+            if (!section.equals(currentSection)) {
+                rowsBox.getChildren().add(createSectionRow(section));
+                currentSection = section;
+            }
+
+            AlcoholProductProfile profile = alcoholProfileDao.findByProductId(line.getProductId());
+            RowBinding binding = createDataRow(line, profile);
+            rowBindings.add(binding);
+            rowsBox.getChildren().add(binding.row());
+        }
+
+        if (!navigationFields.isEmpty()) {
+            navigationFields.get(0).requestFocus();
+            navigationFields.get(0).selectAll();
+        }
+    }
+
+    private GridPane createHeaderRow() {
+        GridPane grid = createBaseGrid();
+        grid.setStyle("-fx-background-color: #2f3b46; -fx-border-color: #596775; -fx-border-width: 0 0 1 0;");
+
+        addHeader(grid, "SKU", 0);
+        addHeader(grid, "Product", 1);
+        addHeader(grid, "Quantity / Total", 2);
+        addHeader(grid, "Full Units", 3);
+        addHeader(grid, "Weight", 4);
+        addHeader(grid, "Unit", 5);
+
+        return grid;
+    }
+
+    private Label createSectionRow(String section) {
+        Label label = new Label(section);
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setStyle(
+                "-fx-font-weight: bold;" +
+                "-fx-padding: 7 10 7 10;" +
+                "-fx-background-color: #008EAA;" +
+                "-fx-text-fill: white;"
         );
-        quantityCol.setPrefWidth(120);
+        return label;
+    }
 
-        quantityCol.setCellFactory(col -> new TableCell<>() {
-            private final TextField textField = new TextField();
+    private RowBinding createDataRow(
+            InventoryCountLine line,
+            AlcoholProductProfile profile
+    ) {
+        GridPane grid = createBaseGrid();
+        grid.setPadding(new Insets(4, 6, 4, 6));
+        grid.setStyle("-fx-border-color: #4c5964; -fx-border-width: 0 0 1 0;");
 
-            {
-                textField.setOnAction(e -> {
+        Label skuLabel = new Label(nullToBlank(line.getSku()));
+        Label productLabel = new Label(nullToBlank(line.getProductDescription()));
+        Label unitLabel = new Label(resolveUnit(line, profile));
 
-                    commitEdit(textField.getText());
+        skuLabel.setMaxWidth(Double.MAX_VALUE);
+        productLabel.setMaxWidth(Double.MAX_VALUE);
+        unitLabel.setMaxWidth(Double.MAX_VALUE);
 
-                    int nextRow = getIndex() + 1;
+        grid.add(skuLabel, 0, 0);
+        grid.add(productLabel, 1, 0);
 
-                    if (nextRow < getTableView().getItems().size()) {
+        boolean weighted = isWeightedAlcohol(profile);
 
-                        getTableView().getSelectionModel().select(nextRow);
+        TextField quantityField = null;
+        TextField fullUnitsField = null;
+        TextField weightField = null;
+        Label totalLabel = new Label(formatQuantity(line.getQuantity()));
 
-                        getTableView().scrollTo(nextRow);
+        totalLabel.setMaxWidth(Double.MAX_VALUE);
+        totalLabel.setAlignment(Pos.CENTER_RIGHT);
 
-                        getTableView().edit(
-                                nextRow,
-                                getTableColumn()
-                        );
+        if (weighted) {
+            double fullUnits = Math.floor(Math.max(0, line.getQuantity()));
+            double partial = Math.max(0, line.getQuantity() - fullUnits);
+            double weight = partial > 0
+                    ? profile.getTareWeight() + partial * profile.getFullContentWeight()
+                    : 0;
 
-                    }
+            fullUnitsField = createNumericField(formatEditable(fullUnits));
+            weightField = createNumericField(formatEditable(weight));
 
-                });
+            grid.add(totalLabel, 2, 0);
+            grid.add(fullUnitsField, 3, 0);
+            grid.add(weightField, 4, 0);
 
-                textField.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
-                    if (!isFocused) {
-                        commitEdit(textField.getText());
-                    }
-                });
-            }
+            navigationFields.add(fullUnitsField);
+            navigationFields.add(weightField);
+        } else {
+            quantityField = createNumericField(formatEditable(line.getQuantity()));
 
-            @Override
-            public void startEdit() {
-                super.startEdit();
-                textField.setText(getItem());
-                setText(null);
-                setGraphic(textField);
-                textField.requestFocus();
-                textField.selectAll();
-            }
+            grid.add(quantityField, 2, 0);
+            grid.add(createDashLabel(), 3, 0);
+            grid.add(createDashLabel(), 4, 0);
 
-            @Override
-            public void cancelEdit() {
-                super.cancelEdit();
-                setText(getItem());
-                setGraphic(null);
-            }
+            navigationFields.add(quantityField);
+        }
 
-            @Override
-            protected void updateItem(String value, boolean empty) {
-                super.updateItem(value, empty);
+        grid.add(unitLabel, 5, 0);
 
-                if (empty) {
-                    setText(null);
-                    setGraphic(null);
-                } else if (isEditing()) {
-                    textField.setText(value);
-                    setText(null);
-                    setGraphic(textField);
-                } else {
-                    setText(value);
-                    setGraphic(null);
-                }
-            }
+        RowBinding binding = new RowBinding(
+                line,
+                profile,
+                grid,
+                quantityField,
+                fullUnitsField,
+                weightField,
+                totalLabel
+        );
 
-            @Override
-            public void commitEdit(String value) {
-                super.commitEdit(value);
+        if (quantityField != null) {
+            configureNavigation(quantityField, () -> commitNormal(binding));
+        }
 
-                InventoryCountLine line = getTableView().getItems().get(getIndex());
+        if (fullUnitsField != null) {
+            configureNavigation(fullUnitsField, () -> commitWeighted(binding));
+        }
 
-                try {
-                    double quantity = Double.parseDouble(value);
-                    double convertedQuantity = quantity * line.getConversionFactor();
+        if (weightField != null) {
+            configureNavigation(weightField, () -> commitWeighted(binding));
+        }
 
-                    line.setQuantity(quantity);
-                    line.setConvertedQuantity(convertedQuantity);
+        return binding;
+    }
 
-                    setText(String.valueOf(quantity));
-                } catch (NumberFormatException ex) {
-                    Alert alert = new Alert(Alert.AlertType.WARNING);
-                    alert.setTitle("Invalid Quantity");
-                    alert.setHeaderText(null);
-                    alert.setContentText("Please enter a valid number.");
-                    alert.showAndWait();
+    private GridPane createBaseGrid() {
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setAlignment(Pos.CENTER_LEFT);
 
-                    setText(String.valueOf(line.getQuantity()));
-                }
+        ColumnConstraints sku = new ColumnConstraints(95);
+        ColumnConstraints product = new ColumnConstraints();
+        product.setHgrow(Priority.ALWAYS);
+        product.setMinWidth(260);
 
-                setGraphic(null);
+        ColumnConstraints quantity = new ColumnConstraints(130);
+        ColumnConstraints full = new ColumnConstraints(105);
+        ColumnConstraints weight = new ColumnConstraints(105);
+        ColumnConstraints unit = new ColumnConstraints(70);
+
+        grid.getColumnConstraints().addAll(sku, product, quantity, full, weight, unit);
+        return grid;
+    }
+
+    private void addHeader(GridPane grid, String text, int column) {
+        Label label = new Label(text);
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setPadding(new Insets(7, 6, 7, 6));
+        label.setStyle("-fx-font-weight: bold; -fx-text-fill: white;");
+        grid.add(label, column, 0);
+    }
+
+    private TextField createNumericField(String value) {
+        TextField field = new TextField(value);
+        field.setMaxWidth(Double.MAX_VALUE);
+        field.setAlignment(Pos.CENTER_RIGHT);
+        return field;
+    }
+
+    private Label createDashLabel() {
+        Label label = new Label("—");
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setAlignment(Pos.CENTER);
+        return label;
+    }
+
+    private void configureNavigation(TextField field, Runnable commitAction) {
+        field.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.TAB) {
+                commitAction.run();
+                moveToNextField(field, event.isShiftDown());
+                event.consume();
             }
         });
 
-        TableColumn<InventoryCountLine, String> unitCol = new TableColumn<>("Unit");
-        unitCol.setCellValueFactory(new PropertyValueFactory<>("countUnit"));
-        unitCol.setPrefWidth(100);
-
-        table.getColumns().setAll(
-                sectionCol,
-                skuCol,
-                productCol,
-                quantityCol,
-                unitCol
-        );
+        field.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
+            if (!isFocused) {
+                commitAction.run();
+            }
+        });
     }
 
-    private void refreshTable() {
-        List<InventoryCountLine> lines = lineDao.findByCount(count.getId());
-        table.setItems(FXCollections.observableArrayList(lines));
+    private void moveToNextField(TextField current, boolean backwards) {
+        int index = navigationFields.indexOf(current);
+
+        if (index < 0) {
+            return;
+        }
+
+        int nextIndex = backwards ? index - 1 : index + 1;
+
+        if (nextIndex < 0 || nextIndex >= navigationFields.size()) {
+            return;
+        }
+
+        TextField next = navigationFields.get(nextIndex);
+        next.requestFocus();
+        next.selectAll();
     }
 
-    private void saveQuantities() {
-        for (InventoryCountLine line : table.getItems()) {
+    private void commitNormal(RowBinding binding) {
+        try {
+            double quantity = parseNonNegative(binding.quantityField().getText(), "Quantity");
+            binding.line().setQuantity(quantity);
+            binding.line().setConvertedQuantity(quantity * binding.line().getConversionFactor());
+            binding.quantityField().setText(formatEditable(quantity));
+        } catch (IllegalArgumentException ex) {
+            showAlert(Alert.AlertType.WARNING, "Invalid Quantity", ex.getMessage());
+            binding.quantityField().setText(formatEditable(binding.line().getQuantity()));
+        }
+    }
+
+    private void commitWeighted(RowBinding binding) {
+        try {
+            double fullUnits = parseNonNegative(binding.fullUnitsField().getText(), "Full Units");
+            double enteredWeight = parseNonNegative(binding.weightField().getText(), "Weight");
+
+            AlcoholProductProfile profile = binding.profile();
+
+            if (profile.getFullContentWeight() <= 0) {
+                throw new IllegalArgumentException(
+                        "The product's full-content weight must be greater than zero."
+                );
+            }
+
+            double partial = 0;
+
+            if (enteredWeight > 0) {
+                partial = (enteredWeight - profile.getTareWeight())
+                        / profile.getFullContentWeight();
+                partial = Math.max(0, Math.min(1, partial));
+            }
+
+            double total = fullUnits + partial;
+
+            binding.line().setQuantity(total);
+            binding.line().setConvertedQuantity(total * binding.line().getConversionFactor());
+            binding.totalLabel().setText(formatQuantity(total));
+            binding.fullUnitsField().setText(formatEditable(fullUnits));
+            binding.weightField().setText(formatEditable(enteredWeight));
+
+        } catch (IllegalArgumentException ex) {
+            showAlert(Alert.AlertType.WARNING, "Invalid Alcohol Count", ex.getMessage());
+        }
+    }
+
+    private void saveQuantities(boolean showConfirmation) {
+        for (RowBinding binding : rowBindings) {
+            if (isWeightedAlcohol(binding.profile())) {
+                commitWeighted(binding);
+            } else {
+                commitNormal(binding);
+            }
+
             lineDao.updateQuantity(
-                    line.getId(),
-                    line.getQuantity(),
-                    line.getConvertedQuantity()
+                    binding.line().getId(),
+                    binding.line().getQuantity(),
+                    binding.line().getConvertedQuantity()
             );
         }
 
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Saved");
-        alert.setHeaderText(null);
-        alert.setContentText("Inventory quantities saved.");
-        alert.showAndWait();
+        if (showConfirmation) {
+            showAlert(Alert.AlertType.INFORMATION, "Saved", "Inventory quantities saved.");
+        }
     }
 
     private void completeCount() {
-        saveQuantities();
+        saveQuantities(false);
         countDao.markCompleted(count.getId());
 
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Completed");
+        showAlert(
+                Alert.AlertType.INFORMATION,
+                "Completed",
+                "Inventory count marked as completed."
+        );
+    }
+
+    private boolean isWeightedAlcohol(AlcoholProductProfile profile) {
+        return profile != null && "WEIGHT".equalsIgnoreCase(profile.getCountMethod());
+    }
+
+    private String resolveUnit(
+            InventoryCountLine line,
+            AlcoholProductProfile profile
+    ) {
+        if (isWeightedAlcohol(profile)
+                && profile.getMeasurementUnit() != null
+                && !profile.getMeasurementUnit().isBlank()) {
+            return profile.getMeasurementUnit();
+        }
+
+        return nullToBlank(line.getCountUnit());
+    }
+
+    private double parseNonNegative(String value, String fieldName) {
+        if (value == null || value.trim().isEmpty()) {
+            return 0;
+        }
+
+        final double parsed;
+
+        try {
+            parsed = Double.parseDouble(value.trim());
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException(fieldName + " must be a valid number.");
+        }
+
+        if (parsed < 0) {
+            throw new IllegalArgumentException(fieldName + " cannot be negative.");
+        }
+
+        return parsed;
+    }
+
+    private String cleanSection(String section) {
+        return section == null || section.isBlank()
+                ? "OTHER"
+                : section.trim().toUpperCase();
+    }
+
+    private String nullToBlank(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String formatQuantity(double value) {
+        return String.format("%.2f", value);
+    }
+
+    private String formatEditable(double value) {
+        if (Math.abs(value - Math.rint(value)) < 0.0000001) {
+            return String.valueOf((long) Math.rint(value));
+        }
+
+        return String.valueOf(value);
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText("Inventory count marked as completed.");
+        alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    private record RowBinding(
+            InventoryCountLine line,
+            AlcoholProductProfile profile,
+            GridPane row,
+            TextField quantityField,
+            TextField fullUnitsField,
+            TextField weightField,
+            Label totalLabel
+    ) {
     }
 }

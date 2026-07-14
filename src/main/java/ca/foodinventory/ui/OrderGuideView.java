@@ -7,13 +7,16 @@ import ca.foodinventory.service.OrderGuideService;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.print.PrinterJob;
+import javafx.scene.Group;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.scene.transform.Scale;
 import javafx.util.StringConverter;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.print.PageLayout;
@@ -33,7 +36,7 @@ public class OrderGuideView {
     private final ComboBox<InventoryCount> closingCountBox = new ComboBox<>();
     private final TableView<OrderGuideRow> table = new TableView<>();
 
-    private static final int LINES_PER_PAGE = 46;
+    private static final int LINES_PER_PAGE = 36;
 
     private final String department;
 
@@ -220,7 +223,7 @@ public class OrderGuideView {
         PageLayout pageLayout = printer.createPageLayout(
                 Paper.NA_LETTER,
                 PageOrientation.LANDSCAPE,
-                Printer.MarginType.DEFAULT
+                Printer.MarginType.HARDWARE_MINIMUM
         );
 
         job.getJobSettings().setPageLayout(pageLayout);
@@ -234,7 +237,9 @@ public class OrderGuideView {
         boolean success = true;
 
         for (Node page : pages) {
-            success = job.printPage(pageLayout, page);
+            Node printablePage = fitPageToPrintableArea(page, pageLayout);
+
+            success = job.printPage(pageLayout, printablePage);
             if (!success) {
                 break;
             }
@@ -243,6 +248,34 @@ public class OrderGuideView {
         if (success) {
             job.endJob();
         }
+    }
+
+    private Node fitPageToPrintableArea(Node page, PageLayout pageLayout) {
+        page.applyCss();
+        page.autosize();
+
+        if (page instanceof Parent parent) {
+            parent.layout();
+        }
+
+        double contentWidth = page.getLayoutBounds().getWidth();
+        double contentHeight = page.getLayoutBounds().getHeight();
+
+        if (contentWidth <= 0 || contentHeight <= 0) {
+            return page;
+        }
+
+        double widthScale = pageLayout.getPrintableWidth() / contentWidth;
+        double heightScale = pageLayout.getPrintableHeight() / contentHeight;
+        double scaleFactor = Math.min(1.0, Math.min(widthScale, heightScale));
+
+        Group wrapper = new Group(page);
+
+        if (scaleFactor < 1.0) {
+            page.getTransforms().add(new Scale(scaleFactor, scaleFactor));
+        }
+
+        return wrapper;
     }
 
     private List<Node> buildPrintablePages(List<OrderGuideRow> rows) {

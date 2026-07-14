@@ -35,3 +35,8 @@ Date: 2026-07-12 11:51
 Date: 2026-07-12 11:56
 
 - Updated Installer
+
+## v2.0.5
+Date: 2026-07-14 13:40
+
+- Finished Alcohol module, Fixed Order guide layouts

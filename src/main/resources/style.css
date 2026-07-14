@@ -93,3 +93,6 @@
     -fx-background-color: #3a3a3a;
     -fx-border-color: #2d89ef;
 }
+.radio-button {
+    -fx-text-fill: white;
+}

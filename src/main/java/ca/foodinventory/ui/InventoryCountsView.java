@@ -1,15 +1,18 @@
 package ca.foodinventory.ui;
 
+import ca.foodinventory.dao.AlcoholProductProfileDao;
 import ca.foodinventory.dao.InventoryCountDao;
 import ca.foodinventory.dao.InventoryCountLineDao;
 import ca.foodinventory.dao.InventoryCountTemplateDao;
+import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
 import ca.foodinventory.model.InventoryCountTemplate;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.print.PrinterJob;
+import javafx.print.*;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -24,6 +27,7 @@ public class InventoryCountsView {
     private final InventoryCountDao countDao = new InventoryCountDao();
     private final InventoryCountTemplateDao templateDao = new InventoryCountTemplateDao();
     private final InventoryCountLineDao lineDao = new InventoryCountLineDao();
+    private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
 
     private final TableView<InventoryCount> table = new TableView<>();
 
@@ -323,137 +327,249 @@ public class InventoryCountsView {
         InventoryCount selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
-            showAlert(
-                    Alert.AlertType.WARNING,
-                    "No Count Selected",
-                    "Please select a count to print."
-            );
+            showAlert(Alert.AlertType.WARNING, "No Count Selected", "Please select a count to print.");
             return;
         }
 
         List<InventoryCountLine> lines = lineDao.findByCount(selected.getId());
 
+        if (lines.isEmpty()) {
+            showAlert(Alert.AlertType.INFORMATION, "Empty Count", "This count has no active products to print.");
+            return;
+        }
+
         PrinterJob job = PrinterJob.createPrinterJob();
+        if (job == null) {
+            return;
+        }
 
-        if (job != null && job.showPrintDialog(table.getScene().getWindow())) {
-            int linesPerPage = 40;
+        PageLayout pageLayout = job.getPrinter().createPageLayout(
+                Paper.NA_LETTER,
+                PageOrientation.PORTRAIT,
+                Printer.MarginType.HARDWARE_MINIMUM
+        );
+        job.getJobSettings().setPageLayout(pageLayout);
 
-            for (int i = 0; i < lines.size(); i += linesPerPage) {
-                int end = Math.min(i + linesPerPage, lines.size());
+        if (!job.showPrintDialog(table.getScene().getWindow())) {
+            return;
+        }
 
-                List<InventoryCountLine> pageLines = lines.subList(i, end);
+        List<List<CountPrintRow>> pages = paginateCountLines(lines, 27);
+        boolean success = true;
 
-                VBox printPage = buildCountSheetPrintLayout(selected, pageLines);
+        for (int i = 0; i < pages.size(); i++) {
+            Node page = buildCountSheetPage(selected, pages.get(i), i + 1, pages.size());
+            page.applyCss();
+            page.autosize();
 
-                boolean success = job.printPage(printPage);
-
-                if (!success) {
-                    break;
-                }
+            if (!job.printPage(pageLayout, page)) {
+                success = false;
+                break;
             }
+        }
 
+        if (success) {
             job.endJob();
         }
     }
 
-    private VBox buildCountSheetPrintLayout(
-            InventoryCount count,
-            List<InventoryCountLine> lines
+    private List<List<CountPrintRow>> paginateCountLines(
+            List<InventoryCountLine> lines,
+            int maxRows
     ) {
-        VBox page = new VBox(3);
-        page.setPadding(new Insets(15));
+        List<List<CountPrintRow>> pages = new java.util.ArrayList<>();
+        int index = 0;
+
+        while (index < lines.size()) {
+            List<CountPrintRow> page = new java.util.ArrayList<>();
+            int used = 0;
+            String currentSection = null;
+
+            while (index < lines.size()) {
+                InventoryCountLine line = lines.get(index);
+                String section = cleanPrintSection(line.getSectionName());
+                boolean newSection = !section.equals(currentSection);
+                int required = newSection ? 2 : 1;
+
+                if (!page.isEmpty() && used + required > maxRows) {
+                    break;
+                }
+
+                if (newSection) {
+                    page.add(CountPrintRow.section(section));
+                    used++;
+                    currentSection = section;
+                }
+
+                page.add(CountPrintRow.item(line));
+                used++;
+                index++;
+
+                if (used >= maxRows) {
+                    break;
+                }
+            }
+
+            pages.add(page);
+        }
+
+        return pages;
+    }
+
+    private VBox buildCountSheetPage(
+            InventoryCount count,
+            List<CountPrintRow> rows,
+            int pageNumber,
+            int totalPages
+    ) {
+        final double productWidth = 255;
+        final double unitWidth = 50;
+        final double quantityWidth = 75;
+        final double fullWidth = 75;
+        final double weightWidth = 85;
+        final double sheetWidth =
+                productWidth + unitWidth + quantityWidth + fullWidth + weightWidth;
+
+        VBox page = new VBox(4);
+        page.setPadding(new Insets(14));
+        page.setPrefWidth(sheetWidth + 28);
+        page.setMaxWidth(sheetWidth + 28);
         page.setStyle("-fx-background-color: white;");
 
         Label title = new Label("INVENTORY COUNT SHEET");
         title.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: black;");
 
         Label details = new Label(
-                count.getTemplateName() +
-                        " | Date: " + count.getCountDate() +
-                        " | Period: " + count.getPeriodStartDate() +
-                        " to " + count.getPeriodEndDate()
+                count.getTemplateName()
+                        + " | Date: " + count.getCountDate()
+                        + " | Period: " + count.getPeriodStartDate()
+                        + " to " + count.getPeriodEndDate()
+                        + " | Page " + pageNumber + " of " + totalPages
         );
         details.setStyle("-fx-font-size: 8px; -fx-text-fill: black;");
 
-        GridPane grid = new GridPane();
-        grid.setHgap(0);
-        grid.setVgap(0);
-        grid.setStyle("-fx-border-color: black; -fx-border-width: 1;");
+        GridPane header = createPrintGrid(
+                productWidth, unitWidth, quantityWidth, fullWidth, weightWidth
+        );
+        header.setStyle("-fx-border-color: black; -fx-border-width: 1; -fx-background-color: #eeeeee;");
+        addPrintCell(header, "Product", 0, true, Pos.CENTER_LEFT);
+        addPrintCell(header, "Unit", 1, true, Pos.CENTER);
+        addPrintCell(header, "Quantity", 2, true, Pos.CENTER);
+        addPrintCell(header, "Full", 3, true, Pos.CENTER);
+        addPrintCell(header, "Weight", 4, true, Pos.CENTER);
 
-        addCountHeaderRow(grid);
+        VBox body = new VBox(0);
 
-        int rowIndex = 1;
-        String currentSection = "";
-
-        for (InventoryCountLine line : lines) {
-            String section = line.getSectionName() == null ? "" : line.getSectionName();
-
-            if (!section.equals(currentSection)) {
-                currentSection = section;
-                addSectionRow(grid, rowIndex++, currentSection, 4);
+        for (CountPrintRow printRow : rows) {
+            if (printRow.sectionHeader()) {
+                Label section = new Label(printRow.sectionName());
+                section.setPrefWidth(sheetWidth);
+                section.setMaxWidth(sheetWidth);
+                section.setStyle(
+                        "-fx-font-weight: bold;" +
+                        "-fx-font-size: 9px;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-background-color: #008EAA;" +
+                        "-fx-padding: 3 5 3 5;" +
+                        "-fx-border-color: black;" +
+                        "-fx-border-width: 1 1 0 1;"
+                );
+                body.getChildren().add(section);
+                continue;
             }
 
-            addCountLineRow(grid, rowIndex++, line);
+            InventoryCountLine line = printRow.line();
+            AlcoholProductProfile profile = alcoholProfileDao.findByProductId(line.getProductId());
+            boolean weighted =
+                    profile != null && "WEIGHT".equalsIgnoreCase(profile.getCountMethod());
+
+            GridPane row = createPrintGrid(
+                    productWidth, unitWidth, quantityWidth, fullWidth, weightWidth
+            );
+            row.setStyle("-fx-border-color: black; -fx-border-width: 0 1 1 1;");
+
+            String unit = weighted && profile.getMeasurementUnit() != null
+                    ? profile.getMeasurementUnit()
+                    : line.getCountUnit();
+
+            addPrintCell(row, line.getProductDescription(), 0, false, Pos.CENTER_LEFT);
+            addPrintCell(row, unit, 1, false, Pos.CENTER);
+            addPrintCell(row, weighted ? "" : "____________", 2, false, Pos.CENTER);
+            addPrintCell(row, weighted ? "________" : "", 3, false, Pos.CENTER);
+            addPrintCell(row, weighted ? "________" : "", 4, false, Pos.CENTER);
+
+            body.getChildren().add(row);
         }
 
-        page.getChildren().addAll(title, details, grid);
-
+        page.getChildren().addAll(title, details, header, body);
         return page;
     }
 
-    private void addCountHeaderRow(GridPane grid) {
-        addPrintCell(grid, "Product", 0, 0, 260, true);
-        addPrintCell(grid, "Unit", 1, 0, 55, true);
-        addPrintCell(grid, "Count", 2, 0, 80, true);
-        addPrintCell(grid, "Notes", 3, 0, 120, true);
-    }
-
-    private void addCountLineRow(GridPane grid, int row, InventoryCountLine line) {
-        addPrintCell(grid, line.getProductDescription(), 0, row, 260, false);
-        addPrintCell(grid, line.getCountUnit(), 1, row, 55, false);
-        addPrintCell(grid, "", 2, row, 80, false);
-        addPrintCell(grid, "", 3, row, 120, false);
-    }
-
-    private void addSectionRow(GridPane grid, int row, String section, int columns) {
-        Label label = new Label(section == null || section.isBlank() ? "Unassigned" : section);
-        label.setMaxWidth(Double.MAX_VALUE);
-        label.setStyle(
-                "-fx-font-weight: bold;" +
-                        "-fx-text-fill: black;" +
-                        "-fx-background-color: white;" +
-                        "-fx-border-color: black;" +
-                        "-fx-border-width: 0 0 1 0;" +
-                        "-fx-padding: 4;"
+    private GridPane createPrintGrid(
+            double productWidth,
+            double unitWidth,
+            double quantityWidth,
+            double fullWidth,
+            double weightWidth
+    ) {
+        GridPane grid = new GridPane();
+        grid.getColumnConstraints().addAll(
+                fixedColumn(productWidth),
+                fixedColumn(unitWidth),
+                fixedColumn(quantityWidth),
+                fixedColumn(fullWidth),
+                fixedColumn(weightWidth)
         );
+        return grid;
+    }
 
-        grid.add(label, 0, row, columns, 1);
+    private ColumnConstraints fixedColumn(double width) {
+        ColumnConstraints column = new ColumnConstraints(width);
+        column.setMinWidth(width);
+        column.setMaxWidth(width);
+        return column;
     }
 
     private void addPrintCell(
             GridPane grid,
             String text,
-            int col,
-            int row,
-            double width,
-            boolean header
+            int column,
+            boolean header,
+            Pos alignment
     ) {
         Label label = new Label(text == null ? "" : text);
-        label.setMinWidth(width);
-        label.setPrefWidth(width);
-        label.setMaxWidth(width);
-        label.setMinHeight(16);
-        label.setAlignment(Pos.CENTER_LEFT);
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setMinHeight(19);
+        label.setAlignment(alignment);
         label.setStyle(
                 "-fx-text-fill: black;" +
-                        "-fx-background-color: white;" +
-                        "-fx-border-color: black;" +
-                        "-fx-border-width: 0 1 1 0;" +
-                        "-fx-padding: 1 3 1 3;" +
-                        (header ? "-fx-font-weight: bold;" : "")
+                "-fx-font-size: 8.5px;" +
+                "-fx-padding: 2 4 2 4;" +
+                "-fx-border-color: black;" +
+                "-fx-border-width: 0 1 0 0;" +
+                (header ? "-fx-font-weight: bold;" : "")
         );
+        grid.add(label, column, 0);
+    }
 
-        grid.add(label, col, row);
+    private String cleanPrintSection(String section) {
+        return section == null || section.isBlank()
+                ? "OTHER"
+                : section.trim().toUpperCase();
+    }
+
+    private record CountPrintRow(
+            boolean sectionHeader,
+            String sectionName,
+            InventoryCountLine line
+    ) {
+        static CountPrintRow section(String sectionName) {
+            return new CountPrintRow(true, sectionName, null);
+        }
+
+        static CountPrintRow item(InventoryCountLine line) {
+            return new CountPrintRow(false, null, line);
+        }
     }
 
     private String getTitleText() {

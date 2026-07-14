@@ -81,7 +81,10 @@ public class ProductEditorView {
 
         populateFields();
 
-        reportingCategoryBox.valueProperty().addListener((obs, oldValue, newValue) -> updateAlcoholSection());
+        reportingCategoryBox.valueProperty().addListener((obs, oldValue, newValue) -> {
+            applyDefaultCountMethodForCategory(newValue);
+            updateAlcoholSection();
+        });
         countMethodGroup.selectedToggleProperty().addListener((obs, oldValue, newValue) -> updateAlcoholSection());
 
         updateAlcoholSection();
@@ -272,6 +275,18 @@ public class ProductEditorView {
         }
     }
 
+    private void applyDefaultCountMethodForCategory(String category) {
+        if (!isAlcoholCategory(category)) {
+            return;
+        }
+
+        if ("BEER".equals(category)) {
+            eachRadio.setSelected(true);
+        } else if (countMethodGroup.getSelectedToggle() == null) {
+            weightRadio.setSelected(true);
+        }
+    }
+
     private void updateAlcoholSection() {
         String category = reportingCategoryBox.getValue();
         boolean alcohol = isAlcoholCategory(category);
@@ -287,12 +302,6 @@ public class ProductEditorView {
 
         containerTypeBox.getItems().clear();
         containerTypeBox.getItems().addAll(containerOptionsForCategory(category));
-
-        if ("BEER".equals(category)) {
-            eachRadio.setSelected(true);
-        } else {
-            weightRadio.setSelected(true);
-        }
 
         selectContainer(previousCode);
 
@@ -537,7 +546,7 @@ public class ProductEditorView {
         return switch (containerType) {
             case "750ML_BOTTLE" -> 25.36;
             case "1_14L_BOTTLE" -> 38.5;
-            case "1_5L_BOTTLE" -> 51.0;
+            case "1_5L_BOTTLE" -> 50.72;
             case "FULL_KEG" -> 130.0;
             case "MEDIUM_KEG" -> 80.0;
             case "SMALL_KEG" -> 45.0;
