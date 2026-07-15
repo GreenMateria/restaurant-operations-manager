@@ -1,5 +1,6 @@
 package ca.foodinventory.ui;
 
+import ca.foodinventory.service.AppVersionService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -9,6 +10,9 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import ca.foodinventory.dao.SettingsDao;
 import javafx.scene.control.*;
@@ -29,9 +33,33 @@ public class MainView {
         root.getStyleClass().add("root-dark");
 
         root.setLeft(buildSidebar());
+        root.setBottom(buildStatusBar());
         showHomeScreen();
 
         return root;
+    }
+
+    private HBox buildStatusBar() {
+        HBox statusBar = new HBox(10);
+        statusBar.setAlignment(Pos.CENTER_LEFT);
+        statusBar.setPadding(new Insets(6, 12, 6, 12));
+
+        Label statusLabel = new Label("Ready");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Label versionLabel = new Label(
+                AppVersionService.getDisplayVersion()
+        );
+
+        statusBar.getChildren().addAll(
+                statusLabel,
+                spacer,
+                versionLabel
+        );
+
+        return statusBar;
     }
 
     private VBox buildSidebar() {

@@ -40,3 +40,8 @@ Date: 2026-07-12 11:56
 Date: 2026-07-14 13:40
 
 - Finished Alcohol module, Fixed Order guide layouts
+
+## v2.0.6
+Date: 2026-07-15 10:47
+
+- Added updater

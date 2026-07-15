@@ -207,6 +207,7 @@ try {
             --type exe `
             --name "$AppName" `
             --app-version "$NewVersion" `
+            --java-options "-Desm.app.version=$NewVersion" `
             --vendor "ESM" `
             --input "$ProjectDir\target" `
             --main-jar "$MainJar" `
