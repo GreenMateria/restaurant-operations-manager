@@ -1,17 +1,15 @@
 # Release History
 
-## v2.0.0-dev
+## v2.0.6
 
-### Alcohol Inventory Milestone
+### Update System
 
--   Added Alcohol Product Profiles
--   Added weight-based bottle counting
--   Added keg counting
--   Added EACH support for coolers and bottled beer
--   Added live decimal bottle calculation
--   Added Alcohol Count Templates
--   Added Alcohol Count Entry
--   Added Alcohol Count Sheet printing
--   Improved keyboard navigation
--   Fixed Order Guide print pagination
--   Fixed Inventory Count Sheet pagination
+-   Added automatic GitHub update checking
+-   Added application version display
+-   Added background update service
+-   Added update notification dialog
+-   Added direct link to latest GitHub installer
+
+### Planned
+
+-   Future in-app installer download (no browser required)

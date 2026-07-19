@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**Development Branch:** Alcohol Inventory Module
+**Development Branch:** v2.0.6-dev
 
 Current database schema version: **9**
 
@@ -10,45 +10,36 @@ Application compiles successfully.
 
 # Completed This Session
 
-## Alcohol Inventory
+## Application Update System
 
 Completed:
 
--   Alcohol Product Profiles
--   Weight and Each count methods
--   Container type support
--   Automatic measurement unit selection (oz / lb / each)
--   Manager-entered tare weights
--   Automatic full-content weight selection by container
--   Alcohol Count Templates
--   Alcohol Count Entry
--   Live decimal bottle calculation
--   Keyboard-friendly alcohol count entry
--   Blank Alcohol Count Sheet printing
--   Started Alcohol Count Sheet printing
--   Alcohol print pagination improvements
--   Order Guide print layout improvements
+-   Automatic GitHub release checking at application startup
+-   Version display in application UI
+-   Version display in application window title
+-   Background update checks (non-blocking)
+-   Automatic comparison against latest GitHub Release
+-   Download prompt when a newer version is available
+-   Silent failure when offline or GitHub is unavailable
 
-Implemented behaviour:
+Current behaviour:
 
--   Liquor, wine and kegs are entered using:
-    -   Full Units
-    -   Weight
--   Decimal quantity is calculated automatically.
--   Only the calculated decimal quantity is stored in the database.
--   Existing valuation and reporting remain compatible.
+-   Installed versions automatically check GitHub Releases on startup.
+-   If a newer version exists, the user is prompted to download it.
+-   Downloads currently open the GitHub release/installer in the default
+    web browser.
 
-Printing:
+# Future Enhancement
 
--   Blank Count Sheets print correctly.
--   Started Count Sheets print correctly.
--   Alcohol sheets display Full and Weight columns.
--   Pagination accounts for section headers.
--   Order Guide printing no longer clips the final section.
+-   Replace browser download with an in-app downloader.
+-   Display download progress.
+-   Verify installer integrity before launch.
+-   Launch installer directly from the application after download.
 
 # Next Development Priorities
 
 1.  Alcohol Inventory Valuation
 2.  Alcohol Cost Report
 3.  Alcohol Order Guide
-4.  Resume Production Variance development
+4.  In-app updater
+5.  Resume Production Variance development

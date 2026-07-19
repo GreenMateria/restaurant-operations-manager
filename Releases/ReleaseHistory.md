@@ -50,3 +50,8 @@ Date: 2026-07-15 10:47
 Date: 2026-07-15 10:53
 
 - bug fixes
+
+## v2.0.8
+Date: 2026-07-19 16:47
+
+- Updated invoice importer. Updated in app updates. Bug Fixes

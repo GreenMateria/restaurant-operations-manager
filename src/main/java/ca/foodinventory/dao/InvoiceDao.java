@@ -3,6 +3,7 @@ package ca.foodinventory.dao;
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.Invoice;
 import ca.foodinventory.model.InvoiceLine;
+import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.PurchaseHistory;
 
 import java.math.BigDecimal;
@@ -17,9 +18,11 @@ public class InvoiceDao {
             String supplier,
             String invoiceNumber,
             String invoiceDate,
+            BigDecimal importedTotal,
+            BigDecimal merchandiseSubtotal,
             BigDecimal invoiceTotal,
+            List<InvoiceAdjustment> adjustments,
             List<InvoiceLine> lines
-
     ) {
         if (lines == null || lines.isEmpty()) {
             return;
@@ -27,27 +30,30 @@ public class InvoiceDao {
 
         invoiceDate = normalizeInvoiceDate(invoiceDate);
 
+        BigDecimal freight = adjustmentAmount(adjustments, "Freight");
+        BigDecimal hst = adjustmentAmount(adjustments, "HST");
+
         String insertInvoiceSql = """
             INSERT INTO invoices (
-                invoice_number,
-                supplier,
-                invoice_date,
-                invoice_total
+                invoice_number, supplier, invoice_date, imported_total,
+                merchandise_subtotal, freight, hst, invoice_total
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """;
 
         String insertLineSql = """
             INSERT INTO invoice_lines (
-                invoice_id,
-                product_id,
-                quantity,
-                base_quantity,
-                pack_size,
-                case_cost,
-                extended_cost
+                invoice_id, product_id, quantity, base_quantity,
+                pack_size, case_cost, extended_cost
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
+        """;
+
+        String insertAdjustmentSql = """
+            INSERT INTO invoice_adjustments (
+                invoice_id, description, amount, display_order
+            )
+            VALUES (?, ?, ?, ?)
         """;
 
         try (Connection conn = DatabaseManager.getConnection()) {
@@ -56,22 +62,21 @@ public class InvoiceDao {
             try {
                 long invoiceId;
 
-                try (PreparedStatement ps = conn.prepareStatement(
-                        insertInvoiceSql,
-                        Statement.RETURN_GENERATED_KEYS
-                )) {
+                try (PreparedStatement ps = conn.prepareStatement(insertInvoiceSql, Statement.RETURN_GENERATED_KEYS)) {
                     ps.setString(1, invoiceNumber);
                     ps.setString(2, supplier);
                     ps.setString(3, invoiceDate);
-                    ps.setString(4, toMoneyString(invoiceTotal));
-
+                    ps.setString(4, toMoneyString(importedTotal));
+                    ps.setString(5, toMoneyString(merchandiseSubtotal));
+                    ps.setString(6, toMoneyString(freight));
+                    ps.setString(7, toMoneyString(hst));
+                    ps.setString(8, toMoneyString(invoiceTotal));
                     ps.executeUpdate();
 
                     try (ResultSet keys = ps.getGeneratedKeys()) {
                         if (!keys.next()) {
                             throw new SQLException("Failed to retrieve invoice ID.");
                         }
-
                         invoiceId = keys.getLong(1);
                     }
                 }
@@ -79,19 +84,13 @@ public class InvoiceDao {
                 try (PreparedStatement ps = conn.prepareStatement(insertLineSql)) {
                     for (InvoiceLine line : lines) {
                         Integer productId = findIdBySkuOrAlias(conn, line.getSku());
-
                         if (productId == null) {
                             throw new SQLException("Product not found for SKU: " + line.getSku());
                         }
 
                         double conversionFactor = getConversionFactor(conn, productId);
-
-                        double purchaseQuantity =
-                                line.getCaseQty() + line.getSplitQty();
-
-                        double baseQuantity =
-                                (line.getCaseQty() * conversionFactor)
-                                        + line.getSplitQty();
+                        double purchaseQuantity = line.getCaseQty() + line.getSplitQty();
+                        double baseQuantity = (line.getCaseQty() * conversionFactor) + line.getSplitQty();
 
                         ps.setLong(1, invoiceId);
                         ps.setInt(2, productId);
@@ -105,24 +104,87 @@ public class InvoiceDao {
                         updateLastCaseCost(conn, productId, line.getCaseCost());
                         updateLastPurchasedDate(conn, productId, invoiceDate);
                     }
-
                     ps.executeBatch();
                 }
 
-                conn.commit();
+                if (adjustments != null && !adjustments.isEmpty()) {
+                    try (PreparedStatement ps = conn.prepareStatement(insertAdjustmentSql)) {
+                        for (InvoiceAdjustment adjustment : adjustments) {
+                            if (adjustment.getDescription().isBlank()) {
+                                continue;
+                            }
+                            ps.setLong(1, invoiceId);
+                            ps.setString(2, adjustment.getDescription());
+                            ps.setString(3, toMoneyString(adjustment.getAmount()));
+                            ps.setInt(4, adjustment.getDisplayOrder());
+                            ps.addBatch();
+                        }
+                        ps.executeBatch();
+                    }
+                }
 
+                conn.commit();
             } catch (Exception ex) {
                 conn.rollback();
                 throw ex;
             } finally {
                 conn.setAutoCommit(true);
             }
-
         } catch (Exception ex) {
             ex.printStackTrace();
             throw new RuntimeException("Failed to save invoice", ex);
         }
     }
+
+    public void saveInvoice(
+            String supplier,
+            String invoiceNumber,
+            String invoiceDate,
+            BigDecimal invoiceTotal,
+            List<InvoiceLine> lines
+    ) {
+        BigDecimal merchandiseSubtotal = calculateTotal(lines);
+        saveInvoice(
+                supplier,
+                invoiceNumber,
+                invoiceDate,
+                invoiceTotal,
+                merchandiseSubtotal,
+                invoiceTotal,
+                List.of(),
+                lines
+        );
+    }
+
+    public List<InvoiceAdjustment> findInvoiceAdjustments(int invoiceId) {
+        List<InvoiceAdjustment> adjustments = new ArrayList<>();
+        String sql = """
+                SELECT id, invoice_id, description, amount, display_order
+                FROM invoice_adjustments
+                WHERE invoice_id = ?
+                ORDER BY display_order, id
+                """;
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, invoiceId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    adjustments.add(new InvoiceAdjustment(
+                            rs.getInt("id"),
+                            rs.getInt("invoice_id"),
+                            rs.getString("description"),
+                            rs.getBigDecimal("amount"),
+                            rs.getInt("display_order")
+                    ));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new RuntimeException("Failed to load invoice adjustments", ex);
+        }
+        return adjustments;
+    }
+
     public List<InvoiceLine> findInvoiceLines(int invoiceId) {
         List<InvoiceLine> lines = new ArrayList<>();
 
@@ -227,6 +289,10 @@ public class InvoiceDao {
                    invoice_number,
                    supplier,
                    invoice_date,
+                   COALESCE(imported_total, invoice_total) AS imported_total,
+                   COALESCE(merchandise_subtotal, invoice_total) AS merchandise_subtotal,
+                   COALESCE(freight, 0) AS freight,
+                   COALESCE(hst, 0) AS hst,
                    invoice_total
             FROM invoices
             ORDER BY invoice_date DESC, id DESC
@@ -242,6 +308,10 @@ public class InvoiceDao {
                         rs.getString("invoice_number"),
                         rs.getString("supplier"),
                         rs.getString("invoice_date"),
+                        rs.getBigDecimal("imported_total"),
+                        rs.getBigDecimal("merchandise_subtotal"),
+                        rs.getBigDecimal("freight"),
+                        rs.getBigDecimal("hst"),
                         rs.getBigDecimal("invoice_total")
                 ));
             }
@@ -411,6 +481,11 @@ public class InvoiceDao {
         )
     """;
 
+        String deleteAdjustmentsSql = """
+        DELETE FROM invoice_adjustments
+        WHERE invoice_id IN (SELECT id FROM invoices WHERE invoice_number = ?)
+    """;
+
         String deleteInvoiceSql = """
         DELETE FROM invoices
         WHERE invoice_number = ?
@@ -423,6 +498,11 @@ public class InvoiceDao {
             try {
 
                 try (PreparedStatement ps = conn.prepareStatement(deleteLinesSql)) {
+                    ps.setString(1, invoiceNumber);
+                    ps.executeUpdate();
+                }
+
+                try (PreparedStatement ps = conn.prepareStatement(deleteAdjustmentsSql)) {
                     ps.setString(1, invoiceNumber);
                     ps.executeUpdate();
                 }
@@ -452,6 +532,11 @@ public class InvoiceDao {
         WHERE invoice_id = ?
     """;
 
+        String deleteAdjustmentsSql = """
+        DELETE FROM invoice_adjustments
+        WHERE invoice_id = ?
+    """;
+
         String deleteInvoiceSql = """
         DELETE FROM invoices
         WHERE id = ?
@@ -462,6 +547,11 @@ public class InvoiceDao {
 
             try {
                 try (PreparedStatement ps = conn.prepareStatement(deleteLinesSql)) {
+                    ps.setInt(1, invoiceId);
+                    ps.executeUpdate();
+                }
+
+                try (PreparedStatement ps = conn.prepareStatement(deleteAdjustmentsSql)) {
                     ps.setInt(1, invoiceId);
                     ps.executeUpdate();
                 }
@@ -490,6 +580,11 @@ public class InvoiceDao {
         )
     """;
 
+        String deleteAdjustmentsSql = """
+        DELETE FROM invoice_adjustments
+        WHERE invoice_id IN (SELECT id FROM invoices WHERE invoice_number = ?)
+    """;
+
         String deleteInvoiceSql = """
         DELETE FROM invoices
         WHERE invoice_number = ?
@@ -500,10 +595,25 @@ public class InvoiceDao {
             ps.executeUpdate();
         }
 
+        try (PreparedStatement ps = conn.prepareStatement(deleteAdjustmentsSql)) {
+            ps.setString(1, invoiceNumber);
+            ps.executeUpdate();
+        }
+
         try (PreparedStatement ps = conn.prepareStatement(deleteInvoiceSql)) {
             ps.setString(1, invoiceNumber);
             ps.executeUpdate();
         }
+    }
+
+    private static BigDecimal adjustmentAmount(List<InvoiceAdjustment> adjustments, String description) {
+        if (adjustments == null) {
+            return BigDecimal.ZERO;
+        }
+        return adjustments.stream()
+                .filter(a -> description.equalsIgnoreCase(a.getDescription()))
+                .map(InvoiceAdjustment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static String toMoneyString(BigDecimal value) {

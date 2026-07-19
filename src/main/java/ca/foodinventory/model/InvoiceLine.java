@@ -28,8 +28,8 @@ public class InvoiceLine {
         this.caseQty = caseQty;
         this.splitQty = splitQty;
         this.packSize = packSize;
-        this.caseCost = safeMoney(caseCost);
-        this.eachCost = safeMoney(eachCost);
+        this.caseCost = safeUnitCost(caseCost);
+        this.eachCost = safeUnitCost(eachCost);
 
         if (extendedCost == null) {
             recalculateExtendedCost();
@@ -70,6 +70,10 @@ public class InvoiceLine {
         return extendedCost;
     }
 
+    public boolean hasManualExtendedCost() {
+        return extendedCost.compareTo(calculateExtendedCost(caseQty, splitQty, caseCost, eachCost)) != 0;
+    }
+
     public void setSku(String sku) {
         this.sku = sku;
     }
@@ -93,20 +97,41 @@ public class InvoiceLine {
     }
 
     public void setCaseCost(BigDecimal caseCost) {
-        this.caseCost = safeMoney(caseCost);
+        this.caseCost = safeUnitCost(caseCost);
         recalculateExtendedCost();
     }
 
     public void setEachCost(BigDecimal eachCost) {
-        this.eachCost = safeMoney(eachCost);
+        this.eachCost = safeUnitCost(eachCost);
         recalculateExtendedCost();
     }
 
+    public void setExtendedCost(BigDecimal extendedCost) {
+        this.extendedCost = safeMoney(extendedCost);
+    }
+
     public void recalculateExtendedCost() {
-        this.extendedCost = safeMoney(caseCost)
+        this.extendedCost = calculateExtendedCost(caseQty, splitQty, caseCost, eachCost);
+    }
+
+    public static BigDecimal calculateExtendedCost(
+            double caseQty,
+            double splitQty,
+            BigDecimal caseCost,
+            BigDecimal eachCost
+    ) {
+        return safeUnitCost(caseCost)
                 .multiply(BigDecimal.valueOf(caseQty))
-                .add(safeMoney(eachCost).multiply(BigDecimal.valueOf(splitQty)))
+                .add(safeUnitCost(eachCost).multiply(BigDecimal.valueOf(splitQty)))
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal safeUnitCost(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+
+        return value.setScale(4, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal safeMoney(BigDecimal value) {

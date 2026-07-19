@@ -7,27 +7,35 @@ import ca.foodinventory.service.GitHubUpdateService.UpdateInfo;
 import ca.foodinventory.ui.MainView;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
+import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainApp extends Application {
 
     private final GitHubUpdateService updateService =
             new GitHubUpdateService();
 
+    private Stage primaryStage;
+
     @Override
     public void start(Stage stage) {
+        primaryStage = stage;
         DatabaseManager.initializeDatabase();
 
         MainView mainView = new MainView();
-
         Scene scene = new Scene(mainView.getView(), 1200, 700);
 
         scene.getStylesheets().add(
@@ -40,19 +48,15 @@ public class MainApp extends Application {
         System.out.println("Icon found: " + (iconStream != null));
 
         if (iconStream != null) {
-            Image appIcon = new Image(iconStream);
-            stage.getIcons().add(appIcon);
+            stage.getIcons().add(new Image(iconStream));
         } else {
-            System.out.println(
-                    "Logo not found at: /images/logo.png"
-            );
+            System.out.println("Logo not found at: /images/logo.png");
         }
 
         stage.setTitle(
                 "ESM Operations Manager "
                         + AppVersionService.getDisplayVersion()
         );
-
         stage.setScene(scene);
         stage.show();
 
@@ -71,70 +75,279 @@ public class MainApp extends Application {
     }
 
     private void showUpdateDialog(UpdateInfo updateInfo) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-
-        alert.setTitle("Update Available");
-        alert.setHeaderText(
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(primaryStage);
+        dialog.setTitle("Update Available");
+        dialog.setHeaderText(
                 "A newer version of ESM Operations Manager is available."
         );
 
-        alert.setContentText(
-                "Installed version: v"
-                        + updateInfo.installedVersion()
-                        + System.lineSeparator()
-                        + "Latest version: v"
-                        + updateInfo.latestVersion()
-                        + System.lineSeparator()
-                        + System.lineSeparator()
-                        + "Would you like to download the update now?"
-        );
-
         ButtonType downloadButton = new ButtonType(
-                "Download Update",
+                updateInfo.downloadUrl() == null
+                        ? "Open Release Page"
+                        : "Download & Install",
                 ButtonBar.ButtonData.OK_DONE
         );
-
         ButtonType laterButton = new ButtonType(
                 "Not Now",
                 ButtonBar.ButtonData.CANCEL_CLOSE
         );
-
-        alert.getButtonTypes().setAll(
+        dialog.getDialogPane().getButtonTypes().setAll(
                 downloadButton,
                 laterButton
         );
 
-        Optional<ButtonType> result = alert.showAndWait();
+        Label installedVersion = new Label(
+                "v" + updateInfo.installedVersion()
+        );
+        Label latestVersion = new Label(
+                "v" + updateInfo.latestVersion()
+        );
+        Label downloadSize = new Label(
+                formatBytes(updateInfo.downloadSizeBytes())
+        );
 
-        if (result.isPresent()
-                && result.get() == downloadButton) {
+        GridPane details = new GridPane();
+        details.setHgap(15);
+        details.setVgap(8);
+        details.addRow(0, new Label("Installed version:"), installedVersion);
+        details.addRow(1, new Label("Latest version:"), latestVersion);
+        details.addRow(2, new Label("Download size:"), downloadSize);
 
-            boolean opened =
-                    updateService.openUpdate(updateInfo);
+        TextArea releaseNotes = new TextArea(updateInfo.releaseNotes());
+        releaseNotes.setEditable(false);
+        releaseNotes.setWrapText(true);
+        releaseNotes.setPrefRowCount(8);
+        releaseNotes.setMaxWidth(Double.MAX_VALUE);
+        VBox.setVgrow(releaseNotes, Priority.ALWAYS);
 
-            if (!opened) {
-                showUnableToOpenUpdateAlert(updateInfo);
+        VBox content = new VBox(
+                10,
+                details,
+                new Label("What's New"),
+                releaseNotes
+        );
+        content.setPadding(new Insets(5));
+        content.setPrefWidth(520);
+
+        dialog.getDialogPane().setContent(content);
+
+        Optional<ButtonType> result = dialog.showAndWait();
+        if (result.isEmpty() || result.get() != downloadButton) {
+            return;
+        }
+
+        if (updateInfo.downloadUrl() == null) {
+            if (!updateService.openReleasePage(updateInfo)) {
+                showError(
+                        "Unable to Open Release",
+                        "The GitHub release page could not be opened."
+                );
             }
+            return;
+        }
+
+        showDownloadDialog(updateInfo);
+    }
+
+    private void showDownloadDialog(UpdateInfo updateInfo) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.initOwner(primaryStage);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        dialog.setTitle("Downloading Update");
+        dialog.setHeaderText(
+                "Downloading ESM Operations Manager v"
+                        + updateInfo.latestVersion()
+        );
+
+        ButtonType cancelButton = new ButtonType(
+                "Cancel",
+                ButtonBar.ButtonData.CANCEL_CLOSE
+        );
+        dialog.getDialogPane().getButtonTypes().add(cancelButton);
+
+        ProgressBar progressBar = new ProgressBar(0);
+        progressBar.setMaxWidth(Double.MAX_VALUE);
+
+        Label progressLabel = new Label("Preparing download...");
+        VBox content = new VBox(12, progressBar, progressLabel);
+        content.setPadding(new Insets(10));
+        content.setPrefWidth(480);
+        dialog.getDialogPane().setContent(content);
+
+        AtomicBoolean cancellationRequested = new AtomicBoolean(false);
+        dialog.setOnCloseRequest(event -> cancellationRequested.set(true));
+
+        updateService.downloadUpdate(
+                        updateInfo,
+                        (downloadedBytes, totalBytes) ->
+                                Platform.runLater(() -> {
+                                    if (totalBytes > 0) {
+                                        progressBar.setProgress(
+                                                (double) downloadedBytes
+                                                        / totalBytes
+                                        );
+                                        progressLabel.setText(
+                                                formatBytes(downloadedBytes)
+                                                        + " / "
+                                                        + formatBytes(totalBytes)
+                                        );
+                                    } else {
+                                        progressBar.setProgress(
+                                                ProgressIndicator.INDETERMINATE_PROGRESS
+                                        );
+                                        progressLabel.setText(
+                                                formatBytes(downloadedBytes)
+                                                        + " downloaded"
+                                        );
+                                    }
+                                }),
+                        cancellationRequested::get
+                )
+                .thenAccept(installerPath ->
+                        Platform.runLater(() -> {
+                            dialog.close();
+                            confirmAndLaunchInstaller(
+                                    updateInfo,
+                                    installerPath
+                            );
+                        })
+                )
+                .exceptionally(exception -> {
+                    Platform.runLater(() -> {
+                        dialog.close();
+                        Throwable cause = rootCause(exception);
+
+                        if (!(cause instanceof CancellationException)) {
+                            showDownloadFailure(updateInfo, cause);
+                        }
+                    });
+                    return null;
+                });
+
+        dialog.showAndWait();
+    }
+
+    private void confirmAndLaunchInstaller(
+            UpdateInfo updateInfo,
+            Path installerPath
+    ) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(primaryStage);
+        alert.setTitle("Update Ready");
+        alert.setHeaderText(
+                "ESM Operations Manager v"
+                        + updateInfo.latestVersion()
+                        + " is ready to install."
+        );
+        alert.setContentText(
+                "The application will close and the Windows installer "
+                        + "will open to complete the update."
+        );
+
+        ButtonType installButton = new ButtonType(
+                "Install Now",
+                ButtonBar.ButtonData.OK_DONE
+        );
+        ButtonType laterButton = new ButtonType(
+                "Install Later",
+                ButtonBar.ButtonData.CANCEL_CLOSE
+        );
+        alert.getButtonTypes().setAll(installButton, laterButton);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isEmpty() || result.get() != installButton) {
+            return;
+        }
+
+        if (updateService.launchInstaller(installerPath)) {
+            Platform.exit();
+        } else {
+            showError(
+                    "Unable to Launch Installer",
+                    "The update was downloaded, but Windows could not "
+                            + "launch the installer. It is located at:"
+                            + System.lineSeparator()
+                            + installerPath.toAbsolutePath()
+            );
         }
     }
 
-    private void showUnableToOpenUpdateAlert(
-            UpdateInfo updateInfo
+    private void showDownloadFailure(
+            UpdateInfo updateInfo,
+            Throwable exception
     ) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
-
-        alert.setTitle("Unable to Open Update");
-        alert.setHeaderText(
-                "The update page could not be opened automatically."
-        );
-
+        alert.initOwner(primaryStage);
+        alert.setTitle("Update Download Failed");
+        alert.setHeaderText("The update could not be downloaded.");
         alert.setContentText(
-                "Please visit the GitHub Releases page manually:"
+                safeMessage(exception)
                         + System.lineSeparator()
-                        + updateInfo.releasePageUrl()
+                        + System.lineSeparator()
+                        + "You can retry the next time the application starts, "
+                        + "or open the GitHub release page."
         );
 
+        ButtonType releasePageButton = new ButtonType(
+                "Open Release Page",
+                ButtonBar.ButtonData.OK_DONE
+        );
+        ButtonType closeButton = new ButtonType(
+                "Close",
+                ButtonBar.ButtonData.CANCEL_CLOSE
+        );
+        alert.getButtonTypes().setAll(releasePageButton, closeButton);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == releasePageButton) {
+            updateService.openReleasePage(updateInfo);
+        }
+    }
+
+    private void showError(String header, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.initOwner(primaryStage);
+        alert.setTitle("Update Error");
+        alert.setHeaderText(header);
+        alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    private static String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "Unknown";
+        }
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+
+        double kilobytes = bytes / 1024.0;
+        if (kilobytes < 1024) {
+            return String.format("%.1f KB", kilobytes);
+        }
+
+        double megabytes = kilobytes / 1024.0;
+        if (megabytes < 1024) {
+            return String.format("%.1f MB", megabytes);
+        }
+
+        return String.format("%.2f GB", megabytes / 1024.0);
+    }
+
+    private static Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static String safeMessage(Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank()
+                ? throwable.getClass().getSimpleName()
+                : message;
     }
 
     public static void main(String[] args) {

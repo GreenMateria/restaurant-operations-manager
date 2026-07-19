@@ -1,16 +1,22 @@
 # ROADMAP
 
-## Alcohol Inventory
+## Update System
 
 ### Completed
 
--   ✅ Alcohol Product Profiles
--   ✅ Weight / Each Count Methods
--   ✅ Bottle Weight Logic
--   ✅ Keg Counting
--   ✅ Alcohol Count Templates
--   ✅ Alcohol Count Entry
--   ✅ Alcohol Count Sheet Printing
+-   ✅ Automatic startup update checking
+-   ✅ GitHub Release version comparison
+-   ✅ Version shown in application UI
+-   ✅ Version shown in window title
+
+### Planned
+
+-   ⏳ Download installer directly inside the application
+-   ⏳ Download progress indicator
+-   ⏳ Installer verification (checksum)
+-   ⏳ Automatic installer launch
+
+## Alcohol Inventory
 
 ### Current Focus
 

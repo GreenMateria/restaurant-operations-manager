@@ -48,8 +48,8 @@ public class GfsCsvImportService {
                 String packSize = get(columns, 5);
                 String description = get(columns, 7);
 
-                BigDecimal caseCost = parseMoney(get(columns, 10));
-                BigDecimal eachCost = parseMoney(get(columns, 11));
+                BigDecimal caseCost = parseUnitCost(get(columns, 10));
+                BigDecimal eachCost = parseUnitCost(get(columns, 11));
 
                 BigDecimal extendedCost = caseCost
                         .multiply(BigDecimal.valueOf(caseQty))
@@ -135,6 +135,24 @@ public class GfsCsvImportService {
             return Double.parseDouble(value.trim());
         } catch (NumberFormatException e) {
             return 0;
+        }
+    }
+
+
+    private BigDecimal parseUnitCost(String value) {
+        if (value == null || value.isBlank()) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+
+        try {
+            return new BigDecimal(
+                    value.replace("$", "")
+                            .replace(",", "")
+                            .trim()
+            ).setScale(4, RoundingMode.HALF_UP);
+
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         }
     }
 

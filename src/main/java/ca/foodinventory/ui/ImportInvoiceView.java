@@ -3,6 +3,7 @@ package ca.foodinventory.ui;
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.dao.ProductDao;
 import ca.foodinventory.model.InvoiceLine;
+import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.Product;
 import ca.foodinventory.service.GfsCsvImportService;
 import javafx.collections.FXCollections;
@@ -15,6 +16,7 @@ import javafx.util.StringConverter;
 import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -190,7 +192,7 @@ public class ImportInvoiceView {
             selected.setPackSize(updated.getPackSize());
             selected.setCaseCost(updated.getCaseCost());
             selected.setEachCost(updated.getEachCost());
-            selected.recalculateExtendedCost();
+            selected.setExtendedCost(updated.getExtendedCost());
 
             table.refresh();
             updateSummary();
@@ -236,6 +238,46 @@ public class ImportInvoiceView {
         TextField packSizeField = new TextField(editing ? existingLine.getPackSize() : "");
         TextField caseCostField = new TextField(editing ? existingLine.getCaseCost().toPlainString() : "0.00");
         TextField eachCostField = new TextField(editing ? existingLine.getEachCost().toPlainString() : "0.00");
+        TextField extendedCostField = new TextField(editing ? existingLine.getExtendedCost().toPlainString() : "0.00");
+
+        CheckBox manualExtendedCostCheckBox = new CheckBox("Use entered extended cost");
+        manualExtendedCostCheckBox.setSelected(editing && existingLine.hasManualExtendedCost());
+        extendedCostField.setDisable(!manualExtendedCostCheckBox.isSelected());
+
+        Label extendedCostNote = new Label(
+                "Use this only when the supplier bills by actual weight or otherwise provides an extended amount " +
+                        "that cannot be calculated from case and split quantities."
+        );
+        extendedCostNote.setWrapText(true);
+        extendedCostNote.setMaxWidth(500);
+
+        Runnable refreshCalculatedExtendedCost = () -> {
+            if (!manualExtendedCostCheckBox.isSelected()) {
+                BigDecimal calculated = InvoiceLine.calculateExtendedCost(
+                        parseDouble(caseQtyField.getText()),
+                        parseDouble(splitQtyField.getText()),
+                        parseUnitCost(caseCostField.getText()),
+                        parseUnitCost(eachCostField.getText())
+                );
+                extendedCostField.setText(calculated.toPlainString());
+            }
+        };
+
+        manualExtendedCostCheckBox.selectedProperty().addListener((obs, oldValue, selected) -> {
+            extendedCostField.setDisable(!selected);
+            if (!selected) {
+                refreshCalculatedExtendedCost.run();
+            }
+        });
+
+        caseQtyField.textProperty().addListener((obs, oldValue, newValue) -> refreshCalculatedExtendedCost.run());
+        splitQtyField.textProperty().addListener((obs, oldValue, newValue) -> refreshCalculatedExtendedCost.run());
+        caseCostField.textProperty().addListener((obs, oldValue, newValue) -> refreshCalculatedExtendedCost.run());
+        eachCostField.textProperty().addListener((obs, oldValue, newValue) -> refreshCalculatedExtendedCost.run());
+
+        if (!manualExtendedCostCheckBox.isSelected()) {
+            refreshCalculatedExtendedCost.run();
+        }
 
         GridPane grid = new GridPane();
         grid.setHgap(12);
@@ -256,11 +298,17 @@ public class ImportInvoiceView {
         grid.add(new Label("Pack/Size:"), 0, 4);
         grid.add(packSizeField, 1, 4);
 
-        grid.add(new Label("Case Cost:"), 0, 5);
+        grid.add(new Label("Case/Unit Cost:"), 0, 5);
         grid.add(caseCostField, 1, 5);
 
         grid.add(new Label("Each Cost:"), 0, 6);
         grid.add(eachCostField, 1, 6);
+
+        grid.add(manualExtendedCostCheckBox, 1, 7);
+
+        grid.add(new Label("Extended Cost:"), 0, 8);
+        grid.add(extendedCostField, 1, 8);
+        grid.add(extendedCostNote, 1, 9);
 
         dialog.getDialogPane().setContent(grid);
 
@@ -276,19 +324,20 @@ public class ImportInvoiceView {
             }
 
             try {
-                InvoiceLine line = new InvoiceLine(
+                BigDecimal extendedCost = manualExtendedCostCheckBox.isSelected()
+                        ? parseMoney(extendedCostField.getText())
+                        : null;
+
+                return new InvoiceLine(
                         skuField.getText().trim(),
                         descriptionField.getText().trim(),
                         parseDouble(caseQtyField.getText()),
                         parseDouble(splitQtyField.getText()),
                         packSizeField.getText().trim(),
-                        parseMoney(caseCostField.getText()),
-                        parseMoney(eachCostField.getText()),
-                        null
+                        parseUnitCost(caseCostField.getText()),
+                        parseUnitCost(eachCostField.getText()),
+                        extendedCost
                 );
-
-                line.recalculateExtendedCost();
-                return line;
 
             } catch (Exception ex) {
                 showAlert(Alert.AlertType.ERROR, "Invalid Line", "Please check the quantities and costs.");
@@ -350,7 +399,10 @@ public class ImportInvoiceView {
                         "GFS",
                         details.invoiceNumber(),
                         details.invoiceDate(),
+                        details.importedTotal(),
+                        details.merchandiseSubtotal(),
                         details.invoiceTotal(),
+                        details.adjustments(),
                         currentLines
                 );
 
@@ -492,67 +544,184 @@ public class ImportInvoiceView {
 
     private Optional<ConfirmedInvoiceDetails> showConfirmInvoiceDialog() {
         Dialog<ConfirmedInvoiceDetails> dialog = new Dialog<>();
-        dialog.setTitle("Confirm Invoice");
-        dialog.setHeaderText("Verify invoice details before saving.");
+        dialog.setTitle("Invoice Reconciliation");
+        dialog.setHeaderText("Reconcile the imported merchandise with the paper invoice total.");
 
         ButtonType saveButtonType = new ButtonType("Save Invoice", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+        dialog.getDialogPane().setPrefWidth(650);
 
         TextField invoiceNumberField = new TextField(currentInvoice.getInvoiceNumber());
         TextField invoiceDateField = new TextField(currentInvoice.getInvoiceDate());
+        TextField paperInvoiceTotalField = new TextField();
+        paperInvoiceTotalField.setPromptText("0.00");
 
-        BigDecimal importedTotal = currentInvoice.getInvoiceTotal();
-        BigDecimal calculatedTotal = calculateTotal();
-        BigDecimal difference = calculatedTotal.subtract(importedTotal).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal importedTotal = currentInvoice.getInvoiceTotal()
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal merchandiseSubtotal = calculateTotal();
 
         Label importedTotalLabel = new Label(formatMoney(importedTotal));
-        Label calculatedTotalLabel = new Label(formatMoney(calculatedTotal));
-        Label differenceLabel = new Label(formatMoney(difference));
+        Label merchandiseSubtotalLabel = new Label(formatMoney(merchandiseSubtotal));
+        Label calculatedGrandTotalLabel = new Label(formatMoney(merchandiseSubtotal));
+        Label differenceLabel = new Label(formatMoney(BigDecimal.ZERO));
+        differenceLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
 
-        if (difference.compareTo(BigDecimal.ZERO) != 0) {
-            differenceLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
-        }
-
-        GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(10);
-
-        grid.add(new Label("Invoice Number:"), 0, 0);
-        grid.add(invoiceNumberField, 1, 0);
-
-        grid.add(new Label("Invoice Date:"), 0, 1);
-        grid.add(invoiceDateField, 1, 1);
-
-        grid.add(new Label("Imported Total:"), 0, 2);
-        grid.add(importedTotalLabel, 1, 2);
-
-        grid.add(new Label("Preview Total:"), 0, 3);
-        grid.add(calculatedTotalLabel, 1, 3);
-
-        grid.add(new Label("Difference:"), 0, 4);
-        grid.add(differenceLabel, 1, 4);
-
-        dialog.getDialogPane().setContent(grid);
+        VBox adjustmentsBox = new VBox(8);
+        List<AdjustmentRow> adjustmentRows = new ArrayList<>();
 
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
-        saveButton.disableProperty().bind(
-                invoiceNumberField.textProperty().isEmpty()
-                        .or(invoiceDateField.textProperty().isEmpty())
-        );
+        saveButton.setDisable(true);
 
-        dialog.setResultConverter(button -> {
-            if (button == saveButtonType) {
-                return new ConfirmedInvoiceDetails(
-                        invoiceNumberField.getText().trim(),
-                        invoiceDateField.getText().trim(),
-                        importedTotal
-                );
+        Runnable refreshTotals = () -> {
+            BigDecimal adjustmentTotal = adjustmentRows.stream()
+                    .map(row -> parseMoney(row.amountField().getText()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal calculatedGrandTotal = merchandiseSubtotal
+                    .add(adjustmentTotal)
+                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal paperInvoiceTotal = parseMoney(paperInvoiceTotalField.getText());
+            BigDecimal difference = paperInvoiceTotal
+                    .subtract(calculatedGrandTotal)
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            calculatedGrandTotalLabel.setText(formatMoney(calculatedGrandTotal));
+            differenceLabel.setText(formatMoney(difference));
+
+            boolean balanced = !paperInvoiceTotalField.getText().isBlank()
+                    && difference.compareTo(BigDecimal.ZERO) == 0;
+            boolean requiredFieldsPresent = !invoiceNumberField.getText().isBlank()
+                    && !invoiceDateField.getText().isBlank();
+
+            if (balanced) {
+                differenceLabel.setStyle("-fx-text-fill: lightgreen; -fx-font-weight: bold;");
+            } else {
+                differenceLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
             }
 
-            return null;
+            saveButton.setDisable(!(balanced && requiredFieldsPresent));
+        };
+
+        addAdjustmentRow(adjustmentsBox, adjustmentRows, "Freight", BigDecimal.ZERO, refreshTotals);
+        addAdjustmentRow(adjustmentsBox, adjustmentRows, "HST", BigDecimal.ZERO, refreshTotals);
+
+        Button addAdjustmentButton = new Button("Add Adjustment");
+        addAdjustmentButton.setOnAction(e ->
+                addAdjustmentRow(adjustmentsBox, adjustmentRows, "", BigDecimal.ZERO, refreshTotals));
+
+        paperInvoiceTotalField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
+        invoiceNumberField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
+        invoiceDateField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
+
+        GridPane invoiceGrid = new GridPane();
+        invoiceGrid.setHgap(12);
+        invoiceGrid.setVgap(10);
+        invoiceGrid.add(new Label("Invoice Number:"), 0, 0);
+        invoiceGrid.add(invoiceNumberField, 1, 0);
+        invoiceGrid.add(new Label("Invoice Date:"), 0, 1);
+        invoiceGrid.add(invoiceDateField, 1, 1);
+        invoiceGrid.add(new Label("Supplier:"), 0, 2);
+        invoiceGrid.add(new Label("GFS"), 1, 2);
+
+        GridPane totalsGrid = new GridPane();
+        totalsGrid.setHgap(12);
+        totalsGrid.setVgap(10);
+        totalsGrid.add(new Label("CSV Imported Total:"), 0, 0);
+        totalsGrid.add(importedTotalLabel, 1, 0);
+        totalsGrid.add(new Label("Merchandise Subtotal:"), 0, 1);
+        totalsGrid.add(merchandiseSubtotalLabel, 1, 1);
+        totalsGrid.add(new Label("Calculated Grand Total:"), 0, 2);
+        totalsGrid.add(calculatedGrandTotalLabel, 1, 2);
+        totalsGrid.add(new Label("Paper Invoice Total:"), 0, 3);
+        totalsGrid.add(paperInvoiceTotalField, 1, 3);
+        totalsGrid.add(new Label("Difference:"), 0, 4);
+        totalsGrid.add(differenceLabel, 1, 4);
+
+        Label adjustmentsHeading = new Label("Adjustments");
+        adjustmentsHeading.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+        VBox content = new VBox(14,
+                invoiceGrid,
+                new Separator(),
+                new Label("Merchandise"),
+                new Label("The merchandise subtotal is the only amount used for inventory valuation and cost reporting."),
+                new Separator(),
+                adjustmentsHeading,
+                adjustmentsBox,
+                addAdjustmentButton,
+                new Separator(),
+                totalsGrid
+        );
+        content.setStyle("-fx-padding: 5;");
+        dialog.getDialogPane().setContent(content);
+
+        refreshTotals.run();
+
+        dialog.setResultConverter(button -> {
+            if (button != saveButtonType) {
+                return null;
+            }
+
+            List<InvoiceAdjustment> adjustments = new ArrayList<>();
+            int displayOrder = 10;
+            for (AdjustmentRow row : adjustmentRows) {
+                String description = row.descriptionField().getText().trim();
+                BigDecimal amount = parseMoney(row.amountField().getText());
+                if (!description.isBlank()) {
+                    adjustments.add(new InvoiceAdjustment(description, amount, displayOrder));
+                    displayOrder += 10;
+                }
+            }
+
+            BigDecimal adjustmentTotal = adjustments.stream()
+                    .map(InvoiceAdjustment::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal grandTotal = merchandiseSubtotal.add(adjustmentTotal)
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            return new ConfirmedInvoiceDetails(
+                    invoiceNumberField.getText().trim(),
+                    invoiceDateField.getText().trim(),
+                    importedTotal,
+                    merchandiseSubtotal,
+                    grandTotal,
+                    adjustments
+            );
         });
 
         return dialog.showAndWait();
+    }
+
+    private void addAdjustmentRow(
+            VBox adjustmentsBox,
+            List<AdjustmentRow> adjustmentRows,
+            String description,
+            BigDecimal amount,
+            Runnable refreshTotals
+    ) {
+        TextField descriptionField = new TextField(description);
+        descriptionField.setPromptText("Description");
+        descriptionField.setPrefWidth(260);
+
+        TextField amountField = new TextField(amount.setScale(2, RoundingMode.HALF_UP).toPlainString());
+        amountField.setPromptText("0.00");
+        amountField.setPrefWidth(120);
+
+        Button removeButton = new Button("Remove");
+        HBox rowBox = new HBox(10, descriptionField, amountField, removeButton);
+        AdjustmentRow row = new AdjustmentRow(descriptionField, amountField, rowBox);
+        adjustmentRows.add(row);
+        adjustmentsBox.getChildren().add(rowBox);
+
+        amountField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
+        descriptionField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
+        removeButton.setOnAction(e -> {
+            adjustmentRows.remove(row);
+            adjustmentsBox.getChildren().remove(rowBox);
+            refreshTotals.run();
+        });
+
+        refreshTotals.run();
     }
 
     private boolean showDuplicateInvoiceWarning(String invoiceNumber) {
@@ -623,6 +792,23 @@ public class ImportInvoiceView {
         }
     }
 
+
+    private BigDecimal parseUnitCost(String value) {
+        if (value == null || value.isBlank()) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+
+        try {
+            return new BigDecimal(
+                    value.replace("$", "")
+                            .replace(",", "")
+                            .trim()
+            ).setScale(4, RoundingMode.HALF_UP);
+        } catch (NumberFormatException ex) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+    }
+
     private BigDecimal parseMoney(String value) {
         if (value == null || value.isBlank()) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -655,10 +841,20 @@ public class ImportInvoiceView {
         return "$" + value.setScale(2, RoundingMode.HALF_UP);
     }
 
+    private record AdjustmentRow(
+            TextField descriptionField,
+            TextField amountField,
+            HBox container
+    ) {
+    }
+
     private record ConfirmedInvoiceDetails(
             String invoiceNumber,
             String invoiceDate,
-            BigDecimal invoiceTotal
+            BigDecimal importedTotal,
+            BigDecimal merchandiseSubtotal,
+            BigDecimal invoiceTotal,
+            List<InvoiceAdjustment> adjustments
     ) {
     }
 }
