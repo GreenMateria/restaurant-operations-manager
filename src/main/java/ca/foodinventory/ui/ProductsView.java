@@ -409,6 +409,18 @@ public class ProductsView {
             return;
         }
 
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Deactivate Product");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "Deactivate \"" + selected.getDescription() + "\"?\n\n"
+                        + "This product will no longer appear in active product lists."
+        );
+
+        if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+
         productDao.deactivate(selected);
         loadProducts();
         historyTable.getItems().clear();

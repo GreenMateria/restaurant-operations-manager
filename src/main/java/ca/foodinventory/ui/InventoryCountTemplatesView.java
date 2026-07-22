@@ -122,6 +122,18 @@ public class InventoryCountTemplatesView {
             return;
         }
 
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Deactivate Count Template");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "Deactivate template \"" + selected.getName() + "\"?\n\n"
+                        + "This template will no longer appear for new inventory counts."
+        );
+
+        if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+
         dao.deactivate(selected.getId());
         loadTemplates();
     }

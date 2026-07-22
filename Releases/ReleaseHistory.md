@@ -65,3 +65,8 @@ Date: 2026-07-19 16:56
 Date: 2026-07-22 13:02
 
 - Fixed Counts, Invoice Importer
+
+## v2.1.1
+Date: 2026-07-22 13:35
+
+- Fixed delte buttons not confirming

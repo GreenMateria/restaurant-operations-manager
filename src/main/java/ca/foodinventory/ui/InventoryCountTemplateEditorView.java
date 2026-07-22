@@ -297,6 +297,28 @@ public class InventoryCountTemplateEditorView {
         InventoryCountTemplateLine selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
+            showSimpleAlert(
+                    Alert.AlertType.WARNING,
+                    "No Product Selected",
+                    "Please select a product to remove."
+            );
+            return;
+        }
+
+        String productName = selected.getDisplayName();
+        if (productName == null || productName.isBlank()) {
+            productName = selected.getProductDescription();
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Remove Product From Template");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "Remove \"" + productName + "\" from this count template?\n\n"
+                        + "This will not delete the product from the product list."
+        );
+
+        if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
             return;
         }
 
