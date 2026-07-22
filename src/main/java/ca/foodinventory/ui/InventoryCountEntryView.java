@@ -22,13 +22,19 @@ public class InventoryCountEntryView {
     private final InventoryCountLineDao lineDao = new InventoryCountLineDao();
     private final InventoryCountDao countDao = new InventoryCountDao();
     private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
+    private final String department;
 
     private final VBox rowsBox = new VBox(0);
     private final List<RowBinding> rowBindings = new ArrayList<>();
     private final List<TextField> navigationFields = new ArrayList<>();
 
     public InventoryCountEntryView(InventoryCount count) {
+        this(count, null);
+    }
+
+    public InventoryCountEntryView(InventoryCount count, String department) {
         this.count = count;
+        this.department = department;
     }
 
     public BorderPane getView() {
@@ -86,7 +92,9 @@ public class InventoryCountEntryView {
                 currentSection = section;
             }
 
-            AlcoholProductProfile profile = alcoholProfileDao.findByProductId(line.getProductId());
+            AlcoholProductProfile profile = isAlcoholLayout()
+                    ? alcoholProfileDao.findByProductId(line.getProductId())
+                    : null;
             RowBinding binding = createDataRow(line, profile);
             rowBindings.add(binding);
             rowsBox.getChildren().add(binding.row());
@@ -104,10 +112,15 @@ public class InventoryCountEntryView {
 
         addHeader(grid, "SKU", 0);
         addHeader(grid, "Product", 1);
-        addHeader(grid, "Quantity / Total", 2);
-        addHeader(grid, "Full Units", 3);
-        addHeader(grid, "Weight", 4);
-        addHeader(grid, "Unit", 5);
+        addHeader(grid, isAlcoholLayout() ? "Quantity / Total" : "Quantity", 2);
+
+        if (isAlcoholLayout()) {
+            addHeader(grid, "Full Units", 3);
+            addHeader(grid, "Weight", 4);
+            addHeader(grid, "Unit", 5);
+        } else {
+            addHeader(grid, "Unit", 3);
+        }
 
         return grid;
     }
@@ -166,20 +179,27 @@ public class InventoryCountEntryView {
             grid.add(totalLabel, 2, 0);
             grid.add(fullUnitsField, 3, 0);
             grid.add(weightField, 4, 0);
+            grid.add(unitLabel, 5, 0);
 
             navigationFields.add(fullUnitsField);
             navigationFields.add(weightField);
-        } else {
+        } else if (isAlcoholLayout()) {
             quantityField = createNumericField(formatEditable(line.getQuantity()));
 
             grid.add(quantityField, 2, 0);
             grid.add(createDashLabel(), 3, 0);
             grid.add(createDashLabel(), 4, 0);
+            grid.add(unitLabel, 5, 0);
+
+            navigationFields.add(quantityField);
+        } else {
+            quantityField = createNumericField(formatEditable(line.getQuantity()));
+
+            grid.add(quantityField, 2, 0);
+            grid.add(unitLabel, 3, 0);
 
             navigationFields.add(quantityField);
         }
-
-        grid.add(unitLabel, 5, 0);
 
         RowBinding binding = new RowBinding(
                 line,
@@ -217,11 +237,16 @@ public class InventoryCountEntryView {
         product.setMinWidth(260);
 
         ColumnConstraints quantity = new ColumnConstraints(130);
-        ColumnConstraints full = new ColumnConstraints(105);
-        ColumnConstraints weight = new ColumnConstraints(105);
         ColumnConstraints unit = new ColumnConstraints(70);
 
-        grid.getColumnConstraints().addAll(sku, product, quantity, full, weight, unit);
+        if (isAlcoholLayout()) {
+            ColumnConstraints full = new ColumnConstraints(105);
+            ColumnConstraints weight = new ColumnConstraints(105);
+            grid.getColumnConstraints().addAll(sku, product, quantity, full, weight, unit);
+        } else {
+            grid.getColumnConstraints().addAll(sku, product, quantity, unit);
+        }
+
         return grid;
     }
 
@@ -359,7 +384,18 @@ public class InventoryCountEntryView {
     }
 
     private boolean isWeightedAlcohol(AlcoholProductProfile profile) {
-        return profile != null && "WEIGHT".equalsIgnoreCase(profile.getCountMethod());
+        return isAlcoholLayout()
+                && profile != null
+                && "WEIGHT".equalsIgnoreCase(profile.getCountMethod());
+    }
+
+    private boolean isAlcoholLayout() {
+        if ("ALCOHOL".equals(department)) {
+            return true;
+        }
+
+        String templateName = count.getTemplateName() == null ? "" : count.getTemplateName().toUpperCase();
+        return templateName.contains("ALCOHOL");
     }
 
     private String resolveUnit(

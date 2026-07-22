@@ -60,3 +60,8 @@ Date: 2026-07-19 16:47
 Date: 2026-07-19 16:56
 
 - update code
+
+## v2.1.0
+Date: 2026-07-22 13:02
+
+- Fixed Counts, Invoice Importer

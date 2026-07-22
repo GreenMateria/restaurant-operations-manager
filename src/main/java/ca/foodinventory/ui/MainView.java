@@ -108,7 +108,7 @@ public class MainView {
         page.setPadding(new Insets(40));
         page.setAlignment(Pos.TOP_CENTER);
 
-        Label title = new Label("East Side Marios Inventory Program");
+        Label title = new Label("East Side Marios Operations Manager");
         title.getStyleClass().add("page-title");
 
         GridPane dashboard = new GridPane();
@@ -168,7 +168,7 @@ public class MainView {
 
                 createDashboardButton(
                         "Manual Invoice",
-                        () -> showView(new ManualInvoiceView().getView())
+                        () -> showView(new ManualInvoiceView("FOOD").getView())
                 ),
 
                 createDashboardButton(
@@ -195,7 +195,7 @@ public class MainView {
 
                 createDashboardButton(
                         "Manual Invoice",
-                        () -> showView(new ManualInvoiceView().getView())
+                        () -> showView(new ManualInvoiceView("ALCOHOL").getView())
                 ),
 
                 createDashboardButton(
@@ -227,7 +227,7 @@ public class MainView {
 
                 createDashboardButton(
                         "Manual Invoice",
-                        () -> showView(new ManualInvoiceView().getView())
+                        () -> showView(new ManualInvoiceView("SUPPLIES").getView())
                 ),
 
                 createDashboardButton(

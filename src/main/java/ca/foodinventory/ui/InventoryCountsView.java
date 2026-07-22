@@ -254,7 +254,7 @@ public class InventoryCountsView {
         }
 
         InventoryCountEntryView view =
-                new InventoryCountEntryView(selected);
+                new InventoryCountEntryView(selected, department);
 
         Stage stage = new Stage();
 
@@ -427,8 +427,10 @@ public class InventoryCountsView {
         final double quantityWidth = 75;
         final double fullWidth = 75;
         final double weightWidth = 85;
-        final double sheetWidth =
-                productWidth + unitWidth + quantityWidth + fullWidth + weightWidth;
+        final boolean alcoholLayout = isAlcoholCount(count);
+        final double sheetWidth = alcoholLayout
+                ? productWidth + unitWidth + quantityWidth + fullWidth + weightWidth
+                : productWidth + unitWidth + quantityWidth;
 
         VBox page = new VBox(4);
         page.setPadding(new Insets(14));
@@ -449,14 +451,17 @@ public class InventoryCountsView {
         details.setStyle("-fx-font-size: 8px; -fx-text-fill: black;");
 
         GridPane header = createPrintGrid(
-                productWidth, unitWidth, quantityWidth, fullWidth, weightWidth
+                alcoholLayout, productWidth, unitWidth, quantityWidth, fullWidth, weightWidth
         );
         header.setStyle("-fx-border-color: black; -fx-border-width: 1; -fx-background-color: #eeeeee;");
         addPrintCell(header, "Product", 0, true, Pos.CENTER_LEFT);
         addPrintCell(header, "Unit", 1, true, Pos.CENTER);
         addPrintCell(header, "Quantity", 2, true, Pos.CENTER);
-        addPrintCell(header, "Full", 3, true, Pos.CENTER);
-        addPrintCell(header, "Weight", 4, true, Pos.CENTER);
+
+        if (alcoholLayout) {
+            addPrintCell(header, "Full", 3, true, Pos.CENTER);
+            addPrintCell(header, "Weight", 4, true, Pos.CENTER);
+        }
 
         VBox body = new VBox(0);
 
@@ -479,12 +484,14 @@ public class InventoryCountsView {
             }
 
             InventoryCountLine line = printRow.line();
-            AlcoholProductProfile profile = alcoholProfileDao.findByProductId(line.getProductId());
+            AlcoholProductProfile profile = alcoholLayout
+                    ? alcoholProfileDao.findByProductId(line.getProductId())
+                    : null;
             boolean weighted =
                     profile != null && "WEIGHT".equalsIgnoreCase(profile.getCountMethod());
 
             GridPane row = createPrintGrid(
-                    productWidth, unitWidth, quantityWidth, fullWidth, weightWidth
+                    alcoholLayout, productWidth, unitWidth, quantityWidth, fullWidth, weightWidth
             );
             row.setStyle("-fx-border-color: black; -fx-border-width: 0 1 1 1;");
 
@@ -495,8 +502,11 @@ public class InventoryCountsView {
             addPrintCell(row, line.getProductDescription(), 0, false, Pos.CENTER_LEFT);
             addPrintCell(row, unit, 1, false, Pos.CENTER);
             addPrintCell(row, weighted ? "" : "____________", 2, false, Pos.CENTER);
-            addPrintCell(row, weighted ? "________" : "", 3, false, Pos.CENTER);
-            addPrintCell(row, weighted ? "________" : "", 4, false, Pos.CENTER);
+
+            if (alcoholLayout) {
+                addPrintCell(row, weighted ? "________" : "", 3, false, Pos.CENTER);
+                addPrintCell(row, weighted ? "________" : "", 4, false, Pos.CENTER);
+            }
 
             body.getChildren().add(row);
         }
@@ -506,6 +516,7 @@ public class InventoryCountsView {
     }
 
     private GridPane createPrintGrid(
+            boolean alcoholLayout,
             double productWidth,
             double unitWidth,
             double quantityWidth,
@@ -516,10 +527,16 @@ public class InventoryCountsView {
         grid.getColumnConstraints().addAll(
                 fixedColumn(productWidth),
                 fixedColumn(unitWidth),
-                fixedColumn(quantityWidth),
-                fixedColumn(fullWidth),
-                fixedColumn(weightWidth)
+                fixedColumn(quantityWidth)
         );
+
+        if (alcoholLayout) {
+            grid.getColumnConstraints().addAll(
+                    fixedColumn(fullWidth),
+                    fixedColumn(weightWidth)
+            );
+        }
+
         return grid;
     }
 
@@ -583,6 +600,15 @@ public class InventoryCountsView {
             case "SUPPLIES" -> "Supplies Inventory Counts";
             default -> "Inventory Counts";
         };
+    }
+
+    private boolean isAlcoholCount(InventoryCount count) {
+        if ("ALCOHOL".equals(department)) {
+            return true;
+        }
+
+        String templateName = count.getTemplateName() == null ? "" : count.getTemplateName().toUpperCase();
+        return templateName.contains("ALCOHOL");
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {

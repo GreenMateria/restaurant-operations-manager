@@ -9,9 +9,11 @@ import ca.foodinventory.service.GfsCsvImportService;
 import javafx.collections.FXCollections;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.util.StringConverter;
+import javafx.util.converter.DoubleStringConverter;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -96,9 +98,15 @@ public class ImportInvoiceView {
 
         TableColumn<InvoiceLine, Double> caseQtyCol = new TableColumn<>("Case Qty");
         caseQtyCol.setCellValueFactory(new PropertyValueFactory<>("caseQty"));
+        caseQtyCol.setCellFactory(TextFieldTableCell.forTableColumn(new DoubleStringConverter()));
+        caseQtyCol.setOnEditCommit(event ->
+                updateReceivedQuantity(event.getRowValue(), event.getOldValue(), event.getNewValue(), true));
 
         TableColumn<InvoiceLine, Double> splitQtyCol = new TableColumn<>("Split Qty");
         splitQtyCol.setCellValueFactory(new PropertyValueFactory<>("splitQty"));
+        splitQtyCol.setCellFactory(TextFieldTableCell.forTableColumn(new DoubleStringConverter()));
+        splitQtyCol.setOnEditCommit(event ->
+                updateReceivedQuantity(event.getRowValue(), event.getOldValue(), event.getNewValue(), false));
 
         TableColumn<InvoiceLine, String> packCol = new TableColumn<>("Pack/Size");
         packCol.setCellValueFactory(new PropertyValueFactory<>("packSize"));
@@ -127,6 +135,39 @@ public class ImportInvoiceView {
         );
 
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setEditable(true);
+    }
+
+    private void updateReceivedQuantity(
+            InvoiceLine line,
+            Double oldValue,
+            Double newValue,
+            boolean caseQuantity
+    ) {
+        if (line == null) {
+            return;
+        }
+
+        if (newValue == null || newValue < 0) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "Invalid Quantity",
+                    "Received quantities must be zero or greater."
+            );
+
+            if (caseQuantity) {
+                line.setCaseQty(oldValue == null ? 0 : oldValue);
+            } else {
+                line.setSplitQty(oldValue == null ? 0 : oldValue);
+            }
+        } else if (caseQuantity) {
+            line.setCaseQty(newValue);
+        } else {
+            line.setSplitQty(newValue);
+        }
+
+        table.refresh();
+        updateSummary();
     }
 
     private TableCell<InvoiceLine, BigDecimal> moneyCell() {

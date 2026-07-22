@@ -2,6 +2,7 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.model.Product;
 import javafx.collections.FXCollections;
@@ -33,13 +34,33 @@ public class ManualInvoiceView {
     private final TextField splitQtyField = new TextField("0");
     private final TextField caseCostField = new TextField("0.00");
     private final TextField eachCostField = new TextField("0.00");
+    private final CheckBox creditLineCheckBox = new CheckBox("Credit / Return");
 
     private final Label totalLabel = new Label("$0.00");
+    private final Label merchandiseSubtotalLabel = new Label("$0.00");
+    private final Label adjustmentTotalLabel = new Label("$0.00");
+    private final TextField hstField = new TextField("0.00");
+    private final TextField bottleDepositField = new TextField("0.00");
+    private final TextField kegDepositField = new TextField("0.00");
+    private final TextField otherAdjustmentDescriptionField = new TextField();
+    private final TextField otherAdjustmentAmountField = new TextField("0.00");
+    private final String department;
+
+    public ManualInvoiceView() {
+        this(null);
+    }
+
+    public ManualInvoiceView(String department) {
+        this.department = department;
+    }
+
     private boolean showConfirmSaveDialog(
             String supplier,
             String invoiceNumber,
             String invoiceDate,
             int lineCount,
+            BigDecimal merchandiseSubtotal,
+            BigDecimal adjustmentTotal,
             BigDecimal total
     ) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
@@ -51,8 +72,10 @@ public class ManualInvoiceView {
                         "Invoice #: " + invoiceNumber + "\n" +
                         "Date: " + invoiceDate + "\n" +
                         "Lines: " + lineCount + "\n" +
-                        "Costing Total: $" + total.setScale(2, RoundingMode.HALF_UP) + "\n\n" +
-                        "This total should exclude HST, deposits, and non-inventory charges."
+                        "Inventory Cost Subtotal: $" + merchandiseSubtotal.setScale(2, RoundingMode.HALF_UP) + "\n" +
+                        "Adjustments: $" + adjustmentTotal.setScale(2, RoundingMode.HALF_UP) + "\n" +
+                        "Invoice Total: $" + total.setScale(2, RoundingMode.HALF_UP) + "\n\n" +
+                        "Adjustments are saved for invoice balancing and are not included in inventory costs."
         );
 
         ButtonType saveButton = new ButtonType("Save Invoice", ButtonBar.ButtonData.OK_DONE);
@@ -93,7 +116,8 @@ public class ManualInvoiceView {
         Label noteLabel = new Label(
                 "Enter product costs before HST and deposits. " +
                         "Do not include taxes, bottle deposits, keg deposits, " +
-                        "or environmental fees in inventory costs."
+                        "or environmental fees in inventory costs. " +
+                        "Use Credit / Return for returned or poor-quality products."
         );
 
         noteLabel.setWrapText(true);
@@ -153,11 +177,29 @@ public class ManualInvoiceView {
         lineGrid.add(new Label("Each Cost:"), 2, 2);
         lineGrid.add(eachCostField, 3, 2);
 
-        lineGrid.add(addLineButton, 1, 3);
+        lineGrid.add(creditLineCheckBox, 1, 3);
 
-        HBox totalBox = new HBox(10, new Label("Invoice Total:"), totalLabel, removeLineButton, saveButton);
+        Label creditNote = new Label("Credit lines save received quantities as negative values.");
+        creditNote.setStyle("-fx-text-fill: orange; -fx-font-size: 11px;");
+        lineGrid.add(creditNote, 2, 3, 2, 1);
 
-        VBox top = new VBox(20, title,noteLabel, invoiceGrid, lineGrid, totalBox);
+        lineGrid.add(addLineButton, 1, 4);
+
+        VBox adjustmentBox = buildAdjustmentBox();
+
+        HBox totalBox = new HBox(
+                10,
+                new Label("Inventory Subtotal:"),
+                merchandiseSubtotalLabel,
+                new Label("Adjustments:"),
+                adjustmentTotalLabel,
+                new Label("Invoice Total:"),
+                totalLabel,
+                removeLineButton,
+                saveButton
+        );
+
+        VBox top = new VBox(20, title,noteLabel, invoiceGrid, lineGrid, adjustmentBox, totalBox);
         top.getStyleClass().add("top-bar");
 
         root.setTop(top);
@@ -166,11 +208,46 @@ public class ManualInvoiceView {
         return root;
     }
 
+    private VBox buildAdjustmentBox() {
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(10);
+
+        hstField.setPrefWidth(100);
+        bottleDepositField.setPrefWidth(100);
+        kegDepositField.setPrefWidth(100);
+        otherAdjustmentDescriptionField.setPromptText("Description");
+        otherAdjustmentAmountField.setPrefWidth(100);
+
+        grid.add(new Label("HST:"), 0, 0);
+        grid.add(hstField, 1, 0);
+        grid.add(new Label("Bottle Deposit:"), 2, 0);
+        grid.add(bottleDepositField, 3, 0);
+        grid.add(new Label("Keg Deposit:"), 0, 1);
+        grid.add(kegDepositField, 1, 1);
+        grid.add(new Label("Other Adjustment:"), 2, 1);
+        grid.add(otherAdjustmentDescriptionField, 3, 1);
+        grid.add(otherAdjustmentAmountField, 4, 1);
+
+        Label note = new Label("Alcohol adjustments balance the paper invoice without affecting inventory valuation.");
+        note.setStyle("-fx-text-fill: orange; -fx-font-size: 11px;");
+
+        VBox box = new VBox(8, new Label("Invoice Adjustments"), grid, note);
+        box.setManaged(isAlcoholInvoice());
+        box.setVisible(isAlcoholInvoice());
+
+        hstField.textProperty().addListener((obs, oldValue, newValue) -> updateTotal());
+        bottleDepositField.textProperty().addListener((obs, oldValue, newValue) -> updateTotal());
+        kegDepositField.textProperty().addListener((obs, oldValue, newValue) -> updateTotal());
+        otherAdjustmentAmountField.textProperty().addListener((obs, oldValue, newValue) -> updateTotal());
+
+        return box;
+    }
+
     private void setupProductComboBox() {
-        productComboBox.setItems(FXCollections.observableArrayList(productDao.findAll()));
         productComboBox.setPrefWidth(500);
 
-        productComboBox.setConverter(new StringConverter<>() {
+        SearchableComboBoxSupport.makeSearchable(productComboBox, loadProductsForInvoice(), new StringConverter<>() {
             @Override
             public String toString(Product product) {
                 if (product == null) {
@@ -187,6 +264,45 @@ public class ManualInvoiceView {
                 return null;
             }
         });
+    }
+
+    private List<Product> loadProductsForInvoice() {
+        List<Product> products = productDao.findAll();
+
+        if (department != null) {
+            products.removeIf(product -> !matchesDepartment(product.getReportingCategory()));
+        }
+
+        return products;
+    }
+
+    private boolean matchesDepartment(String reportingCategory) {
+        String category = reportingCategory == null ? "" : reportingCategory.trim().toUpperCase();
+
+        return switch (department) {
+            case "FOOD" -> category.equals("FOOD");
+            case "ALCOHOL" -> isAlcoholReportingCategory(category);
+            case "SUPPLIES" -> isSuppliesReportingCategory(category);
+            default -> true;
+        };
+    }
+
+    private boolean isAlcoholReportingCategory(String reportingCategory) {
+        String category = reportingCategory == null ? "" : reportingCategory.trim().toUpperCase();
+
+        return switch (category) {
+            case "LIQUOR", "WINE", "BEER", "DRAUGHT", "IMPORT DRAUGHT" -> true;
+            default -> false;
+        };
+    }
+
+    private boolean isSuppliesReportingCategory(String reportingCategory) {
+        String category = reportingCategory == null ? "" : reportingCategory.trim().toUpperCase();
+
+        return switch (category) {
+            case "PAPER", "TAKE OUT", "CLEANING", "DISHWASHING", "GUEST SUPPLIES", "OTHER" -> true;
+            default -> false;
+        };
     }
 
     private void setupTable() {
@@ -241,6 +357,20 @@ public class ManualInvoiceView {
             double caseQty = parseDouble(caseQtyField.getText());
             double splitQty = parseDouble(splitQtyField.getText());
 
+            if (creditLineCheckBox.isSelected()) {
+                caseQty = -Math.abs(caseQty);
+                splitQty = -Math.abs(splitQty);
+            }
+
+            if (caseQty == 0 && splitQty == 0) {
+                showAlert(
+                        Alert.AlertType.WARNING,
+                        "Missing Quantity",
+                        "Enter a case or split quantity. Use Credit / Return to save it as a negative credit."
+                );
+                return;
+            }
+
             BigDecimal caseCost = parseMoney(caseCostField.getText());
             BigDecimal eachCost = parseMoney(eachCostField.getText());
 
@@ -269,6 +399,7 @@ public class ManualInvoiceView {
             splitQtyField.setText("0");
             caseCostField.setText("0.00");
             eachCostField.setText("0.00");
+            creditLineCheckBox.setSelected(false);
 
         } catch (Exception ex) {
             showAlert(Alert.AlertType.ERROR, "Invalid Entry", "Please check quantities and costs.");
@@ -294,13 +425,31 @@ public class ManualInvoiceView {
         String supplier = supplierField.getText().trim();
         String invoiceNumber = invoiceNumberField.getText().trim();
         String invoiceDate = invoiceDatePicker.getValue().toString();
-        BigDecimal total = calculateTotal();
+        BigDecimal merchandiseSubtotal = calculateMerchandiseSubtotal();
+        BigDecimal adjustmentTotal;
+
+        try {
+            adjustmentTotal = calculateAdjustmentTotal(true);
+        } catch (NumberFormatException ex) {
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Invalid Adjustment",
+                    "Please check the HST, deposit, and adjustment amounts."
+            );
+            return;
+        }
+
+        BigDecimal total = merchandiseSubtotal
+                .add(adjustmentTotal)
+                .setScale(2, RoundingMode.HALF_UP);
 
         boolean confirmed = showConfirmSaveDialog(
                 supplier,
                 invoiceNumber,
                 invoiceDate,
                 lines.size(),
+                merchandiseSubtotal,
+                adjustmentTotal,
                 total
         );
 
@@ -318,13 +467,26 @@ public class ManualInvoiceView {
             invoiceDao.deleteInvoice(invoiceNumber);
         }
 
-        invoiceDao.saveInvoice(
-                supplier,
-                invoiceNumber,
-                invoiceDate,
-                total,
-                lines
-        );
+        if (isAlcoholInvoice()) {
+            invoiceDao.saveInvoice(
+                    supplier,
+                    invoiceNumber,
+                    invoiceDate,
+                    total,
+                    merchandiseSubtotal,
+                    total,
+                    buildAdjustments(),
+                    lines
+            );
+        } else {
+            invoiceDao.saveInvoice(
+                    supplier,
+                    invoiceNumber,
+                    invoiceDate,
+                    total,
+                    lines
+            );
+        }
 
         showAlert(Alert.AlertType.INFORMATION, "Invoice Saved", "Manual invoice saved successfully.");
 
@@ -335,17 +497,97 @@ public class ManualInvoiceView {
         invoiceNumberField.clear();
         supplierField.clear();
         invoiceDatePicker.setValue(LocalDate.now());
+        clearAdjustmentFields();
     }
 
     private void updateTotal() {
-        totalLabel.setText("$" + calculateTotal());
+        merchandiseSubtotalLabel.setText(formatMoney(calculateMerchandiseSubtotal()));
+        adjustmentTotalLabel.setText(formatMoney(calculateAdjustmentTotal()));
+        totalLabel.setText(formatMoney(calculateTotal()));
     }
 
     private BigDecimal calculateTotal() {
+        return calculateMerchandiseSubtotal()
+                .add(calculateAdjustmentTotal(false))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateMerchandiseSubtotal() {
         return lines.stream()
                 .map(InvoiceLine::getExtendedCost)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateAdjustmentTotal() {
+        return calculateAdjustmentTotal(false);
+    }
+
+    private BigDecimal calculateAdjustmentTotal(boolean strict) {
+        if (!isAlcoholInvoice()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return buildAdjustments(strict).stream()
+                .map(InvoiceAdjustment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private List<InvoiceAdjustment> buildAdjustments() {
+        return buildAdjustments(true);
+    }
+
+    private List<InvoiceAdjustment> buildAdjustments(boolean strict) {
+        if (!isAlcoholInvoice()) {
+            return List.of();
+        }
+
+        List<InvoiceAdjustment> adjustments = new ArrayList<>();
+        int displayOrder = 10;
+
+        displayOrder = addAdjustment(adjustments, "HST", hstField.getText(), displayOrder, strict);
+        displayOrder = addAdjustment(adjustments, "Bottle Deposit", bottleDepositField.getText(), displayOrder, strict);
+        displayOrder = addAdjustment(adjustments, "Keg Deposit", kegDepositField.getText(), displayOrder, strict);
+
+        String otherDescription = otherAdjustmentDescriptionField.getText() == null
+                ? ""
+                : otherAdjustmentDescriptionField.getText().trim();
+
+        if (!otherDescription.isBlank()) {
+            addAdjustment(adjustments, otherDescription, otherAdjustmentAmountField.getText(), displayOrder, strict);
+        }
+
+        return adjustments;
+    }
+
+    private int addAdjustment(
+            List<InvoiceAdjustment> adjustments,
+            String description,
+            String amountText,
+            int displayOrder,
+            boolean strict
+    ) {
+        BigDecimal amount = strict ? parseMoney(amountText) : parseMoneyOrZero(amountText);
+
+        if (amount.compareTo(BigDecimal.ZERO) != 0) {
+            adjustments.add(new InvoiceAdjustment(description, amount, displayOrder));
+            displayOrder += 10;
+        }
+
+        return displayOrder;
+    }
+
+    private void clearAdjustmentFields() {
+        hstField.setText("0.00");
+        bottleDepositField.setText("0.00");
+        kegDepositField.setText("0.00");
+        otherAdjustmentDescriptionField.clear();
+        otherAdjustmentAmountField.setText("0.00");
+    }
+
+    private boolean isAlcoholInvoice() {
+        return "ALCOHOL".equals(department);
     }
 
     private double parseDouble(String value) {
@@ -361,7 +603,27 @@ public class ManualInvoiceView {
             return BigDecimal.ZERO;
         }
 
-        return new BigDecimal(value.trim()).setScale(2, RoundingMode.HALF_UP);
+        return new BigDecimal(
+                value.replace("$", "")
+                        .replace(",", "")
+                        .trim()
+        ).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal parseMoneyOrZero(String value) {
+        try {
+            return parseMoney(value);
+        } catch (NumberFormatException ex) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+    }
+
+    private String formatMoney(BigDecimal value) {
+        if (value == null) {
+            value = BigDecimal.ZERO;
+        }
+
+        return "$" + value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {

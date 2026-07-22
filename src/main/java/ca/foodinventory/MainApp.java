@@ -13,6 +13,7 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -77,9 +78,12 @@ public class MainApp extends Application {
     private void showUpdateDialog(UpdateInfo updateInfo) {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.initOwner(primaryStage);
+        dialog.initModality(Modality.WINDOW_MODAL);
         dialog.setTitle("Update Available");
         dialog.setHeaderText(
-                "A newer version of ESM Operations Manager is available."
+                "ESM Operations Manager "
+                        + updateInfo.latestVersion()
+                        + " is available."
         );
 
         ButtonType downloadButton = new ButtonType(
@@ -92,45 +96,63 @@ public class MainApp extends Application {
                 "Not Now",
                 ButtonBar.ButtonData.CANCEL_CLOSE
         );
-        dialog.getDialogPane().getButtonTypes().setAll(
-                downloadButton,
-                laterButton
-        );
+
+        DialogPane pane = dialog.getDialogPane();
+        pane.getButtonTypes().setAll(downloadButton, laterButton);
 
         Label installedVersion = new Label(
-                "v" + updateInfo.installedVersion()
+                "Current version:  " + updateInfo.installedVersion()
         );
-        Label latestVersion = new Label(
-                "v" + updateInfo.latestVersion()
-        );
-        Label downloadSize = new Label(
-                formatBytes(updateInfo.downloadSizeBytes())
+        installedVersion.setStyle(
+                "-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #202020;"
         );
 
-        GridPane details = new GridPane();
-        details.setHgap(15);
-        details.setVgap(8);
-        details.addRow(0, new Label("Installed version:"), installedVersion);
-        details.addRow(1, new Label("Latest version:"), latestVersion);
-        details.addRow(2, new Label("Download size:"), downloadSize);
+        Label latestVersion = new Label(
+                "New version:      " + updateInfo.latestVersion()
+        );
+        latestVersion.setStyle(
+                "-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #202020;"
+        );
+
+        Label downloadSize = new Label(
+                "Download size:   " + formatBytes(updateInfo.downloadSizeBytes())
+        );
+        downloadSize.setStyle("-fx-text-fill: #202020;");
+
+        VBox versionDetails = new VBox(
+                6,
+                installedVersion,
+                latestVersion,
+                downloadSize
+        );
+
+        Label notesHeading = new Label("What's New");
+        notesHeading.setStyle(
+                "-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #202020;"
+        );
 
         TextArea releaseNotes = new TextArea(updateInfo.releaseNotes());
         releaseNotes.setEditable(false);
         releaseNotes.setWrapText(true);
         releaseNotes.setPrefRowCount(8);
+        releaseNotes.setMinHeight(170);
         releaseNotes.setMaxWidth(Double.MAX_VALUE);
         VBox.setVgrow(releaseNotes, Priority.ALWAYS);
 
         VBox content = new VBox(
-                10,
-                details,
-                new Label("What's New"),
+                12,
+                versionDetails,
+                notesHeading,
                 releaseNotes
         );
-        content.setPadding(new Insets(5));
-        content.setPrefWidth(520);
+        content.setPadding(new Insets(8));
+        content.setPrefWidth(560);
+        content.setMinWidth(520);
 
-        dialog.getDialogPane().setContent(content);
+        pane.setContent(content);
+        configureDialogPane(pane, 620);
+        styleDialogButton(pane, downloadButton, true);
+        styleDialogButton(pane, laterButton, false);
 
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isEmpty() || result.get() != downloadButton) {
@@ -232,17 +254,14 @@ public class MainApp extends Application {
             UpdateInfo updateInfo,
             Path installerPath
     ) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.initOwner(primaryStage);
-        alert.setTitle("Update Ready");
-        alert.setHeaderText(
-                "ESM Operations Manager v"
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(primaryStage);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        dialog.setTitle("Update Ready");
+        dialog.setHeaderText(
+                "ESM Operations Manager "
                         + updateInfo.latestVersion()
                         + " is ready to install."
-        );
-        alert.setContentText(
-                "The application will close and the Windows installer "
-                        + "will open to complete the update."
         );
 
         ButtonType installButton = new ButtonType(
@@ -253,9 +272,37 @@ public class MainApp extends Application {
                 "Install Later",
                 ButtonBar.ButtonData.CANCEL_CLOSE
         );
-        alert.getButtonTypes().setAll(installButton, laterButton);
 
-        Optional<ButtonType> result = alert.showAndWait();
+        DialogPane pane = dialog.getDialogPane();
+        pane.getButtonTypes().setAll(installButton, laterButton);
+
+        Label versionLabel = new Label(
+                "Current version: " + updateInfo.installedVersion()
+                        + System.lineSeparator()
+                        + "New version: " + updateInfo.latestVersion()
+        );
+        versionLabel.setStyle(
+                "-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #202020;"
+        );
+
+        Label messageLabel = new Label(
+                "The application will close and the Windows installer "
+                        + "will open to complete the update."
+        );
+        messageLabel.setWrapText(true);
+        messageLabel.setStyle("-fx-text-fill: #202020;");
+
+        VBox content = new VBox(12, versionLabel, messageLabel);
+        content.setPadding(new Insets(10));
+        content.setPrefWidth(470);
+        content.setMinWidth(430);
+
+        pane.setContent(content);
+        configureDialogPane(pane, 540);
+        styleDialogButton(pane, installButton, true);
+        styleDialogButton(pane, laterButton, false);
+
+        Optional<ButtonType> result = dialog.showAndWait();
         if (result.isEmpty() || result.get() != installButton) {
             return;
         }
@@ -312,6 +359,49 @@ public class MainApp extends Application {
         alert.setHeaderText(header);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    private void configureDialogPane(DialogPane pane, double preferredWidth) {
+        pane.setPrefWidth(preferredWidth);
+        pane.setMinWidth(preferredWidth);
+        pane.setMinHeight(Region.USE_PREF_SIZE);
+        pane.setStyle(
+                "-fx-background-color: white;"
+                        + "-fx-border-color: #b8b8b8;"
+                        + "-fx-border-width: 1px;"
+        );
+    }
+
+    private void styleDialogButton(
+            DialogPane pane,
+            ButtonType buttonType,
+            boolean primary
+    ) {
+        Button button = (Button) pane.lookupButton(buttonType);
+        if (button == null) {
+            return;
+        }
+
+        button.setMinWidth(120);
+        button.setMinHeight(34);
+
+        if (primary) {
+            button.setStyle(
+                    "-fx-background-color: #2f6fad;"
+                            + "-fx-text-fill: white;"
+                            + "-fx-font-weight: bold;"
+                            + "-fx-background-radius: 4px;"
+                            + "-fx-padding: 7px 14px;"
+            );
+        } else {
+            button.setStyle(
+                    "-fx-background-color: #e6e6e6;"
+                            + "-fx-text-fill: #202020;"
+                            + "-fx-font-weight: bold;"
+                            + "-fx-background-radius: 4px;"
+                            + "-fx-padding: 7px 14px;"
+            );
+        }
     }
 
     private static String formatBytes(long bytes) {
