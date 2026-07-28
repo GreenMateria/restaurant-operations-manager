@@ -70,3 +70,8 @@ Date: 2026-07-22 13:02
 Date: 2026-07-22 13:35
 
 - Fixed delte buttons not confirming
+
+## v2.1.2
+Date: 2026-07-28 12:44
+
+- Reworked Alcohol Invoicing. Fixed Alcohol valuation Bug

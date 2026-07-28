@@ -7,6 +7,7 @@ import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.PurchaseHistory;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -101,7 +102,7 @@ public class InvoiceDao {
                         ps.setString(7, toMoneyString(line.getExtendedCost()));
                         ps.addBatch();
 
-                        updateLastCaseCost(conn, productId, line.getCaseCost());
+                        updateLastCaseCost(conn, productId, deriveLastCaseCost(line, conversionFactor));
                         updateLastPurchasedDate(conn, productId, invoiceDate);
                     }
                     ps.executeBatch();
@@ -419,11 +420,32 @@ public class InvoiceDao {
         return 1.0;
     }
 
+    private BigDecimal deriveLastCaseCost(InvoiceLine line, double conversionFactor) {
+        BigDecimal caseCost = line.getCaseCost();
+        if (caseCost != null && caseCost.compareTo(BigDecimal.ZERO) > 0) {
+            return caseCost;
+        }
+
+        BigDecimal eachCost = line.getEachCost();
+        if (eachCost == null || eachCost.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal normalizedFactor = BigDecimal.valueOf(conversionFactor <= 0 ? 1.0 : conversionFactor);
+
+        return eachCost.multiply(normalizedFactor)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
     private void updateLastCaseCost(
             Connection conn,
             int productId,
             BigDecimal caseCost
     ) throws SQLException {
+        if (caseCost == null || caseCost.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
         String sql = """
             UPDATE products
             SET last_case_cost = ?

@@ -1,6 +1,6 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: July 2026_
+_Last Updated: July 28, 2026_
 
 This file documents the current SQLite database structure for the Food Inventory / ESM Operations Manager application.
 
@@ -25,7 +25,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **9**.
+- Current migration version: **11**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -43,6 +43,8 @@ Current known migration files:
 - `Migration7`
 - `Migration8`
 - `Migration9`
+- `Migration10`
+- `Migration11`
 
 Migration responsibilities:
 
@@ -54,6 +56,12 @@ Migration responsibilities:
   - Added `production_stations.prep_sheet`.
 - `Migration9`
   - Added `production_items.permanent_override_par`.
+- `Migration10`
+  - Added invoice subtotal/allocation fields to `invoices`:
+    `imported_total`, `merchandise_subtotal`, `freight`, and `hst`.
+- `Migration11`
+  - Added `invoice_adjustments`.
+  - Preserved any previously saved Freight/HST values as adjustment rows.
 
 ---
 
@@ -114,11 +122,17 @@ Important fields:
 - `invoice_number`
 - `supplier`
 - `invoice_date`
+- `imported_total`
+- `merchandise_subtotal`
+- `freight`
+- `hst`
 - `invoice_total`
 
 Notes:
 
 - Invoice duplicate handling relies on `invoice_number`.
+- `merchandise_subtotal` is the inventory-cost portion of the invoice.
+- `freight`, `hst`, and other non-inventory charges are excluded from valuation logic.
 
 ---
 
@@ -141,6 +155,29 @@ Notes:
 
 - `base_quantity` is used for usage and valuation calculations.
 - GFS import calculates base quantity from cases and splits.
+- `case_cost` remains the stored purchased-unit cost field.
+- When manual invoices use split / each pricing without a case cost, product fallback valuation cost is derived from the each cost and the product conversion factor rather than overwriting `last_case_cost` with zero.
+
+---
+
+## invoice_adjustments
+
+Stores non-inventory invoice charges and balancing rows.
+
+Important fields:
+
+- `id`
+- `invoice_id`
+- `description`
+- `amount`
+- `display_order`
+
+Notes:
+
+- Used for HST, Freight, Bottle Deposit, Keg Deposit, and similar non-inventory charges.
+- These rows are saved for invoice balancing and display, but are not part of inventory valuation.
+- For alcohol invoices, exact paper HST and exact paper bottle deposit should be saved here as the accounting values.
+- Any remaining reconciliation difference should be absorbed into merchandise line allocation rather than changing the saved HST amount.
 
 ---
 

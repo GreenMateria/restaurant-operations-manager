@@ -2,6 +2,7 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.model.Invoice;
+import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
 import ca.foodinventory.model.InvoiceLine;
 import javafx.collections.FXCollections;
@@ -14,6 +15,8 @@ import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class InvoiceHistoryView {
@@ -53,7 +56,7 @@ public class InvoiceHistoryView {
                         ));
 
                         breakdownTable.setItems(FXCollections.observableArrayList(
-                                invoiceDao.getCategoryBreakdown(selectedInvoice.getId())
+                                buildBreakdownRows(selectedInvoice.getId())
                         ));
                     } else {
                         lineTable.setItems(FXCollections.observableArrayList());
@@ -94,6 +97,22 @@ public class InvoiceHistoryView {
         invoiceTable.setItems(FXCollections.observableArrayList(invoiceDao.findAllInvoices()));
         lineTable.setItems(FXCollections.observableArrayList());
         breakdownTable.setItems(FXCollections.observableArrayList());
+    }
+
+    private List<InvoiceCategoryBreakdownLine> buildBreakdownRows(int invoiceId) {
+        List<InvoiceCategoryBreakdownLine> rows = new ArrayList<>(
+                invoiceDao.getCategoryBreakdown(invoiceId)
+        );
+
+        List<InvoiceAdjustment> adjustments = invoiceDao.findInvoiceAdjustments(invoiceId);
+        for (InvoiceAdjustment adjustment : adjustments) {
+            rows.add(new InvoiceCategoryBreakdownLine(
+                    adjustment.getDescription(),
+                    adjustment.getAmount()
+            ));
+        }
+
+        return rows;
     }
 
     private void deleteSelectedInvoice() {

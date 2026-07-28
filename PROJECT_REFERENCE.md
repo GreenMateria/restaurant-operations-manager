@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: July 2026_
+_Last Updated: Tuesday, July 28, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -277,7 +277,15 @@ Important behavior:
 - Duplicate SKU lines on one invoice must be supported.
 - Duplicate invoices are detected by invoice number.
 - Imported totals should reconcile to the supplier invoice.
-- Alcohol invoices may require deposits, HST, or other non-inventory charges to be excluded manually.
+- Food and supplies use the generic manual invoice workflow.
+- Alcohol uses a dedicated manual invoice workflow.
+- Alcohol invoices may require deposits, HST, freight, or other non-inventory charges to be excluded from inventory merchandise cost.
+- Non-inventory alcohol charges are stored as invoice adjustments and should not flow into inventory valuation.
+- The alcohol manual invoice screen supports line-level `HST Included` and `Bottle Deposit Included` logic for stripping non-inventory amounts out of paper line totals.
+- The alcohol manual invoice screen also accepts exact paper-invoice HST and exact paper bottle deposit totals for accounting / remittance purposes.
+- Any remaining difference between calculated merchandise + exact paper adjustments and the paper invoice total is reconciled into merchandise categories, not into HST.
+- Positive differences are subtracted from the highest merchandise category; negative differences are added to the lowest merchandise category.
+- When a manual alcohol purchase is entered using split / each cost, fallback valuation cost should derive from the actual each cost and the product conversion factor rather than zeroing the product fallback cost.
 - Product costs from purchasing feed inventory valuation and reports.
 
 ---
@@ -386,7 +394,14 @@ Inventory valuation converts counted quantities into monetary value.
 
 Counted quantities may be entered in different units and converted to the product base unit.
 
-Valuation uses product cost history and purchase data. The existing cost fallback order should be preserved, including use of the product's last known case cost where appropriate.
+Valuation uses product cost history and purchase data.
+
+Current fallback behavior:
+
+1. Use period purchase totals where period purchase quantity exists.
+2. Otherwise use the product's last known purchased-unit fallback cost.
+3. For split-cost manual alcohol purchases, derive that fallback from each cost and the product conversion factor instead of overwriting it with zero.
+4. Exact paper-invoice HST and deposit should remain accounting values, not valuation fallback values.
 
 Inventory valuation supports category and department reporting.
 
@@ -549,15 +564,23 @@ Pagination should be section-aware and match the entry screen.
 
 ## Current Status
 
-The alcohol product profile foundation exists.
+The alcohol workflow foundation exists, including:
 
-Remaining alcohol priorities include:
+- Alcohol product filtering in Products / Manual Invoice / Counts / Order Guide entry points
+- Alcohol product profiles
+- Alcohol count templates and count entry support
+- Alcohol-specific manual invoice entry
+- Alcohol manual invoice adjustments for non-inventory charges
+- Exact paper HST and bottle deposit entry for accounting accuracy
+- Automatic reconciliation of remaining invoice differences into merchandise categories
+- Alcohol inclusion in valuation and weekly cost reporting
 
-1. Complete alcohol inventory count entry.
-2. Complete alcohol valuation.
-3. Complete alcohol cost reporting.
-4. Complete alcohol order guide behavior.
-5. Finalize alcohol-specific printing.
+Remaining priorities focus on validation and workflow polish:
+
+1. Continue validating alcohol valuation against live purchasing data.
+2. Continue refining alcohol cost reporting behaviour.
+3. Continue alcohol order guide workflow review.
+4. Finalize alcohol-specific printing and user workflow polish where needed.
 
 ---
 
@@ -781,7 +804,7 @@ The updater:
 - Downloads the installer inside the application.
 - Displays download progress.
 - Stores the installer under the local Updates folder.
-- Prompts with Install Now or Install Later.
+- Prompts for download and install actions.
 - Launches the Windows installer.
 - Closes the application after installer launch.
 
@@ -875,9 +898,7 @@ The application currently has a stable foundation for:
 
 Primary unfinished areas:
 
-- Complete alcohol inventory workflow
-- Alcohol valuation and cost reporting
-- Alcohol order guide
+- Alcohol workflow validation and polish against live data
 - Production-to-inventory variance
 - Recipe costing
 - Yield tracking
@@ -890,11 +911,11 @@ Primary unfinished areas:
 
 ## Immediate
 
-1. Stabilize and finish alcohol inventory count entry.
-2. Complete alcohol valuation.
-3. Complete alcohol cost reporting.
-4. Add a manual Check for Updates action.
-5. Add additive inventory count template synchronization.
+1. Validate alcohol valuation and invoice behaviour against live data in the current schema.
+2. Continue alcohol cost reporting and order guide review.
+3. Add a manual Check for Updates action.
+4. Add additive inventory count template synchronization.
+5. Continue production variance groundwork.
 
 ## Medium Term
 

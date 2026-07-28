@@ -1,6 +1,6 @@
 # CODING_STANDARDS.md
 
-_Last Updated: July 2026_
+_Last Updated: July 28, 2026_
 
 This file documents coding conventions and project-specific implementation rules for the Food Inventory / ESM Operations Manager application.
 
@@ -195,6 +195,11 @@ Important:
 
 - Support duplicate SKUs/lines on the same invoice.
 - Preserve duplicate invoice overwrite behavior.
+- When a manual invoice line uses split / each cost without a case cost, preserve valuation fallback by deriving the product's last known purchased-unit cost from each cost and `conversion_factor`.
+- Never overwrite a valid `last_case_cost` with zero just because the purchase was entered on the split / each side.
+- For alcohol-specific manual invoices, treat line-level inclusion flags as merchandise-cost calculation helpers only.
+- Save exact paper HST and exact paper bottle deposit totals as the accounting adjustment values.
+- If a final invoice balancing difference remains, reconcile it into merchandise categories rather than modifying the saved HST amount.
 
 ---
 

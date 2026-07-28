@@ -195,7 +195,7 @@ public class MainView {
 
                 createDashboardButton(
                         "Manual Invoice",
-                        () -> showView(new ManualInvoiceView("ALCOHOL").getView())
+                        () -> showView(new AlcoholManualInvoiceView().getView())
                 ),
 
                 createDashboardButton(

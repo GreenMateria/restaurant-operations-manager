@@ -32,8 +32,8 @@ public class ManualInvoiceView {
     private final ComboBox<Product> productComboBox = new ComboBox<>();
     private final TextField caseQtyField = new TextField("0");
     private final TextField splitQtyField = new TextField("0");
-    private final TextField caseCostField = new TextField("0.00");
-    private final TextField eachCostField = new TextField("0.00");
+    private final TextField caseCostField = new TextField("0.0000");
+    private final TextField eachCostField = new TextField("0.0000");
     private final CheckBox creditLineCheckBox = new CheckBox("Credit / Return");
 
     private final Label totalLabel = new Label("$0.00");
@@ -371,8 +371,8 @@ public class ManualInvoiceView {
                 return;
             }
 
-            BigDecimal caseCost = parseMoney(caseCostField.getText());
-            BigDecimal eachCost = parseMoney(eachCostField.getText());
+            BigDecimal caseCost = parseUnitCost(caseCostField.getText());
+            BigDecimal eachCost = parseUnitCost(eachCostField.getText());
 
             BigDecimal extendedCost =
                     caseCost.multiply(BigDecimal.valueOf(caseQty))
@@ -397,8 +397,8 @@ public class ManualInvoiceView {
             productComboBox.setValue(null);
             caseQtyField.setText("0");
             splitQtyField.setText("0");
-            caseCostField.setText("0.00");
-            eachCostField.setText("0.00");
+            caseCostField.setText("0.0000");
+            eachCostField.setText("0.0000");
             creditLineCheckBox.setSelected(false);
 
         } catch (Exception ex) {
@@ -608,6 +608,18 @@ public class ManualInvoiceView {
                         .replace(",", "")
                         .trim()
         ).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal parseUnitCost(String value) {
+        if (value == null || value.isBlank()) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+
+        return new BigDecimal(
+                value.replace("$", "")
+                        .replace(",", "")
+                        .trim()
+        ).setScale(4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal parseMoneyOrZero(String value) {
