@@ -146,7 +146,12 @@ public class InventoryCountEntryView {
         grid.setStyle("-fx-border-color: #4c5964; -fx-border-width: 0 0 1 0;");
 
         Label skuLabel = new Label(nullToBlank(line.getSku()));
-        Label productLabel = new Label(nullToBlank(line.getProductDescription()));
+        String productName = line.getDisplayName();
+        if (productName == null || productName.isBlank()) {
+            productName = line.getProductDescription();
+        }
+
+        Label productLabel = new Label(nullToBlank(productName));
         Label unitLabel = new Label(resolveUnit(line, profile));
 
         skuLabel.setMaxWidth(Double.MAX_VALUE);

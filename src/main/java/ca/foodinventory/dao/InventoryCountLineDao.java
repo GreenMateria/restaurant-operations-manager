@@ -18,6 +18,7 @@ public class InventoryCountLineDao {
                     l.*,
                     p.sku,
                     p.description AS product_description,
+                    tl.display_name,
                     tl.section_name,
                     tl.sort_order
                 FROM inventory_count_lines l
@@ -55,6 +56,7 @@ public class InventoryCountLineDao {
 
                 line.setSku(rs.getString("sku"));
                 line.setProductDescription(rs.getString("product_description"));
+                line.setDisplayName(rs.getString("display_name"));
                 line.setSectionName(rs.getString("section_name"));
                 line.setSortOrder(rs.getInt("sort_order"));
 

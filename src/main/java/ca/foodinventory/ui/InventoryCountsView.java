@@ -499,7 +499,12 @@ public class InventoryCountsView {
                     ? profile.getMeasurementUnit()
                     : line.getCountUnit();
 
-            addPrintCell(row, line.getProductDescription(), 0, false, Pos.CENTER_LEFT);
+            String productName = line.getDisplayName();
+            if (productName == null || productName.isBlank()) {
+                productName = line.getProductDescription();
+            }
+
+            addPrintCell(row, productName, 0, false, Pos.CENTER_LEFT);
             addPrintCell(row, unit, 1, false, Pos.CENTER);
             addPrintCell(row, weighted ? "" : "____________", 2, false, Pos.CENTER);
 

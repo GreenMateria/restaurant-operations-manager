@@ -75,3 +75,8 @@ Date: 2026-07-22 13:35
 Date: 2026-07-28 12:44
 
 - Reworked Alcohol Invoicing. Fixed Alcohol valuation Bug
+
+## v2.1.3
+Date: 2026-07-28 13:03
+
+- Fixed display issues in count sheets

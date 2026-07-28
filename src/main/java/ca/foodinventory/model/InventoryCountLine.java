@@ -11,6 +11,7 @@ public class InventoryCountLine {
 
     private String sku;
     private String productDescription;
+    private String displayName;
     private String sectionName;
     private int sortOrder;
     private double conversionFactor;
@@ -56,6 +57,10 @@ public class InventoryCountLine {
         return productDescription;
     }
 
+    public String getDisplayName() {
+        return displayName;
+    }
+
     public String getSectionName() {
         return sectionName;
     }
@@ -94,6 +99,10 @@ public class InventoryCountLine {
 
     public void setProductDescription(String productDescription) {
         this.productDescription = productDescription;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public void setSectionName(String sectionName) {
