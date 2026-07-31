@@ -18,6 +18,7 @@ public class ProductionItemDao {
                 pi.name,
                 pi.unit,
                 pi.shelf_life,
+                COALESCE(NULLIF(pi.yield_factor, 0), 1.0) AS yield_factor,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -52,6 +53,7 @@ public class ProductionItemDao {
                 pi.name,
                 pi.unit,
                 pi.shelf_life,
+                COALESCE(NULLIF(pi.yield_factor, 0), 1.0) AS yield_factor,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -85,6 +87,7 @@ public class ProductionItemDao {
                 pi.name,
                 pi.unit,
                 pi.shelf_life,
+                COALESCE(NULLIF(pi.yield_factor, 0), 1.0) AS yield_factor,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -120,6 +123,7 @@ public class ProductionItemDao {
                 pi.name,
                 pi.unit,
                 pi.shelf_life,
+                COALESCE(NULLIF(pi.yield_factor, 0), 1.0) AS yield_factor,
                 pi.station_id,
                 ps.name AS station_name,
                 pi.print_order,
@@ -162,12 +166,13 @@ public class ProductionItemDao {
                 name,
                 unit,
                 shelf_life,
+                yield_factor,
                 station_id,
                 print_order,
                 permanent_override_par,
                 active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """;
 
         try (Connection connection = DatabaseManager.getConnection();
@@ -176,10 +181,11 @@ public class ProductionItemDao {
             statement.setString(1, item.getName());
             statement.setString(2, item.getUnit());
             statement.setString(3, item.getShelfLife());
-            setNullableInt(statement, 4, item.getStationId());
-            statement.setInt(5, item.getPrintOrder());
-            setNullableInteger(statement, 6, item.getPermanentOverridePar());
-            statement.setInt(7, item.isActive() ? 1 : 0);
+            statement.setDouble(4, item.getYieldFactor());
+            setNullableInt(statement, 5, item.getStationId());
+            statement.setInt(6, item.getPrintOrder());
+            setNullableInteger(statement, 7, item.getPermanentOverridePar());
+            statement.setInt(8, item.isActive() ? 1 : 0);
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -193,6 +199,7 @@ public class ProductionItemDao {
             SET name = ?,
                 unit = ?,
                 shelf_life = ?,
+                yield_factor = ?,
                 station_id = ?,
                 print_order = ?,
                 permanent_override_par = ?,
@@ -206,11 +213,12 @@ public class ProductionItemDao {
             statement.setString(1, item.getName());
             statement.setString(2, item.getUnit());
             statement.setString(3, item.getShelfLife());
-            setNullableInt(statement, 4, item.getStationId());
-            statement.setInt(5, item.getPrintOrder());
-            setNullableInteger(statement, 6, item.getPermanentOverridePar());
-            statement.setInt(7, item.isActive() ? 1 : 0);
-            statement.setInt(8, item.getId());
+            statement.setDouble(4, item.getYieldFactor());
+            setNullableInt(statement, 5, item.getStationId());
+            statement.setInt(6, item.getPrintOrder());
+            setNullableInteger(statement, 7, item.getPermanentOverridePar());
+            statement.setInt(8, item.isActive() ? 1 : 0);
+            statement.setInt(9, item.getId());
             statement.executeUpdate();
 
         } catch (SQLException e) {
@@ -277,6 +285,7 @@ public class ProductionItemDao {
                 resultSet.getString("name"),
                 resultSet.getString("unit"),
                 resultSet.getString("shelf_life"),
+                resultSet.getDouble("yield_factor"),
                 resultSet.getInt("station_id"),
                 resultSet.getString("station_name"),
                 resultSet.getInt("print_order"),

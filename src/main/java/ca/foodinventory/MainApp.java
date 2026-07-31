@@ -80,11 +80,7 @@ public class MainApp extends Application {
         dialog.initOwner(primaryStage);
         dialog.initModality(Modality.WINDOW_MODAL);
         dialog.setTitle("Update Available");
-        dialog.setHeaderText(
-                "ESM Operations Manager "
-                        + updateInfo.latestVersion()
-                        + " is available."
-        );
+        dialog.setHeaderText(null);
 
         ButtonType downloadButton = new ButtonType(
                 updateInfo.downloadUrl() == null
@@ -141,6 +137,11 @@ public class MainApp extends Application {
 
         VBox content = new VBox(
                 12,
+                createDialogHeading(
+                        "ESM Operations Manager "
+                                + updateInfo.latestVersion()
+                                + " is available."
+                ),
                 versionDetails,
                 notesHeading,
                 releaseNotes
@@ -177,10 +178,7 @@ public class MainApp extends Application {
         dialog.initOwner(primaryStage);
         dialog.initModality(Modality.WINDOW_MODAL);
         dialog.setTitle("Downloading Update");
-        dialog.setHeaderText(
-                "Downloading ESM Operations Manager v"
-                        + updateInfo.latestVersion()
-        );
+        dialog.setHeaderText(null);
 
         ButtonType cancelButton = new ButtonType(
                 "Cancel",
@@ -192,10 +190,21 @@ public class MainApp extends Application {
         progressBar.setMaxWidth(Double.MAX_VALUE);
 
         Label progressLabel = new Label("Preparing download...");
-        VBox content = new VBox(12, progressBar, progressLabel);
+        VBox content = new VBox(
+                12,
+                createDialogHeading(
+                        "Downloading ESM Operations Manager v"
+                                + updateInfo.latestVersion()
+                ),
+                progressBar,
+                progressLabel
+        );
         content.setPadding(new Insets(10));
         content.setPrefWidth(480);
-        dialog.getDialogPane().setContent(content);
+        DialogPane pane = dialog.getDialogPane();
+        pane.setContent(content);
+        configureDialogPane(pane, 540);
+        styleDialogButton(pane, cancelButton, false);
 
         AtomicBoolean cancellationRequested = new AtomicBoolean(false);
         dialog.setOnCloseRequest(event -> cancellationRequested.set(true));
@@ -258,11 +267,7 @@ public class MainApp extends Application {
         dialog.initOwner(primaryStage);
         dialog.initModality(Modality.WINDOW_MODAL);
         dialog.setTitle("Update Ready");
-        dialog.setHeaderText(
-                "ESM Operations Manager "
-                        + updateInfo.latestVersion()
-                        + " is ready to install."
-        );
+        dialog.setHeaderText(null);
 
         ButtonType installButton = new ButtonType(
                 "Install Now",
@@ -292,7 +297,16 @@ public class MainApp extends Application {
         messageLabel.setWrapText(true);
         messageLabel.setStyle("-fx-text-fill: #202020;");
 
-        VBox content = new VBox(12, versionLabel, messageLabel);
+        VBox content = new VBox(
+                12,
+                createDialogHeading(
+                        "ESM Operations Manager "
+                                + updateInfo.latestVersion()
+                                + " is ready to install."
+                ),
+                versionLabel,
+                messageLabel
+        );
         content.setPadding(new Insets(10));
         content.setPrefWidth(470);
         content.setMinWidth(430);
@@ -362,14 +376,26 @@ public class MainApp extends Application {
     }
 
     private void configureDialogPane(DialogPane pane, double preferredWidth) {
+        String stylesheet = getClass().getResource("/style.css").toExternalForm();
+        if (!pane.getStylesheets().contains(stylesheet)) {
+            pane.getStylesheets().add(stylesheet);
+        }
+
+        if (!pane.getStyleClass().contains("update-dialog")) {
+            pane.getStyleClass().add("update-dialog");
+        }
+
         pane.setPrefWidth(preferredWidth);
         pane.setMinWidth(preferredWidth);
         pane.setMinHeight(Region.USE_PREF_SIZE);
-        pane.setStyle(
-                "-fx-background-color: white;"
-                        + "-fx-border-color: #b8b8b8;"
-                        + "-fx-border-width: 1px;"
-        );
+    }
+
+    private Label createDialogHeading(String text) {
+        Label heading = new Label(text);
+        heading.getStyleClass().add("update-dialog-heading");
+        heading.setWrapText(true);
+        heading.setMaxWidth(Double.MAX_VALUE);
+        return heading;
     }
 
     private void styleDialogButton(

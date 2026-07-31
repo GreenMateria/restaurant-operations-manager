@@ -94,7 +94,6 @@ public class ProductionProfileLine {
         this.quantityPerSale = quantityPerSale;
     }
 
-
     public String getUnit() {
         return unit;
     }

@@ -227,6 +227,14 @@ public class ProductionWeekDao {
     }
 
     public void refreshWeekLines(ProductionWeek week, boolean includeAllActiveProductionItems) {
+        refreshWeekLines(week, week.getParMultiplier(), includeAllActiveProductionItems);
+    }
+
+    public void refreshWeekLines(
+            ProductionWeek week,
+            double parMultiplier,
+            boolean includeAllActiveProductionItems
+    ) {
         Map<Integer, ProductionItem> activeItemsById = buildActiveProductionItemMap();
 
         try (Connection connection = DatabaseManager.getConnection()) {
@@ -234,11 +242,13 @@ public class ProductionWeekDao {
             connection.setAutoCommit(false);
 
             try {
+                updateWeekParMultiplier(connection, week.getId(), parMultiplier);
+
                 for (ProductionWeekDay day : findDaysByWeekId(week.getId())) {
                     refreshLinesForDay(
                             connection,
                             day.getId(),
-                            week.getParMultiplier(),
+                            parMultiplier,
                             activeItemsById,
                             includeAllActiveProductionItems
                     );
@@ -254,6 +264,24 @@ public class ProductionWeekDao {
 
         } catch (SQLException e) {
             throw new RuntimeException("Failed to refresh production week", e);
+        }
+    }
+
+    private void updateWeekParMultiplier(
+            Connection connection,
+            int productionWeekId,
+            double parMultiplier
+    ) throws SQLException {
+        String sql = """
+            UPDATE production_weeks
+            SET par_multiplier = ?
+            WHERE id = ?
+        """;
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setDouble(1, parMultiplier);
+            statement.setInt(2, productionWeekId);
+            statement.executeUpdate();
         }
     }
 

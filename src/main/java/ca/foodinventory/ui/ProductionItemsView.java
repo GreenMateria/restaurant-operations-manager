@@ -56,6 +56,9 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
         TableColumn<ProductionItem, String> shelfLifeCol = new TableColumn<>("Shelf Life");
         shelfLifeCol.setCellValueFactory(new PropertyValueFactory<>("shelfLife"));
 
+        TableColumn<ProductionItem, Double> yieldFactorCol = new TableColumn<>("Yield Factor");
+        yieldFactorCol.setCellValueFactory(new PropertyValueFactory<>("yieldFactor"));
+
         TableColumn<ProductionItem, Integer> printOrderCol = new TableColumn<>("Print Order");
         printOrderCol.setCellValueFactory(new PropertyValueFactory<>("printOrder"));
 
@@ -71,6 +74,7 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
                 stationCol,
                 unitCol,
                 shelfLifeCol,
+                yieldFactorCol,
                 printOrderCol,
                 permanentOverrideParCol,
                 activeCol
@@ -125,6 +129,7 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
                     || containsIgnoreCase(item.getStationName(), search)
                     || containsIgnoreCase(item.getUnit(), search)
                     || containsIgnoreCase(item.getShelfLife(), search)
+                    || String.valueOf(item.getYieldFactor()).contains(search)
                     || String.valueOf(item.getPrintOrder()).contains(search)
                     || String.valueOf(item.getPermanentOverridePar()).contains(search);
         });

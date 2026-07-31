@@ -4,7 +4,7 @@
 
 **Current Project Version:** v2.1.1
 
-Current database schema version: **11**
+Current database schema version: **12**
 
 Application compiles successfully.
 
@@ -26,6 +26,7 @@ Completed:
 -   Exact paper HST and bottle deposit entry for alcohol invoices
 -   Alcohol invoice reconciliation that preserves paper HST and absorbs remaining difference into merchandise categories
 -   Split-cost alcohol invoice fallback now preserves valuation cost by deriving case-equivalent last cost from each cost when needed
+-   Production items now support a yield factor for automated prep-yield quantity conversion
 
 Current behaviour:
 

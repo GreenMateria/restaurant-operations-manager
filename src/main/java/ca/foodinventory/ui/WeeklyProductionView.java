@@ -195,8 +195,11 @@ public class WeeklyProductionView extends BorderPane {
         if (week == null) {
             summaryLabel.setText("Select or import a production week.");
             prepSheetComboBox.getItems().clear();
+            parMultiplierSpinner.getValueFactory().setValue(DEFAULT_PAR_MULTIPLIER);
             return;
         }
+
+        parMultiplierSpinner.getValueFactory().setValue(week.getParMultiplier());
 
         summaryLabel.setText(
                 "Showing " + formatWeek(week)
@@ -336,13 +339,14 @@ public class WeeklyProductionView extends BorderPane {
         }
 
         try {
+            double parMultiplier = getCommittedParMultiplier();
             ImportedUsageReportSummary usageSummary = usageReportImportService.importUsageReport(file);
             ProductionReportSummary productionSummary =
                     productionReportService.generateReport(usageSummary);
 
             int productionWeekId = productionWeekDao.saveGeneratedWeek(
                     weekStartDate,
-                    parMultiplierSpinner.getValue(),
+                    parMultiplier,
                     productionSummary,
                     includeAllProductionItemsCheckBox.isSelected()
             );
@@ -417,6 +421,7 @@ public class WeeklyProductionView extends BorderPane {
             int selectedWeekId = selectedWeek.getId();
             productionWeekDao.refreshWeekLines(
                     selectedWeek,
+                    getCommittedParMultiplier(),
                     includeAllProductionItemsCheckBox.isSelected()
             );
             loadWeeks();
@@ -425,7 +430,7 @@ public class WeeklyProductionView extends BorderPane {
             showAlert(
                     Alert.AlertType.INFORMATION,
                     "Week Refreshed",
-                    "Updated the selected week from current Production Item settings and permanent overrides."
+                    "Updated the selected week from the current par multiplier, Production Item settings, and permanent overrides."
             );
         } catch (RuntimeException e) {
             showAlert(
@@ -434,6 +439,27 @@ public class WeeklyProductionView extends BorderPane {
                     e.getMessage()
             );
         }
+    }
+
+    private double getCommittedParMultiplier() {
+        String editorText = parMultiplierSpinner.getEditor().getText();
+        StringConverter<Double> converter = parMultiplierSpinner.getValueFactory().getConverter();
+
+        if (editorText != null && !editorText.isBlank() && converter != null) {
+            try {
+                Double value = converter.fromString(editorText);
+
+                if (value != null) {
+                    parMultiplierSpinner.getValueFactory().setValue(value);
+                }
+            } catch (RuntimeException ignored) {
+                parMultiplierSpinner.getEditor().setText(
+                        converter.toString(parMultiplierSpinner.getValue())
+                );
+            }
+        }
+
+        return parMultiplierSpinner.getValue();
     }
 
     private void saveSelectedPermanentOverride() {

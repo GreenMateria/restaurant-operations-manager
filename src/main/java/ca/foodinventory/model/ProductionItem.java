@@ -6,6 +6,7 @@ public class ProductionItem {
     private String name;
     private String unit;
     private String shelfLife;
+    private double yieldFactor = 1.0;
     private int stationId;
     private String stationName;
     private int printOrder;
@@ -20,6 +21,7 @@ public class ProductionItem {
             String name,
             String unit,
             String shelfLife,
+            double yieldFactor,
             int stationId,
             String stationName,
             int printOrder,
@@ -30,6 +32,7 @@ public class ProductionItem {
         this.name = name;
         this.unit = unit;
         this.shelfLife = shelfLife;
+        this.yieldFactor = normalizeYieldFactor(yieldFactor);
         this.stationId = stationId;
         this.stationName = stationName;
         this.printOrder = printOrder;
@@ -41,6 +44,7 @@ public class ProductionItem {
             String name,
             String unit,
             String shelfLife,
+            double yieldFactor,
             int stationId,
             int printOrder,
             Integer permanentOverridePar,
@@ -49,6 +53,7 @@ public class ProductionItem {
         this.name = name;
         this.unit = unit;
         this.shelfLife = shelfLife;
+        this.yieldFactor = normalizeYieldFactor(yieldFactor);
         this.stationId = stationId;
         this.printOrder = printOrder;
         this.permanentOverridePar = permanentOverridePar;
@@ -87,6 +92,14 @@ public class ProductionItem {
 
     public void setShelfLife(String shelfLife) {
         this.shelfLife = shelfLife;
+    }
+
+    public double getYieldFactor() {
+        return yieldFactor;
+    }
+
+    public void setYieldFactor(double yieldFactor) {
+        this.yieldFactor = normalizeYieldFactor(yieldFactor);
     }
 
     public int getStationId() {
@@ -139,5 +152,13 @@ public class ProductionItem {
     @Override
     public String toString() {
         return name;
+    }
+
+    private double normalizeYieldFactor(double value) {
+        if (value <= 0) {
+            return 1.0;
+        }
+
+        return value;
     }
 }

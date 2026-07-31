@@ -80,3 +80,8 @@ Date: 2026-07-28 12:44
 Date: 2026-07-28 13:03
 
 - Fixed display issues in count sheets
+
+## v2.1.4
+Date: 2026-07-31 11:37
+
+- Fixed Production Module, Fixed update process

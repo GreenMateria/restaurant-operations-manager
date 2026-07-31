@@ -31,6 +31,7 @@ public class Migration6 implements Migration {
                     name TEXT NOT NULL UNIQUE,
                     unit TEXT NOT NULL,
                     shelf_life TEXT,
+                    yield_factor REAL NOT NULL DEFAULT 1.0,
                     station_id INTEGER,
                     print_order INTEGER NOT NULL DEFAULT 0,
                     active INTEGER NOT NULL DEFAULT 1,

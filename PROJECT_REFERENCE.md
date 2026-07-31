@@ -633,8 +633,11 @@ Production items include:
 - Unit
 - Station
 - Shelf life
+- Yield factor
 - Permanent override PAR
 - Active status
+
+Yield factor belongs to the production item because Weekly Production rows are production items. Use `1.0` for normal items. Use a higher value when prepared output is larger than input quantity, such as dry pasta becoming a larger cooked weight.
 
 ## Production Profiles
 
@@ -648,6 +651,14 @@ Chicken Parmesan Sale
 → 1 Pasta Portion
 → 1 Sauce Portion
 ```
+
+Weekly Production converts imported sales into generated quantities using:
+
+```text
+sales quantity * quantity per sale / production item yield factor
+```
+
+Then the selected par multiplier is applied. Existing production items use a yield factor of `1.0`, so only items that need yield correction have to be edited.
 
 ## POS Menu Items
 

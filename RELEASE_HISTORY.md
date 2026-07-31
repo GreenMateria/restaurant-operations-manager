@@ -2,6 +2,11 @@
 
 ## v2.1.1 (current codebase state)
 
+### Production
+
+-   Added production item yield factors for automated prep-yield conversion in Weekly Production
+-   Added schema migration 12 for `production_items.yield_factor`
+
 ### Inventory / Invoice Handling
 
 -   Added invoice subtotal allocation fields on `invoices`
@@ -16,7 +21,7 @@
 
 ### Project State Notes
 
--   Current schema version in code is 11
+-   Current schema version in code is 12
 -   Runtime database migrations auto-upgrade older databases on startup
 -   `mvn clean test` passes on the current working tree
 

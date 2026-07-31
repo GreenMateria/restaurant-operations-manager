@@ -25,7 +25,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **11**.
+- Current migration version: **12**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -45,6 +45,7 @@ Current known migration files:
 - `Migration9`
 - `Migration10`
 - `Migration11`
+- `Migration12`
 
 Migration responsibilities:
 
@@ -62,6 +63,9 @@ Migration responsibilities:
 - `Migration11`
   - Added `invoice_adjustments`.
   - Preserved any previously saved Freight/HST values as adjustment rows.
+- `Migration12`
+  - Added `production_items.yield_factor`.
+  - Existing production items default to a yield factor of `1.0`.
 
 ---
 
@@ -328,11 +332,13 @@ Important fields:
 - `station_id`
 - `active`
 - `shelf_life`
+- `yield_factor`
 - `permanent_override_par`
 
 Notes:
 
 - `shelf_life` is printed in the LIFE column on prep sheets.
+- `yield_factor` adjusts generated quantities for prep yield. A value of `1.0` preserves existing behavior.
 - `permanent_override_par`, when set, becomes the default override/final par for generated Weekly Production lines.
 - Freezer Pull items use pull-style units.
 
@@ -363,13 +369,14 @@ Important fields:
 - `id`
 - `profile_id`
 - `production_item_id`
-- `quantity`
+- `quantity_per_sale`
 - `unit`
 - `active`
 
 Notes:
 
 - These lines determine how POS item sales convert into production quantities.
+- Weekly Production uses `sales quantity * quantity_per_sale / production item yield factor` before applying the par multiplier.
 - Freezer Pull line units can differ from normal prep units.
 
 ---

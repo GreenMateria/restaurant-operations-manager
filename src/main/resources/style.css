@@ -96,3 +96,34 @@
 .radio-button {
     -fx-text-fill: white;
 }
+
+.update-dialog {
+    -fx-background-color: white;
+    -fx-border-color: #b8b8b8;
+    -fx-border-width: 1px;
+}
+
+.update-dialog > .content {
+    -fx-background-color: white;
+}
+
+.update-dialog .label {
+    -fx-text-fill: #202020;
+}
+
+.update-dialog-heading {
+    -fx-text-fill: #202020;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.update-dialog .text-area,
+.update-dialog .text-area .content {
+    -fx-background-color: white;
+    -fx-control-inner-background: white;
+    -fx-text-fill: #202020;
+}
+
+.update-dialog .button-bar {
+    -fx-background-color: white;
+}

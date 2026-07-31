@@ -299,6 +299,7 @@ Production setup workflow:
 5. Product Mappings
 
 Production Profiles define the production quantities for sold POS items.
+Production Item yield factors default to `1.0` and should only be changed for items that need prep-yield conversion.
 
 POS Menu Items connect POS SKUs/PLUs to Production Profiles.
 

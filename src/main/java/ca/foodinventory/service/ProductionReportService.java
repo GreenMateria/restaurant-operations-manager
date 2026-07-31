@@ -60,7 +60,8 @@ public class ProductionReportService {
                         ignored -> createReportLine(productionItem, profileLine)
                 );
 
-                double quantityPerSale = profileLine.getQuantityPerSale();
+                double quantityPerSale = profileLine.getQuantityPerSale()
+                        / productionItem.getYieldFactor();
 
                 reportLine.addQuantities(
                         importedLine.getMondayQuantitySold() * quantityPerSale,

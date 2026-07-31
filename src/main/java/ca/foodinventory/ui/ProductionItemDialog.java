@@ -22,6 +22,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
     private final ComboBox<ProductionStation> stationComboBox = new ComboBox<>();
     private final ComboBox<String> unitComboBox = new ComboBox<>();
     private final TextField shelfLifeField = new TextField();
+    private final TextField yieldFactorField = new TextField();
     private final TextField printOrderField = new TextField();
     private final TextField permanentOverrideParField = new TextField();
     private final CheckBox activeCheckBox = new CheckBox("Active");
@@ -53,6 +54,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
 
         nameField.setPromptText("Example: Alfredo Sauce");
         shelfLifeField.setPromptText("Example: 3 days");
+        yieldFactorField.setPromptText("Example: 2.0");
         printOrderField.setPromptText("Example: 10");
         permanentOverrideParField.setPromptText("Blank for usage-based par");
 
@@ -79,14 +81,17 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         grid.add(new Label("Shelf Life:"), 0, 3);
         grid.add(shelfLifeField, 1, 3);
 
-        grid.add(new Label("Print Order:"), 0, 4);
-        grid.add(printOrderField, 1, 4);
+        grid.add(new Label("Yield Factor:"), 0, 4);
+        grid.add(yieldFactorField, 1, 4);
 
-        grid.add(new Label("Permanent Override Par:"), 0, 5);
-        grid.add(permanentOverrideParField, 1, 5);
+        grid.add(new Label("Print Order:"), 0, 5);
+        grid.add(printOrderField, 1, 5);
 
-        grid.add(new Label("Status:"), 0, 6);
-        grid.add(activeCheckBox, 1, 6);
+        grid.add(new Label("Permanent Override Par:"), 0, 6);
+        grid.add(permanentOverrideParField, 1, 6);
+
+        grid.add(new Label("Status:"), 0, 7);
+        grid.add(activeCheckBox, 1, 7);
 
         getDialogPane().setContent(grid);
 
@@ -226,6 +231,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
     private void populateFields() {
         if (existingItem == null) {
             printOrderField.setText("0");
+            yieldFactorField.setText("1");
             activeCheckBox.setSelected(true);
             return;
         }
@@ -233,6 +239,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         nameField.setText(existingItem.getName());
         unitComboBox.setValue(existingItem.getUnit());
         shelfLifeField.setText(existingItem.getShelfLife());
+        yieldFactorField.setText(formatNumber(existingItem.getYieldFactor()));
         printOrderField.setText(String.valueOf(existingItem.getPrintOrder()));
         permanentOverrideParField.setText(existingItem.getPermanentOverridePar() == null
                 ? ""
@@ -252,6 +259,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
     private boolean validate() {
         String name = nameField.getText();
         String unit = getUnitText();
+        String yieldFactor = yieldFactorField.getText();
         String printOrder = printOrderField.getText();
         String permanentOverridePar = permanentOverrideParField.getText();
 
@@ -267,6 +275,23 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
 
         if (printOrder == null || printOrder.trim().isEmpty()) {
             showValidationError("Print order is required.");
+            return false;
+        }
+
+        if (yieldFactor == null || yieldFactor.trim().isEmpty()) {
+            showValidationError("Yield factor is required.");
+            return false;
+        }
+
+        try {
+            double parsedYieldFactor = Double.parseDouble(yieldFactor.trim());
+
+            if (parsedYieldFactor <= 0) {
+                showValidationError("Yield factor must be greater than zero.");
+                return false;
+            }
+        } catch (NumberFormatException e) {
+            showValidationError("Yield factor must be a number.");
             return false;
         }
 
@@ -302,6 +327,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         item.setName(nameField.getText().trim());
         item.setUnit(getUnitText().trim().toUpperCase());
         item.setShelfLife(normalizeOptionalText(shelfLifeField.getText()));
+        item.setYieldFactor(Double.parseDouble(yieldFactorField.getText().trim()));
         item.setStationId(selectedStation == null ? 0 : selectedStation.getId());
         item.setStationName(selectedStation == null ? null : selectedStation.getName());
         item.setPrintOrder(Integer.parseInt(printOrderField.getText().trim()));
@@ -335,6 +361,14 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
         }
 
         return Integer.parseInt(value.trim());
+    }
+
+    private String formatNumber(double value) {
+        if (value == Math.rint(value)) {
+            return String.valueOf((long) value);
+        }
+
+        return String.valueOf(value);
     }
 
     private void showValidationError(String message) {
