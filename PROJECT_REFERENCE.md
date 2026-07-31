@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Tuesday, July 28, 2026_
+_Last Updated: Friday, July 31, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -724,7 +724,12 @@ Do not reintroduce the previous hard-coded 32-row pagination rule unless explici
 
 Freezer Pull:
 
-- Uses the same imported Usage Report.
+- Loads active production items assigned to the Freezer Pull station.
+- Does not require a POS usage report.
+- Monday through Sunday quantities are edited directly in the table.
+- Daily quantities persist between sessions.
+- Weekly totals recalculate from the seven daily values.
+- Prints independently in landscape letter format with compact single-page scaling.
 - Includes items assigned to the Freezer Pull workflow.
 - Prints independently from normal weekly production sheets.
 - Uses the profile-specific pull unit where applicable.

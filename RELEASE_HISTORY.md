@@ -1,6 +1,16 @@
 # Release History
 
-## v2.1.1 (current codebase state)
+## v2.1.2 (current codebase state)
+
+### Production / Freezer Pull
+
+- Reworked Freezer Pull to load active Freezer Pull production items without a POS usage report.
+- Added editable Monday-through-Sunday pull quantities directly in the Freezer Pull table.
+- Added persistence for each item seven daily Freezer Pull quantities.
+- Recalculated weekly totals when daily quantities are edited.
+- Updated Freezer Pull printing for landscape letter output with compact single-page scaling.
+
+## v2.1.1 (previous codebase state)
 
 ### Production
 

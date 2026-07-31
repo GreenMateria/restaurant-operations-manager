@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**Current Project Version:** v2.1.1
+**Current Project Version:** v2.1.2
 
 Current database schema version: **12**
 
@@ -27,6 +27,9 @@ Completed:
 -   Alcohol invoice reconciliation that preserves paper HST and absorbs remaining difference into merchandise categories
 -   Split-cost alcohol invoice fallback now preserves valuation cost by deriving case-equivalent last cost from each cost when needed
 -   Production items now support a yield factor for automated prep-yield quantity conversion
+-   Freezer Pull loads active station items with editable daily quantities
+-   Freezer Pull daily quantities persist between sessions
+-   Freezer Pull printing uses landscape letter single-page scaling
 
 Current behaviour:
 

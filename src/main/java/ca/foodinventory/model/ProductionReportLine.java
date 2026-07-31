@@ -16,6 +16,7 @@ public class ProductionReportLine {
     private double saturdayQuantity;
     private double sundayQuantity;
     private double weeklyQuantity;
+    private double manualPar;
 
     public ProductionReportLine(
             int productionItemId,
@@ -31,6 +32,37 @@ public class ProductionReportLine {
         this.stationId = stationId;
         this.stationName = stationName;
         this.printOrder = printOrder;
+    }
+
+    public void setDayQuantity(String propertyName, double value) {
+        double v = Math.max(0, value);
+        switch (propertyName) {
+            case "mondayQuantity" -> mondayQuantity = v;
+            case "tuesdayQuantity" -> tuesdayQuantity = v;
+            case "wednesdayQuantity" -> wednesdayQuantity = v;
+            case "thursdayQuantity" -> thursdayQuantity = v;
+            case "fridayQuantity" -> fridayQuantity = v;
+            case "saturdayQuantity" -> saturdayQuantity = v;
+            case "sundayQuantity" -> sundayQuantity = v;
+            default -> throw new IllegalArgumentException(propertyName);
+        }
+        weeklyQuantity = mondayQuantity + tuesdayQuantity + wednesdayQuantity + thursdayQuantity + fridayQuantity + saturdayQuantity + sundayQuantity;
+    }
+
+    public void setManualPar(double manualPar) {
+        this.manualPar = Math.max(0, manualPar);
+        this.mondayQuantity = this.manualPar;
+        this.tuesdayQuantity = this.manualPar;
+        this.wednesdayQuantity = this.manualPar;
+        this.thursdayQuantity = this.manualPar;
+        this.fridayQuantity = this.manualPar;
+        this.saturdayQuantity = this.manualPar;
+        this.sundayQuantity = this.manualPar;
+        this.weeklyQuantity = this.manualPar * 7.0;
+    }
+
+    public double getManualPar() {
+        return manualPar;
     }
 
     public void addQuantities(
