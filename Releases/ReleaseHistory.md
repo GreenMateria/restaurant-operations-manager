@@ -95,3 +95,8 @@ Date: 2026-07-31 15:23
 Date: 2026-08-01 13:27
 
 - Bug fixes, Alcohol, Updater
+
+## v2.1.7
+Date: 2026-08-01 13:42
+
+- Bug Fix

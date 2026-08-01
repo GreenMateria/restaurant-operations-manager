@@ -2,13 +2,13 @@
 
 ## Current Version
 
-**Current Project Version:** v2.1.5
+**Current Project Version:** v2.1.6
 
 Current database schema version: **12**
 
 Application compiles successfully.
 
-All implemented features through v2.1.5 are considered working as intended.
+All implemented features through v2.1.6 are considered working as intended.
 
 # Completed This Session
 
@@ -34,6 +34,7 @@ Completed:
 -   Freezer Pull printing uses landscape letter single-page scaling
 -   Freezer Pull is accepted as working as intended and should be left unchanged unless explicitly requested
 -   Update-ready installer prompt now opens after the download dialog fully closes, preventing the blank white dialog state
+-   Release installer now uses a stable Windows upgrade UUID so future installers are treated as upgrades of the same app instead of separate products
 
 Current behaviour:
 
@@ -46,17 +47,21 @@ Current behaviour:
 -   Inventory valuation still uses purchase history first, then the product fallback cost.
 -   Freezer Pull is an independent manual workflow and does not require POS usage report import.
 -   After an update download completes, the user sees a readable install-now / install-later prompt.
+-   Installers built from the updated release script use the same `--win-upgrade-uuid` on every release.
+-   The v2.1.5-to-v2.1.6 update-ready prompt may still appear blank because that prompt is rendered by the already-installed v2.1.5 code; pressing Enter activates the default install action.
 
 # Future Enhancement
 
 -   Verify installer integrity before launch.
 -   Add a manual Check for Updates action.
+-   Validate the first installer upgrade built with the stable Windows upgrade UUID on a previously installed machine.
 -   Continue alcohol workflow polish only as new live-data issues are identified.
 
 # Next Development Priorities
 
 1.  Add installer verification / checksum handling.
 2.  Add a manual Check for Updates action.
-3.  Resume Production Variance development.
-4.  Continue advanced reporting and workflow polish.
-5.  Address alcohol workflow changes only when live-data validation identifies a concrete issue.
+3.  Confirm future installer upgrades replace the existing installed app entry and do not create duplicate installs.
+4.  Resume Production Variance development.
+5.  Continue advanced reporting and workflow polish.
+6.  Address alcohol workflow changes only when live-data validation identifies a concrete issue.

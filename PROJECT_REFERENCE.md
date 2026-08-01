@@ -824,6 +824,7 @@ The updater:
 - Prompts for download and install actions.
 - Launches the Windows installer.
 - Closes the application after installer launch.
+- Deletes older downloaded `.exe` installers from `%LOCALAPPDATA%\FoodInventory\Updates` before saving a new installer.
 
 The update check uses a 12-hour cooldown.
 
@@ -852,6 +853,12 @@ System → Check for Updates
 Updater dialogs must explicitly size their content and buttons so stylesheet behavior cannot produce blank white dialogs.
 
 The update-ready installer prompt must be shown only after the download progress dialog has fully closed. Do not open a second modal dialog from inside the download dialog close action; store the completed installer path, let `showAndWait()` return, then show the ready prompt.
+
+Important bootstrap caveat:
+
+- Updater dialog fixes only affect updates started from the version that contains the fix.
+- When installed v2.1.5 updates to v2.1.6, the final `Update Ready` prompt is still rendered by v2.1.5 code and may appear blank.
+- In that specific v2.1.5-to-v2.1.6 case, pressing Enter activates the default install action.
 
 ---
 
@@ -891,6 +898,10 @@ Important:
 - Draft releases are not treated as the latest public release.
 - Version strings must compare cleanly.
 - The installed version should match the Maven/release version.
+- `Release.ps1` must always pass the same stable `--win-upgrade-uuid` value to `jpackage`.
+- Do not change the Windows upgrade UUID after release; changing it can make Windows treat a future installer as a different product instead of an upgrade.
+- The current Windows upgrade UUID is `8F7E5D76-9E8B-4C25-8B8E-55A94D4E0B0A`.
+- Program data is stored separately under `%LOCALAPPDATA%\FoodInventory` and should not be removed by normal app upgrades.
 
 ---
 
@@ -915,7 +926,7 @@ The application currently has a stable foundation for:
 - Release automation
 - Automatic updating
 
-All implemented features through version 2.1.5 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 2.1.6 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 
@@ -1033,6 +1044,8 @@ For packaging:
 - Confirm the icon is included.
 - Confirm the bundled runtime launches on a clean machine.
 - Confirm GitHub release assets contain the installer.
+- Confirm installer upgrades replace the existing Windows install entry and do not create duplicate installed apps.
+- Confirm app data under `%LOCALAPPDATA%\FoodInventory` is preserved across upgrades.
 
 ---
 

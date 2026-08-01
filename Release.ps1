@@ -7,6 +7,7 @@ $MainJar = "FoodInventory.jar"
 $MainClass = "ca.foodinventory.Launcher"
 $Icon = "FoodInventory.ico"
 $PomPath = "$ProjectDir\pom.xml"
+$WindowsUpgradeUuid = "8F7E5D76-9E8B-4C25-8B8E-55A94D4E0B0A"
 
 function Invoke-Step {
     param([string]$Name, [scriptblock]$Command)
@@ -214,6 +215,7 @@ try {
             --main-class "$MainClass" `
             --icon "$ProjectDir\$Icon" `
             --dest "$InstallerDir" `
+            --win-upgrade-uuid "$WindowsUpgradeUuid" `
             --win-dir-chooser `
             --win-menu `
             --win-shortcut

@@ -1,6 +1,14 @@
 # Release History
 
-## v2.1.5 (current codebase state)
+## v2.1.6 (current codebase state)
+
+### Update / Installer
+
+- Added a stable Windows `jpackage --win-upgrade-uuid` to release builds so future installers are linked as upgrades of the same installed application.
+- Confirmed the downloaded installer cache is cleaned before each new update download under `%LOCALAPPDATA%\FoodInventory\Updates`.
+- Documented that the v2.1.5-to-v2.1.6 update-ready prompt may still appear blank because that dialog is rendered by the installed v2.1.5 updater code; pressing Enter starts the default install action.
+
+## v2.1.5
 
 ### Production / Freezer Pull
 
