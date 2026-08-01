@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MainApp extends Application {
 
@@ -207,6 +208,8 @@ public class MainApp extends Application {
         styleDialogButton(pane, cancelButton, false);
 
         AtomicBoolean cancellationRequested = new AtomicBoolean(false);
+        AtomicReference<Path> completedInstaller = new AtomicReference<>();
+        AtomicReference<Throwable> downloadFailure = new AtomicReference<>();
         dialog.setOnCloseRequest(event -> cancellationRequested.set(true));
 
         updateService.downloadUpdate(
@@ -237,26 +240,33 @@ public class MainApp extends Application {
                 )
                 .thenAccept(installerPath ->
                         Platform.runLater(() -> {
+                            completedInstaller.set(installerPath);
                             dialog.close();
-                            confirmAndLaunchInstaller(
-                                    updateInfo,
-                                    installerPath
-                            );
                         })
                 )
                 .exceptionally(exception -> {
                     Platform.runLater(() -> {
-                        dialog.close();
                         Throwable cause = rootCause(exception);
 
                         if (!(cause instanceof CancellationException)) {
-                            showDownloadFailure(updateInfo, cause);
+                            downloadFailure.set(cause);
                         }
+
+                        dialog.close();
                     });
                     return null;
                 });
 
         dialog.showAndWait();
+
+        if (completedInstaller.get() != null) {
+            confirmAndLaunchInstaller(updateInfo, completedInstaller.get());
+            return;
+        }
+
+        if (downloadFailure.get() != null) {
+            showDownloadFailure(updateInfo, downloadFailure.get());
+        }
     }
 
     private void confirmAndLaunchInstaller(

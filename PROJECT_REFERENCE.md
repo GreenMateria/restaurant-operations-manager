@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Friday, July 31, 2026_
+_Last Updated: Saturday, August 1, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -733,6 +733,7 @@ Freezer Pull:
 - Includes items assigned to the Freezer Pull workflow.
 - Prints independently from normal weekly production sheets.
 - Uses the profile-specific pull unit where applicable.
+- Current Freezer Pull behavior is accepted as working as intended. Do not modify this module unless a future task explicitly asks for a Freezer Pull change.
 
 ---
 
@@ -850,6 +851,8 @@ System → Check for Updates
 
 Updater dialogs must explicitly size their content and buttons so stylesheet behavior cannot produce blank white dialogs.
 
+The update-ready installer prompt must be shown only after the download progress dialog has fully closed. Do not open a second modal dialog from inside the download dialog close action; store the completed installer path, let `showAndWait()` return, then show the ready prompt.
+
 ---
 
 # 21. Versioning and Releases
@@ -911,6 +914,8 @@ The application currently has a stable foundation for:
 - Backup and restore
 - Release automation
 - Automatic updating
+
+All implemented features through version 2.1.5 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 

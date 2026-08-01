@@ -2,11 +2,13 @@
 
 ## Current Version
 
-**Current Project Version:** v2.1.2
+**Current Project Version:** v2.1.5
 
 Current database schema version: **12**
 
 Application compiles successfully.
+
+All implemented features through v2.1.5 are considered working as intended.
 
 # Completed This Session
 
@@ -30,6 +32,8 @@ Completed:
 -   Freezer Pull loads active station items with editable daily quantities
 -   Freezer Pull daily quantities persist between sessions
 -   Freezer Pull printing uses landscape letter single-page scaling
+-   Freezer Pull is accepted as working as intended and should be left unchanged unless explicitly requested
+-   Update-ready installer prompt now opens after the download dialog fully closes, preventing the blank white dialog state
 
 Current behaviour:
 
@@ -40,17 +44,19 @@ Current behaviour:
 -   Invoice adjustments are stored separately from inventory merchandise cost.
 -   Alcohol invoice history breakdown now shows saved adjustments such as HST and Bottle Deposit.
 -   Inventory valuation still uses purchase history first, then the product fallback cost.
+-   Freezer Pull is an independent manual workflow and does not require POS usage report import.
+-   After an update download completes, the user sees a readable install-now / install-later prompt.
 
 # Future Enhancement
 
 -   Verify installer integrity before launch.
 -   Add a manual Check for Updates action.
--   Continue alcohol workflow polish and validation against live restaurant data.
+-   Continue alcohol workflow polish only as new live-data issues are identified.
 
 # Next Development Priorities
 
-1.  Continue validating alcohol valuation and cost reporting workflows.
-2.  Review older live databases after import into schema 11 and confirm migration behaviour.
-3.  Add installer verification / checksum handling.
-4.  Resume Production Variance development.
-5.  Continue advanced reporting and workflow polish.
+1.  Add installer verification / checksum handling.
+2.  Add a manual Check for Updates action.
+3.  Resume Production Variance development.
+4.  Continue advanced reporting and workflow polish.
+5.  Address alcohol workflow changes only when live-data validation identifies a concrete issue.

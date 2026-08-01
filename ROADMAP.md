@@ -20,13 +20,11 @@
 
 ## Alcohol Inventory
 
-### Current Focus
+### Status
 
-1.  Validate alcohol inventory valuation against live purchasing data
-2.  Continue alcohol cost reporting review
-3.  Continue alcohol order guide workflow polish
-4.  Confirm migrated live databases behave correctly in schema 11
-5.  Continue UI polish and defaulting for the alcohol-specific invoice flow
+-   Implemented features through v2.1.5 are working as intended.
+-   Alcohol workflow changes should be driven by specific live-data issues when they appear.
+-   Freezer Pull is working as intended and is not an active roadmap item.
 
 ### Future
 

@@ -1,6 +1,6 @@
 # Release History
 
-## v2.1.2 (current codebase state)
+## v2.1.5 (current codebase state)
 
 ### Production / Freezer Pull
 
@@ -9,6 +9,9 @@
 - Added persistence for each item seven daily Freezer Pull quantities.
 - Recalculated weekly totals when daily quantities are edited.
 - Updated Freezer Pull printing for landscape letter output with compact single-page scaling.
+- Confirmed Freezer Pull is working as intended and should not be changed unless explicitly requested.
+- Confirmed all implemented features through this point are working as intended.
+- Fixed the update-ready installer prompt so it appears after the download dialog closes instead of opening as a blank white dialog.
 
 ## v2.1.1 (previous codebase state)
 

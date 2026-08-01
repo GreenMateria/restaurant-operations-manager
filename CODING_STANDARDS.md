@@ -279,10 +279,11 @@ Important:
 
 Freezer Pull:
 
-- Uses the same Usage Report import.
+- Is an independent manual workflow.
 - Filters to Production Items assigned to `Freezer Pull`.
 - Prints only freezer-pull lines.
 - Unit comes from the Production Profile line where applicable.
+- Current Freezer Pull behavior is accepted as working as intended. Leave this module unchanged unless a task explicitly targets Freezer Pull.
 
 Do not merge freezer pull into Weekly Production printouts unless explicitly requested.
 

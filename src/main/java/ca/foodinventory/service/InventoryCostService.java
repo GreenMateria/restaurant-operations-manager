@@ -73,6 +73,51 @@ public class InventoryCostService {
                 closingValues
         );
 
+        addCogsRow(
+                report,
+                "BEER",
+                salesPeriod.getBeerSales(),
+                openingValues,
+                purchases,
+                closingValues
+        );
+
+        addCogsRow(
+                report,
+                "WINE",
+                salesPeriod.getWineSales(),
+                openingValues,
+                purchases,
+                closingValues
+        );
+
+        addCogsRow(
+                report,
+                "DRAUGHT",
+                salesPeriod.getDraughtSales(),
+                openingValues,
+                purchases,
+                closingValues
+        );
+
+        addCogsRow(
+                report,
+                "IMPORT DRAUGHT",
+                salesPeriod.getImportDraughtSales(),
+                openingValues,
+                purchases,
+                closingValues
+        );
+
+        addCogsRow(
+                report,
+                "LIQUOR",
+                salesPeriod.getLiquorSales(),
+                openingValues,
+                purchases,
+                closingValues
+        );
+
         BigDecimal foodRevenue = salesPeriod.getFoodSales();
 
         addSuppliesRow(report, "PAPER", foodRevenue, openingValues, purchases, closingValues);
