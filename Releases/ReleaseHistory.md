@@ -115,3 +115,8 @@ Date: 2026-08-01 13:42
 Date: 2026-08-04 12:38
 
 - Added PostgreSQL migration for cloud based solution - Corrected Inventory vaulation reports to only show reporting categories based on the count periods selected. - Added ability for CASE column to be edited in ORDER GUIDE for different users ordering preferences. Added dual mode adminsitrative access to switch between classic (SQLite) and Cloud (PostgreSQL) laying groundwork for future 100 percent cloud based operations
+
+## v3.0.0
+Date: 2026-08-04 12:50
+
+- Added support for cloud based database (PostgreSQL) while retaining offline mode (SQLite) this requires adminstrator access to switch modes. Made CASE column editible in order  guide. Other bug fixes and stability improvements
