@@ -39,7 +39,7 @@ public class InventoryCountTemplateLineDao {
             ps.setString(5, line.getCountUnit());
             ps.setDouble(6, line.getConversionFactorToBase());
             ps.setString(7, line.getDisplayName());
-            ps.setBoolean(8, line.isActive());
+            ps.setInt(8, line.isActive() ? 1 : 0);
 
             ps.executeUpdate();
 
@@ -207,6 +207,28 @@ public class InventoryCountTemplateLineDao {
 
         } catch (SQLException e) {
             e.printStackTrace();
+        }
+    }
+
+    public void updateOrderGuideCaseSize(int lineId, String caseSize) {
+        String sql = """
+            UPDATE inventory_count_template_lines
+            SET order_guide_case_size = ?
+            WHERE id = ?
+            """;
+
+        try (
+                Connection conn = DatabaseManager.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)
+        ) {
+
+            ps.setString(1, caseSize == null ? "" : caseSize.trim());
+            ps.setInt(2, lineId);
+
+            ps.executeUpdate();
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save order guide case size", e);
         }
     }
 

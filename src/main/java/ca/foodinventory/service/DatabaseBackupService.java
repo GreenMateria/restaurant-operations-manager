@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter;
 public class DatabaseBackupService {
 
     public File backupDatabase(File destinationFolder) throws IOException {
+        requireLocalDatabase();
 
         File sourceDb = DatabaseManager.getDatabaseFile();
 
@@ -34,6 +35,7 @@ public class DatabaseBackupService {
     }
 
     public void restoreDatabase(File backupFile) throws IOException {
+        requireLocalDatabase();
 
         File destinationDb = DatabaseManager.getDatabaseFile();
 
@@ -42,5 +44,13 @@ public class DatabaseBackupService {
                 destinationDb.toPath(),
                 StandardCopyOption.REPLACE_EXISTING
         );
+    }
+
+    private void requireLocalDatabase() {
+        if (!DatabaseManager.isLocalFileDatabase()) {
+            throw new IllegalStateException(
+                    "Backup and restore currently support local SQLite mode only."
+            );
+        }
     }
 }

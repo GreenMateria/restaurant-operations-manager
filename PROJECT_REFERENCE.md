@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Saturday, August 1, 2026_
+_Last Updated: Tuesday, August 4, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -39,6 +39,7 @@ Printed count sheets, prep sheets, and order guides are core parts of the workfl
 - JavaFX 25
 - Maven
 - SQLite
+- PostgreSQL on Aiven for optional cloud database mode
 - Apache POI for Excel imports
 - Git and GitHub
 - GitHub Releases
@@ -65,6 +66,12 @@ Packaged runtime database:
 %LOCALAPPDATA%\FoodInventory\food_inventory.db
 ```
 
+Packaged runtime database configuration:
+
+```text
+%LOCALAPPDATA%\FoodInventory\database.properties
+```
+
 Update downloads:
 
 ```text
@@ -75,6 +82,9 @@ Important:
 
 - A `food_inventory.db` file in the project directory may not be the active database.
 - The packaged application uses the database under `%LOCALAPPDATA%`.
+- SQLite is the default startup mode.
+- Cloud PostgreSQL mode is selected through `%LOCALAPPDATA%\FoodInventory\database.properties` and can be changed from the password-protected System module.
+- Fresh installs seed `database.properties` from safe bundled defaults when the local config file does not exist; cloud credentials must be supplied locally outside source control.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
 
@@ -91,7 +101,7 @@ Service / Business Logic
    ↓
 DAO
    ↓
-SQLite Database
+SQLite Database or Aiven PostgreSQL
 ```
 
 Main packages:
@@ -145,12 +155,13 @@ ca.foodinventory.Launcher
 
 At startup, the application:
 
-1. Initializes the runtime database.
-2. Runs pending database migrations.
-3. Loads the main dashboard.
-4. Displays the installed application version.
-5. Starts a background GitHub update check.
-6. Shows an update dialog when a newer release is available.
+1. Loads or creates the local database configuration.
+2. Initializes the selected startup database mode.
+3. Runs pending SQLite migrations or validates/initializes PostgreSQL schema.
+4. Loads the main dashboard.
+5. Displays the installed application version.
+6. Starts a background GitHub update check.
+7. Shows an update dialog when a newer release is available.
 
 The startup update check does not block the main UI.
 
@@ -925,8 +936,11 @@ The application currently has a stable foundation for:
 - Backup and restore
 - Release automation
 - Automatic updating
+- Controlled SQLite/PostgreSQL mode switching
+- Password-protected cloud upload/download tools
+- Persistent Order Guide case-size overrides
 
-All implemented features through version 2.1.6 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 3.0.0 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 
@@ -943,10 +957,10 @@ Primary unfinished areas:
 
 ## Immediate
 
-1. Validate alcohol valuation and invoice behaviour against live data in the current schema.
-2. Continue alcohol cost reporting and order guide review.
-3. Add a manual Check for Updates action.
-4. Add additive inventory count template synchronization.
+1. Package and publish v3.0.0.
+2. Validate the first v3.0.0 installer upgrade on another PC.
+3. Continue controlled cloud-mode live testing before making Cloud PostgreSQL the normal operating mode.
+4. Add a manual Check for Updates action.
 5. Continue production variance groundwork.
 
 ## Medium Term

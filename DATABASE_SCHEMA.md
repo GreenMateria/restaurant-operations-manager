@@ -1,8 +1,8 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: July 28, 2026_
+_Last Updated: Tuesday, August 4, 2026_
 
-This file documents the current SQLite database structure for the Food Inventory / ESM Operations Manager application.
+This file documents the current database structure for the Food Inventory / ESM Operations Manager application.
 
 Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting, inventory, or production features.
 
@@ -10,7 +10,9 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 
 # General Rules
 
-- Database engine: SQLite.
+- Default database engine: SQLite.
+- Optional cloud database engine: PostgreSQL on Aiven.
+- SQLite remains the default startup mode; PostgreSQL mode is selected through the password-protected System module or local runtime configuration and takes effect after restart.
 - Runtime database path is controlled by `DatabaseManager`.
 - Runtime database is under:
 
@@ -25,7 +27,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **12**.
+- Current migration version: **13**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -46,6 +48,20 @@ Current known migration files:
 - `Migration10`
 - `Migration11`
 - `Migration12`
+- `Migration13`
+
+PostgreSQL support:
+
+- `PostgresSchemaInitializer`
+  - Creates or repairs a PostgreSQL-compatible version of the current schema when the connected user has schema privileges.
+  - Validates required schema for lower-access application users.
+- `SQLiteToPostgresUploadTool`
+  - Copies data from the runtime SQLite database into PostgreSQL through `DatabaseSyncService`.
+  - Requires explicit upload confirmation before replacing PostgreSQL table data.
+  - Initial upload to Aiven `defaultdb` copied 6,576 rows on Sunday, August 2, 2026.
+- `DatabaseSyncService`
+  - Uploads local SQLite data to cloud PostgreSQL.
+  - Downloads cloud PostgreSQL data to local SQLite, backing up the local database first.
 
 Migration responsibilities:
 
@@ -66,6 +82,9 @@ Migration responsibilities:
 - `Migration12`
   - Added `production_items.yield_factor`.
   - Existing production items default to a yield factor of `1.0`.
+- `Migration13`
+  - Added `inventory_count_template_lines.order_guide_case_size`.
+  - Order Guide case-size edits now persist per count template line.
 
 ---
 
@@ -214,12 +233,14 @@ Important fields:
 - `count_unit`
 - `conversion_factor_to_base`
 - `display_name`
+- `order_guide_case_size`
 - `active`
 
 Notes:
 
 - `section_name` and `sort_order` control printed count sheet/order guide layout.
 - `conversion_factor_to_base` converts counted units to product base units.
+- `order_guide_case_size` overrides the product pack size on generated order guides without changing the product record.
 
 ---
 

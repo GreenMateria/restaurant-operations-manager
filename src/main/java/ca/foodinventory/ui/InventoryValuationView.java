@@ -5,6 +5,7 @@ import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryValuationLine;
 import ca.foodinventory.service.InventoryValuationService;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
@@ -277,8 +278,38 @@ public class InventoryValuationView {
             return;
         }
 
-        List<InventoryValuationLine> lines = valuationService.calculateValuation(selected.getId());
+        totalValueLabel.setText("Loading inventory valuation...");
+        summaryTotalLabel.setText("Loading inventory valuation...");
+        detailedTable.setDisable(true);
+        summaryTable.setDisable(true);
 
+        Task<List<InventoryValuationLine>> task = new Task<>() {
+            @Override
+            protected List<InventoryValuationLine> call() {
+                return valuationService.calculateValuation(selected.getId());
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            applyValuationLines(task.getValue());
+            detailedTable.setDisable(false);
+            summaryTable.setDisable(false);
+        });
+
+        task.setOnFailed(event -> {
+            detailedTable.setDisable(false);
+            summaryTable.setDisable(false);
+            totalValueLabel.setText("Total Inventory Value: $0.00");
+            summaryTotalLabel.setText("Total Inventory Value: $0.00");
+            showAlert(Alert.AlertType.ERROR, "Valuation Failed", task.getException().getMessage());
+        });
+
+        Thread thread = new Thread(task, "inventory-valuation-loader");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void applyValuationLines(List<InventoryValuationLine> lines) {
         detailedTable.setItems(FXCollections.observableArrayList(lines));
         summaryTable.setItems(FXCollections.observableArrayList(buildCategorySummary(lines)));
         departmentReportArea.setText(buildDepartmentReport(lines));
@@ -503,6 +534,15 @@ public class InventoryValuationView {
             return;
         }
 
+        if (openingCount.getId() == closingCount.getId()) {
+            showAlert(
+                    Alert.AlertType.WARNING,
+                    "Invalid Count Selection",
+                    "Opening count and closing count must be different counts."
+            );
+            return;
+        }
+
         try {
             WeeklyCostReport report = costService.generateReport(
                     openingCount.getId(),
@@ -519,14 +559,6 @@ public class InventoryValuationView {
                     "Cost Report Failed",
                     ex.getMessage()
             );
-        }
-        if (openingCount.getId() == closingCount.getId()) {
-            showAlert(
-                    Alert.AlertType.WARNING,
-                    "Invalid Count Selection",
-                    "Opening count and closing count must be different counts."
-            );
-            return;
         }
     }
 
@@ -562,27 +594,29 @@ public class InventoryValuationView {
         builder.append(String.format("%-18s %13s\n", "TOTAL USAGE", formatMoney(report.getTotalUsage())));
         builder.append(String.format("%-18s %12s%%\n", "COGS %", report.getCogsPercent()));
 
-        builder.append("\n\nOPERATING SUPPLIES\n");
-        builder.append("-------------------------------------------------------------\n");
-        builder.append(String.format("%-18s %13s %15s\n", "CATEGORY", "USAGE", "% OF REVENUE"));
-        builder.append("-------------------------------------------------------------\n\n");
+        if (!report.getSuppliesRows().isEmpty()) {
+            builder.append("\n\nOPERATING SUPPLIES\n");
+            builder.append("-------------------------------------------------------------\n");
+            builder.append(String.format("%-18s %13s %15s\n", "CATEGORY", "USAGE", "% OF REVENUE"));
+            builder.append("-------------------------------------------------------------\n\n");
 
-        for (CategoryCostReportRow row : report.getSuppliesRows()) {
+            for (CategoryCostReportRow row : report.getSuppliesRows()) {
+                builder.append(String.format(
+                        "%-18s %13s %14s%%\n",
+                        row.getCategory(),
+                        formatMoney(row.getUsage()),
+                        row.getCostPercent()
+                ));
+            }
+
+            builder.append("\n-------------------------------------------------------------\n");
             builder.append(String.format(
                     "%-18s %13s %14s%%\n",
-                    row.getCategory(),
-                    formatMoney(row.getUsage()),
-                    row.getCostPercent()
+                    "TOTAL SUPPLIES",
+                    formatMoney(report.getTotalSuppliesUsage()),
+                    report.getSuppliesPercent()
             ));
         }
-
-        builder.append("\n-------------------------------------------------------------\n");
-        builder.append(String.format(
-                "%-18s %13s %14s%%\n",
-                "TOTAL SUPPLIES",
-                formatMoney(report.getTotalSuppliesUsage()),
-                report.getSuppliesPercent()
-        ));
 
         return builder.toString();
     }

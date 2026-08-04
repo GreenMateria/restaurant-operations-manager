@@ -1,6 +1,7 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InventoryCountDao;
+import ca.foodinventory.dao.InventoryCountTemplateLineDao;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.OrderGuideRow;
 import ca.foodinventory.service.OrderGuideService;
@@ -30,6 +31,8 @@ import java.util.List;
 public class OrderGuideView {
 
     private final InventoryCountDao countDao = new InventoryCountDao();
+    private final InventoryCountTemplateLineDao templateLineDao =
+            new InventoryCountTemplateLineDao();
     private final OrderGuideService orderGuideService = new OrderGuideService();
 
     private final ComboBox<InventoryCount> openingCountBox = new ComboBox<>();
@@ -129,9 +132,12 @@ public class OrderGuideView {
         unitCol.setCellValueFactory(new PropertyValueFactory<>("unit"));
         unitCol.setPrefWidth(70);
 
-        TableColumn<OrderGuideRow, String> caseSizeCol = new TableColumn<>("Case Size");
+        TableColumn<OrderGuideRow, String> caseSizeCol = new TableColumn<>("Case");
         caseSizeCol.setCellValueFactory(new PropertyValueFactory<>("caseSize"));
+        caseSizeCol.setCellFactory(TextFieldTableCell.forTableColumn());
+        caseSizeCol.setOnEditCommit(e -> saveCaseSize(e.getRowValue(), e.getNewValue()));
         caseSizeCol.setPrefWidth(100);
+        caseSizeCol.setEditable(true);
 
         TableColumn<OrderGuideRow, Double> closingCol = new TableColumn<>("Close");
         closingCol.setCellValueFactory(new PropertyValueFactory<>("closingQuantity"));
@@ -203,6 +209,24 @@ public class OrderGuideView {
         );
 
         table.setItems(FXCollections.observableArrayList(rows));
+    }
+
+    private void saveCaseSize(OrderGuideRow row, String value) {
+        if (row == null) {
+            return;
+        }
+
+        String caseSize = value == null ? "" : value.trim();
+
+        try {
+            row.setCaseSize(caseSize);
+            templateLineDao.updateOrderGuideCaseSize(row.getTemplateLineId(), caseSize);
+            table.refresh();
+        } catch (RuntimeException ex) {
+            ex.printStackTrace();
+            showAlert("Case value could not be saved.");
+            table.refresh();
+        }
     }
 
     private void printGuide() {

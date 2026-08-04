@@ -16,11 +16,12 @@ public class OrderGuideService {
 
         String sql = """
                 SELECT
+                    tl.id AS template_line_id,
                     tl.product_id,
                     p.sku,
                     p.description AS product_description,
                     p.unit,
-                    p.pack_size,
+                    COALESCE(NULLIF(tl.order_guide_case_size, ''), p.pack_size) AS case_size,
                     COALESCE(tl.section_name, 'OTHER') AS section_name,
                     COALESCE(tl.sort_order, 9999) AS sort_order,
 
@@ -81,11 +82,12 @@ public class OrderGuideService {
 
                     OrderGuideRow row = new OrderGuideRow();
 
+                    row.setTemplateLineId(rs.getInt("template_line_id"));
                     row.setProductId(rs.getInt("product_id"));
                     row.setSku(rs.getString("sku"));
                     row.setProductDescription(rs.getString("product_description"));
                     row.setUnit(rs.getString("unit"));
-                    row.setCaseSize(rs.getString("pack_size"));
+                    row.setCaseSize(rs.getString("case_size"));
                     row.setSectionName(rs.getString("section_name"));
                     row.setClosingQuantity(round2(closing));
                     row.setUsageQuantity(round2(usage));

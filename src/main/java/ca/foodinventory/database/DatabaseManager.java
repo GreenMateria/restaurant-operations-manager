@@ -1,24 +1,112 @@
 package ca.foodinventory.database;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Properties;
 
 public class DatabaseManager {
 
     private static final String APP_FOLDER_NAME = "FoodInventory";
     private static final String DB_FILE_NAME = "food_inventory.db";
-
-    private static final String DB_URL =
-            "jdbc:sqlite:" + getDatabasePath();
+    private static final String DB_MODE_PROPERTY = "foodinventory.db.mode";
+    private static final String DB_URL_PROPERTY = "foodinventory.db.url";
+    private static final String DB_USER_PROPERTY = "foodinventory.db.user";
+    private static final String DB_PASSWORD_PROPERTY = "foodinventory.db.password";
+    private static final String DB_MODE_ENV = "FOOD_INVENTORY_DB_MODE";
+    private static final String DB_URL_ENV = "FOOD_INVENTORY_DB_URL";
+    private static final String DB_USER_ENV = "FOOD_INVENTORY_DB_USER";
+    private static final String DB_PASSWORD_ENV = "FOOD_INVENTORY_DB_PASSWORD";
+    private static final String POSTGRES_MODE = "postgres";
+    private static final String SQLITE_MODE = "sqlite";
+    private static final String CONFIG_FILE_NAME = "database.properties";
+    private static final String DEFAULT_CONFIG_RESOURCE = "/database-default.properties";
+    private static final String CONFIG_MODE_KEY = "mode";
+    private static final String CONFIG_URL_KEY = "cloud.url";
+    private static final String CONFIG_USER_KEY = "cloud.user";
+    private static final String CONFIG_PASSWORD_KEY = "cloud.password";
+    private static final String ACTIVE_DATABASE_MODE = normalizeMode(
+            configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV)
+    );
+    private static PostgresConnectionPool postgresConnectionPool;
+    private static String postgresConnectionPoolKey;
 
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(DB_URL);
+        if (isPostgresMode()) {
+            return getPostgresConnectionPool().borrowConnection();
+        }
+
+        return DriverManager.getConnection(getSqliteUrl());
+    }
+
+    public static Connection getConfiguredPostgresConnection() throws SQLException {
+        return getPostgresConnectionPool().borrowConnection();
+    }
+
+    public static boolean hasConfiguredPostgresConnection() {
+        return !configuredValue(DB_URL_PROPERTY, DB_URL_ENV).isBlank()
+                && !configuredValue(DB_USER_PROPERTY, DB_USER_ENV).isBlank()
+                && !configuredValue(DB_PASSWORD_PROPERTY, DB_PASSWORD_ENV).isBlank();
+    }
+
+    public static String getActiveDatabaseModeLabel() {
+        return isPostgresMode() ? "Cloud PostgreSQL" : "Local SQLite";
+    }
+
+    public static String getPreferredDatabaseModeLabel() {
+        String preferredMode = normalizeMode(
+                configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV)
+        );
+        return POSTGRES_MODE.equals(preferredMode) ? "Cloud PostgreSQL" : "Local SQLite";
+    }
+
+    public static File getDatabaseConfigFile() {
+        return new File(getAppDirectory(), CONFIG_FILE_NAME);
+    }
+
+    public static void setPreferredDatabaseMode(String mode) {
+        String normalizedMode = normalizeMode(mode);
+        Properties properties = loadDatabaseProperties();
+        properties.setProperty(CONFIG_MODE_KEY, normalizedMode);
+
+        if (POSTGRES_MODE.equals(normalizedMode)) {
+            copyConfiguredPostgresValue(properties, DB_URL_PROPERTY, DB_URL_ENV, CONFIG_URL_KEY);
+            copyConfiguredPostgresValue(properties, DB_USER_PROPERTY, DB_USER_ENV, CONFIG_USER_KEY);
+            copyConfiguredPostgresValue(properties, DB_PASSWORD_PROPERTY, DB_PASSWORD_ENV, CONFIG_PASSWORD_KEY);
+        }
+
+        saveDatabaseProperties(properties);
+    }
+
+    private static synchronized PostgresConnectionPool getPostgresConnectionPool() {
+        String url = requireConfiguredValue(DB_URL_PROPERTY, DB_URL_ENV);
+        String user = requireConfiguredValue(DB_USER_PROPERTY, DB_USER_ENV);
+        String password = requireConfiguredValue(DB_PASSWORD_PROPERTY, DB_PASSWORD_ENV);
+        String key = url + "\n" + user + "\n" + password;
+
+        if (postgresConnectionPool == null || !key.equals(postgresConnectionPoolKey)) {
+            postgresConnectionPool = new PostgresConnectionPool(url, user, password);
+            postgresConnectionPoolKey = key;
+        }
+
+        return postgresConnectionPool;
     }
 
     public static String getDatabasePath() {
+        File appDir = getAppDirectory();
+        File dbFile = new File(appDir, DB_FILE_NAME);
+        return dbFile.getAbsolutePath();
+    }
+
+    private static File getAppDirectory() {
         String localAppData = System.getenv("LOCALAPPDATA");
 
         File appDir;
@@ -33,19 +121,30 @@ public class DatabaseManager {
             appDir.mkdirs();
         }
 
-        File dbFile = new File(appDir, DB_FILE_NAME);
-        return dbFile.getAbsolutePath();
+        return appDir;
     }
 
 
     public static void initializeDatabase() {
 
-        try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement()) {
+        try (Connection conn = getConnection()) {
+            if (isPostgresMode()) {
+                PostgresSchemaInitializer initializer = new PostgresSchemaInitializer();
+                if (canInitializePostgresSchema(conn)) {
+                    initializer.initialize(conn);
+                } else {
+                    initializer.validateRequiredSchema(conn);
+                }
+                System.out.println("PostgreSQL development database initialized successfully.");
+                System.out.println("Database URL: " + configuredValue(DB_URL_PROPERTY, DB_URL_ENV));
+                return;
+            }
 
-            createBaseSchema(stmt);
+            try (Statement stmt = conn.createStatement()) {
+                createBaseSchema(stmt);
 
-            DatabaseMigrationRunner.runMigrations(conn);
+                DatabaseMigrationRunner.runMigrations(conn);
+            }
 
             System.out.println("Database initialized successfully.");
             System.out.println("Database location: " + getDatabasePath());
@@ -139,6 +238,7 @@ public class DatabaseManager {
                     count_unit TEXT DEFAULT 'EA',
                     conversion_factor_to_base REAL DEFAULT 1,
                     display_name TEXT,
+                    order_guide_case_size TEXT,
                     active INTEGER DEFAULT 1,
                     FOREIGN KEY(template_id) REFERENCES inventory_count_templates(id),
                     FOREIGN KEY(product_id) REFERENCES products(id)
@@ -241,7 +341,185 @@ public class DatabaseManager {
             }
         }
     }
+
+    public static boolean isLocalFileDatabase() {
+        return !isPostgresMode();
+    }
+
+    public static boolean isPostgresDatabase() {
+        return isPostgresMode();
+    }
+
     public static File getDatabaseFile() {
+        if (!isLocalFileDatabase()) {
+            throw new IllegalStateException(
+                    "The active database is not a local SQLite file."
+            );
+        }
+
+        return getSqliteDatabaseFile();
+    }
+
+    public static File getSqliteDatabaseFile() {
         return new File(getDatabasePath());
+    }
+
+    private static String getSqliteUrl() {
+        return "jdbc:sqlite:" + getDatabasePath();
+    }
+
+    private static boolean isPostgresMode() {
+        return POSTGRES_MODE.equals(ACTIVE_DATABASE_MODE);
+    }
+
+    private static boolean canInitializePostgresSchema(Connection connection) throws SQLException {
+        String sql = "SELECT has_schema_privilege(current_schema(), 'CREATE')";
+
+        try (PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery()) {
+
+            return resultSet.next() && resultSet.getBoolean(1);
+        }
+    }
+
+    private static String configuredValue(String propertyName, String envName) {
+        String propertyValue = System.getProperty(propertyName);
+        if (propertyValue != null && !propertyValue.isBlank()) {
+            return propertyValue.trim();
+        }
+
+        String envValue = System.getenv(envName);
+        if (envValue != null && !envValue.isBlank()) {
+            return envValue.trim();
+        }
+
+        String configValue = localConfigValue(propertyName);
+        if (configValue != null && !configValue.isBlank()) {
+            return configValue.trim();
+        }
+
+        return "";
+    }
+
+    private static String localConfigValue(String propertyName) {
+        Properties properties = loadDatabaseProperties();
+
+        return switch (propertyName) {
+            case DB_MODE_PROPERTY -> properties.getProperty(CONFIG_MODE_KEY);
+            case DB_URL_PROPERTY -> properties.getProperty(CONFIG_URL_KEY);
+            case DB_USER_PROPERTY -> properties.getProperty(CONFIG_USER_KEY);
+            case DB_PASSWORD_PROPERTY -> properties.getProperty(CONFIG_PASSWORD_KEY);
+            default -> "";
+        };
+    }
+
+    private static Properties loadDatabaseProperties() {
+        Properties properties = new Properties();
+        File configFile = getDatabaseConfigFile();
+
+        if (!configFile.isFile()) {
+            createDatabaseConfigFromDefaults(configFile);
+        }
+
+        if (!configFile.isFile()) {
+            return properties;
+        }
+
+        try (InputStream inputStream = Files.newInputStream(configFile.toPath())) {
+            properties.load(inputStream);
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "Failed to load database configuration.",
+                    e
+            );
+        }
+
+        return properties;
+    }
+
+    private static void createDatabaseConfigFromDefaults(File configFile) {
+        File parent = configFile.getParentFile();
+
+        try {
+            if (parent != null && !parent.exists()) {
+                Files.createDirectories(parent.toPath());
+            }
+
+            try (InputStream inputStream = DatabaseManager.class.getResourceAsStream(DEFAULT_CONFIG_RESOURCE)) {
+                if (inputStream == null) {
+                    return;
+                }
+
+                Files.copy(inputStream, configFile.toPath());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "Failed to create database configuration.",
+                    e
+            );
+        }
+    }
+
+    private static void saveDatabaseProperties(Properties properties) {
+        File configFile = getDatabaseConfigFile();
+        File parent = configFile.getParentFile();
+
+        try {
+            if (parent != null && !parent.exists()) {
+                Files.createDirectories(parent.toPath());
+            }
+
+            try (OutputStream outputStream = Files.newOutputStream(configFile.toPath())) {
+                properties.store(
+                        outputStream,
+                        "ESM Operations Manager database settings"
+                );
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "Failed to save database configuration.",
+                    e
+            );
+        }
+    }
+
+    private static void copyConfiguredPostgresValue(
+            Properties properties,
+            String propertyName,
+            String envName,
+            String configKey
+    ) {
+        String value = configuredValue(propertyName, envName);
+        if (!value.isBlank()) {
+            properties.setProperty(configKey, value);
+        }
+    }
+
+    private static String normalizeMode(String mode) {
+        if (mode == null || mode.isBlank()) {
+            return SQLITE_MODE;
+        }
+
+        String normalizedMode = mode.trim().toLowerCase();
+        if (POSTGRES_MODE.equals(normalizedMode) || SQLITE_MODE.equals(normalizedMode)) {
+            return normalizedMode;
+        }
+
+        throw new IllegalArgumentException("Unsupported database mode: " + mode);
+    }
+
+    private static String requireConfiguredValue(
+            String propertyName,
+            String envName
+    ) {
+        String value = configuredValue(propertyName, envName);
+        if (value.isBlank()) {
+            throw new IllegalStateException(
+                    "PostgreSQL mode requires " + propertyName
+                            + " or " + envName + "."
+            );
+        }
+
+        return value;
     }
 }

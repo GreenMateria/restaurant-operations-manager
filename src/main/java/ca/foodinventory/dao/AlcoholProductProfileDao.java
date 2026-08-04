@@ -4,6 +4,8 @@ import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholProductProfile;
 
 import java.sql.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class AlcoholProductProfileDao {
 
@@ -31,6 +33,33 @@ public class AlcoholProductProfileDao {
 
         } catch (SQLException e) {
             throw new RuntimeException("Failed to load alcohol product profile", e);
+        }
+    }
+
+    public Map<Integer, AlcoholProductProfile> findAllActiveByProductId() {
+        String sql = """
+            SELECT *
+            FROM alcohol_product_profiles
+            WHERE active = 1
+        """;
+
+        Map<Integer, AlcoholProductProfile> profilesByProductId =
+                new HashMap<>();
+
+        try (
+                Connection conn = DatabaseManager.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()
+        ) {
+            while (rs.next()) {
+                AlcoholProductProfile profile = map(rs);
+                profilesByProductId.put(profile.getProductId(), profile);
+            }
+
+            return profilesByProductId;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load alcohol product profiles", e);
         }
     }
 

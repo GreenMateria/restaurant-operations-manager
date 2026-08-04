@@ -67,10 +67,10 @@ public class InvoiceDao {
                     ps.setString(1, invoiceNumber);
                     ps.setString(2, supplier);
                     ps.setString(3, invoiceDate);
-                    ps.setString(4, toMoneyString(importedTotal));
-                    ps.setString(5, toMoneyString(merchandiseSubtotal));
-                    ps.setString(6, toMoneyString(freight));
-                    ps.setString(7, toMoneyString(hst));
+                    ps.setBigDecimal(4, moneyValue(importedTotal));
+                    ps.setBigDecimal(5, moneyValue(merchandiseSubtotal));
+                    ps.setBigDecimal(6, moneyValue(freight));
+                    ps.setBigDecimal(7, moneyValue(hst));
                     ps.setString(8, toMoneyString(invoiceTotal));
                     ps.executeUpdate();
 
@@ -98,8 +98,8 @@ public class InvoiceDao {
                         ps.setDouble(3, purchaseQuantity);
                         ps.setDouble(4, baseQuantity);
                         ps.setString(5, line.getPackSize());
-                        ps.setString(6, toMoneyString(line.getCaseCost()));
-                        ps.setString(7, toMoneyString(line.getExtendedCost()));
+                        ps.setBigDecimal(6, moneyValue(line.getCaseCost()));
+                        ps.setBigDecimal(7, moneyValue(line.getExtendedCost()));
                         ps.addBatch();
 
                         updateLastCaseCost(conn, productId, deriveLastCaseCost(line, conversionFactor));
@@ -116,7 +116,7 @@ public class InvoiceDao {
                             }
                             ps.setLong(1, invoiceId);
                             ps.setString(2, adjustment.getDescription());
-                            ps.setString(3, toMoneyString(adjustment.getAmount()));
+                            ps.setBigDecimal(3, moneyValue(adjustment.getAmount()));
                             ps.setInt(4, adjustment.getDisplayOrder());
                             ps.addBatch();
                         }
@@ -290,8 +290,8 @@ public class InvoiceDao {
                    invoice_number,
                    supplier,
                    invoice_date,
-                   COALESCE(imported_total, invoice_total) AS imported_total,
-                   COALESCE(merchandise_subtotal, invoice_total) AS merchandise_subtotal,
+                   COALESCE(imported_total, CAST(invoice_total AS NUMERIC)) AS imported_total,
+                   COALESCE(merchandise_subtotal, CAST(invoice_total AS NUMERIC)) AS merchandise_subtotal,
                    COALESCE(freight, 0) AS freight,
                    COALESCE(hst, 0) AS hst,
                    invoice_total
@@ -453,7 +453,7 @@ public class InvoiceDao {
         """;
 
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, toMoneyString(caseCost));
+            ps.setBigDecimal(1, moneyValue(caseCost));
             ps.setInt(2, productId);
             ps.executeUpdate();
         }
@@ -646,6 +646,14 @@ public class InvoiceDao {
         return value.toPlainString();
     }
 
+    private static BigDecimal moneyValue(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+
+        return value;
+    }
+
     private String normalizeInvoiceDate(String invoiceDate) {
         if (invoiceDate == null || invoiceDate.isBlank()) {
             return java.time.LocalDate.now().toString();
@@ -682,7 +690,7 @@ public class InvoiceDao {
         WHERE il.invoice_id = ?
         GROUP BY COALESCE(p.reporting_category, 'OTHER')
                         ORDER BY
-                                   CASE p.reporting_category
+                                   CASE COALESCE(p.reporting_category, 'OTHER')
                                        WHEN 'FOOD' THEN 1
                                        WHEN 'LIQUOR' THEN 2
                                        WHEN 'WINE' THEN 3

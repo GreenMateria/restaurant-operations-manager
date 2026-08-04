@@ -10,6 +10,7 @@ import ca.foodinventory.model.ProductionWeekLine;
 import ca.foodinventory.service.ProductionReportService;
 import ca.foodinventory.service.ProductionUsageReportImportService;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.print.PageLayout;
@@ -201,16 +202,43 @@ public class WeeklyProductionView extends BorderPane {
 
         parMultiplierSpinner.getValueFactory().setValue(week.getParMultiplier());
 
-        summaryLabel.setText(
-                "Showing " + formatWeek(week)
-                        + " | Par multiplier: " + formatNumber(week.getParMultiplier())
-        );
+        summaryLabel.setText("Loading " + formatWeek(week) + "...");
+        dayTabs.setDisable(true);
 
+        Task<WeekLoadData> task = new Task<>() {
+            @Override
+            protected WeekLoadData call() {
+                List<ProductionWeekDay> days = productionWeekDao.findDaysByWeekId(week.getId());
+                Map<Integer, List<ProductionWeekLine>> linesByDayId =
+                        productionWeekDao.findLinesByWeekId(week.getId());
+                return new WeekLoadData(week, days, linesByDayId);
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            renderLoadedWeek(task.getValue());
+            dayTabs.setDisable(false);
+        });
+
+        task.setOnFailed(event -> {
+            dayTabs.setDisable(false);
+            summaryLabel.setText("The selected production week could not be loaded.");
+            showAlert(Alert.AlertType.ERROR, "Load Failed", task.getException().getMessage());
+        });
+
+        Thread thread = new Thread(task, "weekly-production-loader");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void renderLoadedWeek(WeekLoadData data) {
+        ProductionWeek week = data.week();
         List<String> prepSheets = new ArrayList<>();
+        dayTabs.getTabs().clear();
 
-        for (ProductionWeekDay day : productionWeekDao.findDaysByWeekId(week.getId())) {
+        for (ProductionWeekDay day : data.days()) {
             TableView<ProductionWeekLine> table = buildDayTable();
-            List<ProductionWeekLine> dayLines = productionWeekDao.findLinesByDayId(day.getId());
+            List<ProductionWeekLine> dayLines = data.linesByDayId().getOrDefault(day.getId(), List.of());
 
             for (ProductionWeekLine line : dayLines) {
                 String prepSheet = getPrepSheetName(line);
@@ -231,6 +259,11 @@ public class WeeklyProductionView extends BorderPane {
             prepSheetComboBox.getSelectionModel().selectFirst();
             applyPrepSheetFilterToTabs();
         }
+
+        summaryLabel.setText(
+                "Showing " + formatWeek(week)
+                        + " | Par multiplier: " + formatNumber(week.getParMultiplier())
+        );
     }
 
     private TableView<ProductionWeekLine> buildDayTable() {
@@ -990,6 +1023,13 @@ public class WeeklyProductionView extends BorderPane {
     }
 
     private record DayTabData(List<ProductionWeekLine> lines) {
+    }
+
+    private record WeekLoadData(
+            ProductionWeek week,
+            List<ProductionWeekDay> days,
+            Map<Integer, List<ProductionWeekLine>> linesByDayId
+    ) {
     }
 
     private record PrintableRow(String text, ProductionWeekLine line, boolean stationHeader) {

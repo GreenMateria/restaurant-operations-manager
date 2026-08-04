@@ -12,7 +12,28 @@ public class SalesPeriodDao {
 
     public void save(SalesPeriod salesPeriod) {
         ensureTableExists();
-        String sql = """
+        String sql = DatabaseManager.isPostgresDatabase()
+                ? """
+            INSERT INTO sales_periods (
+                period_start_date,
+                period_end_date,
+                food_sales,
+                beer_sales,
+                wine_sales,
+                draught_sales,
+                import_draught_sales,
+                liquor_sales
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(period_start_date, period_end_date) DO UPDATE SET
+                food_sales = excluded.food_sales,
+                beer_sales = excluded.beer_sales,
+                wine_sales = excluded.wine_sales,
+                draught_sales = excluded.draught_sales,
+                import_draught_sales = excluded.import_draught_sales,
+                liquor_sales = excluded.liquor_sales
+        """
+                : """
             INSERT OR REPLACE INTO sales_periods (
                 period_start_date,
                 period_end_date,
@@ -178,6 +199,10 @@ public class SalesPeriodDao {
         return new BigDecimal(value).setScale(2, java.math.RoundingMode.HALF_UP);
     }
     private void ensureTableExists() {
+        if (DatabaseManager.isPostgresDatabase()) {
+            return;
+        }
+
         String sql = """
         CREATE TABLE IF NOT EXISTS sales_periods (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

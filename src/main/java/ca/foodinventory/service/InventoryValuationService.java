@@ -15,41 +15,40 @@ public class InventoryValuationService {
         List<InventoryValuationLine> lines = new ArrayList<>();
 
         String sql = """
+            WITH selected_count AS (
+                SELECT id, period_start_date, period_end_date
+                FROM inventory_counts
+                WHERE id = ?
+            ),
+            purchase_totals AS (
+                SELECT
+                    il.product_id,
+                    SUM(il.extended_cost) AS period_total_cost,
+                    SUM(il.base_quantity) AS period_total_quantity,
+                    SUM(il.quantity) AS period_purchase_quantity
+                FROM invoice_lines il
+                JOIN invoices i ON i.id = il.invoice_id
+                JOIN selected_count sc
+                  ON i.invoice_date BETWEEN sc.period_start_date AND sc.period_end_date
+                GROUP BY il.product_id
+            )
             SELECT
                 p.sku,
                 p.description,
                 p.category,
                 p.reporting_category,
                 icl.converted_quantity AS counted_quantity,
-                ic.period_start_date,
-                ic.period_end_date,
-                (
-                    SELECT SUM(il.extended_cost)
-                    FROM invoice_lines il
-                    JOIN invoices i ON i.id = il.invoice_id
-                    WHERE il.product_id = icl.product_id
-                      AND i.invoice_date BETWEEN ic.period_start_date AND ic.period_end_date
-                ) AS period_total_cost,
-                (
-                    SELECT SUM(il.base_quantity)
-                    FROM invoice_lines il
-                    JOIN invoices i ON i.id = il.invoice_id
-                    WHERE il.product_id = icl.product_id
-                      AND i.invoice_date BETWEEN ic.period_start_date AND ic.period_end_date
-                ) AS period_total_quantity,
-                (
-                    SELECT SUM(il.quantity)
-                    FROM invoice_lines il
-                    JOIN invoices i ON i.id = il.invoice_id
-                    WHERE il.product_id = icl.product_id
-                      AND i.invoice_date BETWEEN ic.period_start_date AND ic.period_end_date
-                ) AS period_purchase_quantity,
+                sc.period_start_date,
+                sc.period_end_date,
+                pt.period_total_cost,
+                pt.period_total_quantity,
+                pt.period_purchase_quantity,
                 p.last_case_cost,
                 p.conversion_factor
             FROM inventory_count_lines icl
-            JOIN inventory_counts ic ON ic.id = icl.count_id
+            JOIN selected_count sc ON sc.id = icl.count_id
             JOIN products p ON p.id = icl.product_id
-            WHERE icl.count_id = ?
+            LEFT JOIN purchase_totals pt ON pt.product_id = icl.product_id
             ORDER BY p.reporting_category, p.category, p.description
         """;
 

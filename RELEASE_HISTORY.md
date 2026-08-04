@@ -1,6 +1,27 @@
 # Release History
 
-## v2.1.6 (current codebase state)
+## v3.0.0 (current codebase state)
+
+### Cloud Database / Sync
+
+- Added controlled hybrid database support with SQLite as the default mode and optional Aiven PostgreSQL cloud mode.
+- Added local runtime database configuration at `%LOCALAPPDATA%\FoodInventory\database.properties`, seeded from safe bundled defaults on fresh installs.
+- Added password-protected System module controls for testing cloud connection, switching next startup mode, uploading this PC to cloud, and downloading cloud to this PC.
+- Added guarded two-way sync through `DatabaseSyncService`; cloud downloads back up the local SQLite database before replacement.
+- Added PostgreSQL schema initialization/validation, lower-access app-user runtime support, and an internal PostgreSQL connection pool.
+- Confirmed local SQLite upload to Aiven, cloud download back to SQLite, broad DAO/service smoke tests, and manual JavaFX UI testing.
+
+### Performance / Reporting
+
+- Improved Cloud PostgreSQL performance for Weekly Production, Freezer Pull, and Inventory Valuation by batching data loads, adding PostgreSQL indexes, and moving long UI loads to background tasks.
+- Fixed Weekly Cost Report department filtering so food and alcohol reports use the selected count department instead of mixing all reporting categories.
+
+### Order Guide
+
+- Added schema migration 13 for `inventory_count_template_lines.order_guide_case_size`.
+- Made the Order Guide `Case` column editable and persistent per count template line, while keeping product pack size as the fallback when no override is saved.
+
+## v2.1.6
 
 ### Update / Installer
 

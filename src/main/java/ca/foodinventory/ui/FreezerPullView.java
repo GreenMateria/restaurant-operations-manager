@@ -5,6 +5,7 @@ import ca.foodinventory.dao.ProductionItemDao;
 import ca.foodinventory.model.ProductionItem;
 import ca.foodinventory.model.ProductionReportLine;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.print.PageLayout;
@@ -34,6 +35,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 public class FreezerPullView extends BorderPane {
     private static final String FREEZER_PULL_STATION = "Freezer Pull";
@@ -143,23 +145,49 @@ public class FreezerPullView extends BorderPane {
     }
 
     private void loadManualPars() {
-        try {
+        summaryLabel.setText("Loading Freezer Pull items...");
+        table.setDisable(true);
+
+        Task<List<ProductionReportLine>> task = new Task<>() {
+            @Override
+            protected List<ProductionReportLine> call() {
+                return loadManualParLines();
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            List<ProductionReportLine> lines = task.getValue();
+            table.setItems(FXCollections.observableArrayList(lines));
+            summaryLabel.setText("Loaded " + lines.size() + " Freezer Pull items. Enter daily quantities directly in the table.");
+            table.setDisable(false);
+        });
+
+        task.setOnFailed(event -> {
+            table.setDisable(false);
+            summaryLabel.setText("Freezer Pull items could not be loaded.");
+            showAlert(Alert.AlertType.ERROR, "Load Failed", task.getException().getMessage());
+        });
+
+        Thread thread = new Thread(task, "freezer-pull-loader");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private List<ProductionReportLine> loadManualParLines() {
             List<ProductionReportLine> lines = new ArrayList<>();
+            Map<Integer, double[]> savedByItemId = freezerPullParDao.loadAll();
+
             for (ProductionItem item : productionItemDao.findAll()) {
                 if (!item.isActive() || !FREEZER_PULL_STATION.equalsIgnoreCase(item.getStationName())) continue;
-                int par = item.getPermanentOverridePar() == null ? 0 : item.getPermanentOverridePar();
                 ProductionReportLine line = new ProductionReportLine(item.getId(), item.getName(), item.getUnit(), item.getStationId(), item.getStationName(), item.getPrintOrder());
-                double[] saved = freezerPullParDao.load(item.getId());
+                double[] saved = savedByItemId.getOrDefault(item.getId(), new double[7]);
                 String[] properties = {"mondayQuantity", "tuesdayQuantity", "wednesdayQuantity", "thursdayQuantity", "fridayQuantity", "saturdayQuantity", "sundayQuantity"};
                 for (int i = 0; i < properties.length; i++) line.setDayQuantity(properties[i], saved[i]);
                 lines.add(line);
             }
+
             lines.sort(Comparator.comparingInt(ProductionReportLine::getPrintOrder).thenComparing(ProductionReportLine::getProductionItemName, String.CASE_INSENSITIVE_ORDER));
-            table.setItems(FXCollections.observableArrayList(lines));
-            summaryLabel.setText("Loaded " + lines.size() + " Freezer Pull items. Enter daily quantities directly in the table.");
-        } catch (RuntimeException e) {
-            showAlert(Alert.AlertType.ERROR, "Load Failed", e.getMessage());
-        }
+            return lines;
     }
 
     private void saveManualPar(ProductionReportLine line, Double value) {

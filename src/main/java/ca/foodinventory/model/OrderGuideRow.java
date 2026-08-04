@@ -3,6 +3,7 @@ package ca.foodinventory.model;
 public class OrderGuideRow {
 
     private int productId;
+    private int templateLineId;
     private String sectionName;
     private String sku;
     private String productDescription;
@@ -17,6 +18,10 @@ public class OrderGuideRow {
 
     public int getProductId() {
         return productId;
+    }
+
+    public int getTemplateLineId() {
+        return templateLineId;
     }
 
     public String getSectionName() {
@@ -53,6 +58,10 @@ public class OrderGuideRow {
 
     public void setProductId(int productId) {
         this.productId = productId;
+    }
+
+    public void setTemplateLineId(int templateLineId) {
+        this.templateLineId = templateLineId;
     }
 
     public void setSectionName(String sectionName) {

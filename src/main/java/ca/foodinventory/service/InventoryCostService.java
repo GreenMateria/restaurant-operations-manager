@@ -26,6 +26,13 @@ public class InventoryCostService {
 
         CountInfo openingCount = getCountInfo(openingCountId);
         CountInfo closingCount = getCountInfo(closingCountId);
+        String department = determineDepartment(openingCount.templateName());
+
+        if (!department.equals(determineDepartment(closingCount.templateName()))) {
+            throw new RuntimeException(
+                    "Opening count and closing count must be from the same department."
+            );
+        }
 
         String reportStartDate = openingCount.countDate();
         String reportEndDate = closingCount.periodEndDate();
@@ -64,68 +71,23 @@ public class InventoryCostService {
                         reportEndDate
                 );
 
-        addCogsRow(
-                report,
-                "FOOD",
-                salesPeriod.getFoodSales(),
-                openingValues,
-                purchases,
-                closingValues
-        );
+        if ("ALCOHOL".equals(department)) {
+            addCogsRow(report, "BEER", salesPeriod.getBeerSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "WINE", salesPeriod.getWineSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "DRAUGHT", salesPeriod.getDraughtSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "IMPORT DRAUGHT", salesPeriod.getImportDraughtSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "LIQUOR", salesPeriod.getLiquorSales(), openingValues, purchases, closingValues);
+        } else {
+            addCogsRow(report, "FOOD", salesPeriod.getFoodSales(), openingValues, purchases, closingValues);
 
-        addCogsRow(
-                report,
-                "BEER",
-                salesPeriod.getBeerSales(),
-                openingValues,
-                purchases,
-                closingValues
-        );
-
-        addCogsRow(
-                report,
-                "WINE",
-                salesPeriod.getWineSales(),
-                openingValues,
-                purchases,
-                closingValues
-        );
-
-        addCogsRow(
-                report,
-                "DRAUGHT",
-                salesPeriod.getDraughtSales(),
-                openingValues,
-                purchases,
-                closingValues
-        );
-
-        addCogsRow(
-                report,
-                "IMPORT DRAUGHT",
-                salesPeriod.getImportDraughtSales(),
-                openingValues,
-                purchases,
-                closingValues
-        );
-
-        addCogsRow(
-                report,
-                "LIQUOR",
-                salesPeriod.getLiquorSales(),
-                openingValues,
-                purchases,
-                closingValues
-        );
-
-        BigDecimal foodRevenue = salesPeriod.getFoodSales();
-
-        addSuppliesRow(report, "PAPER", foodRevenue, openingValues, purchases, closingValues);
-        addSuppliesRow(report, "TAKE OUT", foodRevenue, openingValues, purchases, closingValues);
-        addSuppliesRow(report, "CLEANING", foodRevenue, openingValues, purchases, closingValues);
-        addSuppliesRow(report, "DISHWASHING", foodRevenue, openingValues, purchases, closingValues);
-        addSuppliesRow(report, "GUEST SUPPLIES", foodRevenue, openingValues, purchases, closingValues);
-        addSuppliesRow(report, "OTHER", foodRevenue, openingValues, purchases, closingValues);
+            BigDecimal foodRevenue = salesPeriod.getFoodSales();
+            addSuppliesRow(report, "PAPER", foodRevenue, openingValues, purchases, closingValues);
+            addSuppliesRow(report, "TAKE OUT", foodRevenue, openingValues, purchases, closingValues);
+            addSuppliesRow(report, "CLEANING", foodRevenue, openingValues, purchases, closingValues);
+            addSuppliesRow(report, "DISHWASHING", foodRevenue, openingValues, purchases, closingValues);
+            addSuppliesRow(report, "GUEST SUPPLIES", foodRevenue, openingValues, purchases, closingValues);
+            addSuppliesRow(report, "OTHER", foodRevenue, openingValues, purchases, closingValues);
+        }
 
         return report;
     }
@@ -209,14 +171,6 @@ public class InventoryCostService {
                 .subtract(closing)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        System.out.println("================================");
-        System.out.println("CATEGORY: " + category);
-        System.out.println("OPENING : " + opening);
-        System.out.println("PURCHASES: " + purchased);
-        System.out.println("CLOSING : " + closing);
-        System.out.println("USAGE   : " + usage);
-        System.out.println("================================");
-
         return usage;
     }
 
@@ -250,7 +204,18 @@ public class InventoryCostService {
     ) {
         Map<String, BigDecimal> purchases = new HashMap<>();
 
-        String sql = """
+        String sql = DatabaseManager.isPostgresDatabase()
+                ? """
+                SELECT
+                    p.reporting_category,
+                    SUM(CAST(il.extended_cost AS REAL)) AS total_purchases
+                FROM invoice_lines il
+                JOIN invoices i ON i.id = il.invoice_id
+                JOIN products p ON p.id = il.product_id
+                WHERE i.invoice_date BETWEEN ? AND ?
+                GROUP BY p.reporting_category
+                """
+                : """
                 SELECT
                     p.reporting_category,
                     SUM(CAST(il.extended_cost AS REAL)) AS total_purchases
@@ -311,11 +276,14 @@ public class InventoryCostService {
     private CountInfo getCountInfo(int countId) {
         String sql = """
                 SELECT
+                    t.name AS template_name,
                     count_date,
                     period_start_date,
                     period_end_date
                 FROM inventory_counts
-                WHERE id = ?
+                JOIN inventory_count_templates t
+                    ON t.id = inventory_counts.template_id
+                WHERE inventory_counts.id = ?
                 """;
 
         try (
@@ -327,6 +295,7 @@ public class InventoryCostService {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     return new CountInfo(
+                            rs.getString("template_name"),
                             rs.getString("count_date"),
                             rs.getString("period_start_date"),
                             rs.getString("period_end_date")
@@ -373,7 +342,20 @@ public class InventoryCostService {
                 .toUpperCase();
     }
 
+    private String determineDepartment(String templateName) {
+        String normalizedTemplateName = templateName == null
+                ? ""
+                : templateName.trim().toUpperCase();
+
+        if (normalizedTemplateName.contains("ALCOHOL")) {
+            return "ALCOHOL";
+        }
+
+        return "FOOD";
+    }
+
     private record CountInfo(
+            String templateName,
             String countDate,
             String periodStartDate,
             String periodEndDate

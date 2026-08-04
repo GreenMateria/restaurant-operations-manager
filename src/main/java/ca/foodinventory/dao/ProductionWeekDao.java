@@ -133,6 +133,54 @@ public class ProductionWeekDao {
         return lines;
     }
 
+    public Map<Integer, List<ProductionWeekLine>> findLinesByWeekId(int productionWeekId) {
+        Map<Integer, List<ProductionWeekLine>> linesByDayId = new LinkedHashMap<>();
+
+        String sql = """
+            SELECT
+                pwl.id,
+                pwl.production_week_day_id,
+                pwl.production_item_id,
+                pi.name AS production_item_name,
+                pwl.previous_sales_quantity,
+                pwl.generated_par,
+                pwl.override_par,
+                pwl.final_par,
+                pwl.unit,
+                pi.shelf_life,
+                pwl.station_id,
+                ps.name AS station_name,
+                ps.prep_sheet,
+                pwl.print_order
+            FROM production_week_lines pwl
+            JOIN production_week_days pwd ON pwd.id = pwl.production_week_day_id
+            LEFT JOIN production_items pi ON pwl.production_item_id = pi.id
+            LEFT JOIN production_stations ps ON pwl.station_id = ps.id
+            WHERE pwd.production_week_id = ?
+            ORDER BY pwd.sort_order, ps.sort_order, pwl.print_order, pi.name
+        """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setInt(1, productionWeekId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    ProductionWeekLine line = mapLine(resultSet);
+                    linesByDayId
+                            .computeIfAbsent(line.getProductionWeekDayId(), ignored -> new ArrayList<>())
+                            .add(line);
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load production week lines", e);
+        }
+
+        return linesByDayId;
+    }
+
     public int saveGeneratedWeek(
             LocalDate weekStartDate,
             double parMultiplier,

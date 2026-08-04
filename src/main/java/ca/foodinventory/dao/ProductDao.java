@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class ProductDao {
 
@@ -51,6 +52,8 @@ public class ProductDao {
 
     public List<Product> getAllActiveProducts() {
         List<Product> products = new ArrayList<>();
+        Map<Integer, AlcoholProductProfile> profilesByProductId =
+                alcoholProfileDao.findAllActiveByProductId();
 
         String sql = """
             SELECT
@@ -73,10 +76,14 @@ public class ProductDao {
 
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+            ResultSet rs = ps.executeQuery()) {
 
             while (rs.next()) {
-                products.add(mapProduct(rs));
+                Product product = mapProduct(rs, false);
+                product.setAlcoholProfile(
+                        profilesByProductId.get(product.getId())
+                );
+                products.add(product);
             }
 
         } catch (Exception ex) {
@@ -263,6 +270,7 @@ public class ProductDao {
             ON CONFLICT(sku) DO UPDATE SET
                 description = excluded.description,
                 category = excluded.category,
+                reporting_category = excluded.reporting_category,
                 unit = excluded.unit,
                 conversion_factor = excluded.conversion_factor,
                 pack_size = excluded.pack_size,
@@ -292,6 +300,13 @@ public class ProductDao {
     }
 
     private Product mapProduct(ResultSet rs) throws SQLException {
+        return mapProduct(rs, true);
+    }
+
+    private Product mapProduct(
+            ResultSet rs,
+            boolean loadAlcoholProfile
+    ) throws SQLException {
         Product product = new Product(
                 rs.getInt("id"),
                 rs.getString("sku"),
@@ -307,8 +322,11 @@ public class ProductDao {
                 rs.getInt("active") == 1
         );
 
-        AlcoholProductProfile profile = alcoholProfileDao.findByProductId(product.getId());
-        product.setAlcoholProfile(profile);
+        if (loadAlcoholProfile) {
+            AlcoholProductProfile profile =
+                    alcoholProfileDao.findByProductId(product.getId());
+            product.setAlcoholProfile(profile);
+        }
 
         return product;
     }
