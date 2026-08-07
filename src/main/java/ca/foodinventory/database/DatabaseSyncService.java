@@ -203,16 +203,15 @@ public class DatabaseSyncService {
     }
 
     private void clearPostgresTables(Connection connection) throws SQLException {
-        StringJoiner tableNames = new StringJoiner(", ");
-        for (String tableName : TABLES_IN_INSERT_ORDER) {
-            tableNames.add(quoteIdentifier(tableName));
-        }
+        List<String> reverseTables = new ArrayList<>(TABLES_IN_INSERT_ORDER);
+        Collections.reverse(reverseTables);
 
         try (Statement statement = connection.createStatement()) {
-            statement.execute(
-                    "TRUNCATE TABLE " + tableNames
-                            + " RESTART IDENTITY CASCADE"
-            );
+            for (String tableName : reverseTables) {
+                if (postgresTableExists(connection, tableName)) {
+                    statement.execute("DELETE FROM " + quoteIdentifier(tableName));
+                }
+            }
         }
     }
 

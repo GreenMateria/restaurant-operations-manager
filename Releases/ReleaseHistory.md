@@ -120,3 +120,8 @@ Date: 2026-08-04 12:38
 Date: 2026-08-04 12:50
 
 - Added support for cloud based database (PostgreSQL) while retaining offline mode (SQLite) this requires adminstrator access to switch modes. Made CASE column editible in order  guide. Other bug fixes and stability improvements
+
+## v3.0.1
+Date: 2026-08-07 12:34
+
+- Added debug code for Cloud connection

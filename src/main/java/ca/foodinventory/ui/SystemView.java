@@ -369,12 +369,38 @@ public class SystemView {
             if (exception != null) {
                 exception.printStackTrace();
             }
-            showAlert(Alert.AlertType.ERROR, "Failed", failureMessage);
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Failed",
+                    failureMessage + formatFailureDetails(exception)
+            );
         });
 
         Thread thread = new Thread(task, "database-sync");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private String formatFailureDetails(Throwable exception) {
+        if (exception == null) {
+            return "";
+        }
+
+        Throwable rootCause = exception;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+
+        String message = rootCause.getMessage();
+        if (message == null || message.isBlank()) {
+            message = exception.getMessage();
+        }
+
+        if (message == null || message.isBlank()) {
+            return "";
+        }
+
+        return "\n\nDetails: " + message;
     }
 
     private void setDatabaseButtonsDisabled(boolean disabled) {
