@@ -136,3 +136,8 @@ Date: 2026-08-09
 Date: 2026-08-09 14:41
 
 - Added net sales after discounts function. Compelted Cloud Database set up
+
+## v3.0.2
+Date: 2026-08-09 14:42
+
+- 
