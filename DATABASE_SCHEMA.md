@@ -1,6 +1,6 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: Tuesday, August 4, 2026_
+_Last Updated: Sunday, August 9, 2026_
 
 This file documents the current database structure for the Food Inventory / ESM Operations Manager application.
 
@@ -10,9 +10,10 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 
 # General Rules
 
-- Default database engine: SQLite.
-- Optional cloud database engine: PostgreSQL on Aiven.
-- SQLite remains the default startup mode; PostgreSQL mode is selected through the password-protected System module or local runtime configuration and takes effect after restart.
+- Default fresh-install database engine: SQLite.
+- Normal shared database engine for configured work PCs: PostgreSQL on Aiven.
+- SQLite remains available for fresh installs, fallback, and local testing.
+- PostgreSQL mode is selected through the password-protected System module or local runtime configuration and takes effect after restart.
 - Runtime database path is controlled by `DatabaseManager`.
 - Runtime database is under:
 
@@ -27,7 +28,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **13**.
+- Current migration version: **14**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -49,6 +50,7 @@ Current known migration files:
 - `Migration11`
 - `Migration12`
 - `Migration13`
+- `Migration14`
 
 PostgreSQL support:
 
@@ -62,6 +64,7 @@ PostgreSQL support:
 - `DatabaseSyncService`
   - Uploads local SQLite data to cloud PostgreSQL.
   - Downloads cloud PostgreSQL data to local SQLite, backing up the local database first.
+  - These actions are administrator migration/recovery tools. Normal daily cloud use happens directly through PostgreSQL mode and does not require manual upload/download.
 
 Migration responsibilities:
 
@@ -85,6 +88,11 @@ Migration responsibilities:
 - `Migration13`
   - Added `inventory_count_template_lines.order_guide_case_size`.
   - Order Guide case-size edits now persist per count template line.
+- `Migration14`
+  - Added net-sales fields to `sales_periods`:
+    `food_net_sales`, `beer_net_sales`, `wine_net_sales`, `draught_net_sales`,
+    `import_draught_net_sales`, and `liquor_net_sales`.
+  - Existing net-sales values are seeded from the matching gross sales fields when missing.
 
 ---
 

@@ -572,27 +572,39 @@ public class InventoryValuationView {
                 .append(report.getPeriodEndDate())
                 .append("\n\n");
 
-        builder.append("-------------------------------------------------------------\n");
-        builder.append(String.format("%-18s %13s %13s %10s\n", "CATEGORY", "SALES", "USAGE", "COST %"));
-        builder.append("-------------------------------------------------------------\n\n");
+        builder.append("-------------------------------------------------------------------------------------\n");
+        builder.append(String.format(
+                "%-18s %13s %13s %13s %10s %10s\n",
+                "CATEGORY",
+                "GROSS SALES",
+                "NET SALES",
+                "USAGE",
+                "GROSS %",
+                "NET %"
+        ));
+        builder.append("-------------------------------------------------------------------------------------\n\n");
 
         for (CategoryCostReportRow row : report.getCogsRows()) {
             builder.append(String.format(
-                    "%-18s %13s %13s %9s%%\n",
+                    "%-18s %13s %13s %13s %9s%% %9s%%\n",
                     row.getCategory(),
                     formatMoney(row.getSales()),
+                    formatMoney(row.getNetSales()),
                     formatMoney(row.getUsage()),
-                    row.getCostPercent()
+                    row.getCostPercent(),
+                    row.getNetCostPercent()
             ));
         }
 
-        builder.append("\n-------------------------------------------------------------\n");
+        builder.append("\n-------------------------------------------------------------------------------------\n");
         builder.append("TOTAL COST OF GOODS SOLD\n");
-        builder.append("-------------------------------------------------------------\n\n");
+        builder.append("-------------------------------------------------------------------------------------\n\n");
 
-        builder.append(String.format("%-18s %13s\n", "TOTAL SALES", formatMoney(report.getTotalSales())));
+        builder.append(String.format("%-18s %13s\n", "GROSS SALES", formatMoney(report.getTotalSales())));
+        builder.append(String.format("%-18s %13s\n", "NET SALES", formatMoney(report.getTotalNetSales())));
         builder.append(String.format("%-18s %13s\n", "TOTAL USAGE", formatMoney(report.getTotalUsage())));
-        builder.append(String.format("%-18s %12s%%\n", "COGS %", report.getCogsPercent()));
+        builder.append(String.format("%-18s %12s%%\n", "COGS % GROSS", report.getCogsPercent()));
+        builder.append(String.format("%-18s %12s%%\n", "COGS % NET", report.getNetCogsPercent()));
 
         if (!report.getSuppliesRows().isEmpty()) {
             builder.append("\n\nOPERATING SUPPLIES\n");

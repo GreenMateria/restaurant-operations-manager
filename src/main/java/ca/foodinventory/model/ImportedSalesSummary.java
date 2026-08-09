@@ -12,6 +12,12 @@ public class ImportedSalesSummary {
     private BigDecimal draughtSales = BigDecimal.ZERO;
     private BigDecimal importDraughtSales = BigDecimal.ZERO;
     private BigDecimal liquorSales = BigDecimal.ZERO;
+    private BigDecimal foodNetSales = BigDecimal.ZERO;
+    private BigDecimal beerNetSales = BigDecimal.ZERO;
+    private BigDecimal wineNetSales = BigDecimal.ZERO;
+    private BigDecimal draughtNetSales = BigDecimal.ZERO;
+    private BigDecimal importDraughtNetSales = BigDecimal.ZERO;
+    private BigDecimal liquorNetSales = BigDecimal.ZERO;
 
     private final List<String> unmappedCategories = new ArrayList<>();
 
@@ -39,22 +45,72 @@ public class ImportedSalesSummary {
         return liquorSales;
     }
 
+    public BigDecimal getFoodNetSales() {
+        return foodNetSales;
+    }
+
+    public BigDecimal getBeerNetSales() {
+        return beerNetSales;
+    }
+
+    public BigDecimal getWineNetSales() {
+        return wineNetSales;
+    }
+
+    public BigDecimal getDraughtNetSales() {
+        return draughtNetSales;
+    }
+
+    public BigDecimal getImportDraughtNetSales() {
+        return importDraughtNetSales;
+    }
+
+    public BigDecimal getLiquorNetSales() {
+        return liquorNetSales;
+    }
+
     public List<String> getUnmappedCategories() {
         return unmappedCategories;
     }
 
     public void addSale(String reportingCategory, BigDecimal amount) {
-        if (reportingCategory == null || amount == null) {
+        addSale(reportingCategory, amount, amount);
+    }
+
+    public void addSale(String reportingCategory, BigDecimal grossAmount, BigDecimal netAmount) {
+        if (reportingCategory == null || grossAmount == null) {
             return;
         }
 
+        if (netAmount == null) {
+            netAmount = grossAmount;
+        }
+
         switch (reportingCategory) {
-            case "FOOD" -> foodSales = foodSales.add(amount);
-            case "BEER" -> beerSales = beerSales.add(amount);
-            case "WINE" -> wineSales = wineSales.add(amount);
-            case "DRAUGHT" -> draughtSales = draughtSales.add(amount);
-            case "IMPORT DRAUGHT" -> importDraughtSales = importDraughtSales.add(amount);
-            case "LIQUOR" -> liquorSales = liquorSales.add(amount);
+            case "FOOD" -> {
+                foodSales = foodSales.add(grossAmount);
+                foodNetSales = foodNetSales.add(netAmount);
+            }
+            case "BEER" -> {
+                beerSales = beerSales.add(grossAmount);
+                beerNetSales = beerNetSales.add(netAmount);
+            }
+            case "WINE" -> {
+                wineSales = wineSales.add(grossAmount);
+                wineNetSales = wineNetSales.add(netAmount);
+            }
+            case "DRAUGHT" -> {
+                draughtSales = draughtSales.add(grossAmount);
+                draughtNetSales = draughtNetSales.add(netAmount);
+            }
+            case "IMPORT DRAUGHT" -> {
+                importDraughtSales = importDraughtSales.add(grossAmount);
+                importDraughtNetSales = importDraughtNetSales.add(netAmount);
+            }
+            case "LIQUOR" -> {
+                liquorSales = liquorSales.add(grossAmount);
+                liquorNetSales = liquorNetSales.add(netAmount);
+            }
         }
     }
 

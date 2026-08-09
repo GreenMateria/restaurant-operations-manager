@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Tuesday, August 4, 2026_
+_Last Updated: Sunday, August 9, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -85,6 +85,8 @@ Important:
 - SQLite is the default startup mode.
 - Cloud PostgreSQL mode is selected through `%LOCALAPPDATA%\FoodInventory\database.properties` and can be changed from the password-protected System module.
 - Fresh installs seed `database.properties` from safe bundled defaults when the local config file does not exist; cloud credentials must be supplied locally outside source control.
+- For the current work PCs, Aiven PostgreSQL is the normal operating mode and the cloud database is the accurate master data source.
+- Upload/download cloud sync controls are administrator migration/recovery tools, not routine daily sync actions.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
 
@@ -484,6 +486,8 @@ The restaurant normally places two weekly orders, so both order columns are requ
 # 14. Sales Data
 
 Sales periods store category totals for a selected period.
+
+Schema version 14 also stores matching net-sales fields for each sales category.
 
 Known sales fields include:
 
@@ -940,7 +944,7 @@ The application currently has a stable foundation for:
 - Password-protected cloud upload/download tools
 - Persistent Order Guide case-size overrides
 
-All implemented features through version 3.0.0 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 3.0.1 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 
@@ -957,9 +961,9 @@ Primary unfinished areas:
 
 ## Immediate
 
-1. Package and publish v3.0.0.
-2. Validate the first v3.0.0 installer upgrade on another PC.
-3. Continue controlled cloud-mode live testing before making Cloud PostgreSQL the normal operating mode.
+1. Package and publish v3.0.1 on Sunday, August 9, 2026.
+2. Validate the v3.0.1 installer upgrade on the work PCs.
+3. Continue monitoring daily Cloud PostgreSQL use on the configured work PCs.
 4. Add a manual Check for Updates action.
 5. Continue production variance groundwork.
 

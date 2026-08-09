@@ -72,13 +72,13 @@ public class InventoryCostService {
                 );
 
         if ("ALCOHOL".equals(department)) {
-            addCogsRow(report, "BEER", salesPeriod.getBeerSales(), openingValues, purchases, closingValues);
-            addCogsRow(report, "WINE", salesPeriod.getWineSales(), openingValues, purchases, closingValues);
-            addCogsRow(report, "DRAUGHT", salesPeriod.getDraughtSales(), openingValues, purchases, closingValues);
-            addCogsRow(report, "IMPORT DRAUGHT", salesPeriod.getImportDraughtSales(), openingValues, purchases, closingValues);
-            addCogsRow(report, "LIQUOR", salesPeriod.getLiquorSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "BEER", salesPeriod.getBeerSales(), salesPeriod.getBeerNetSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "WINE", salesPeriod.getWineSales(), salesPeriod.getWineNetSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "DRAUGHT", salesPeriod.getDraughtSales(), salesPeriod.getDraughtNetSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "IMPORT DRAUGHT", salesPeriod.getImportDraughtSales(), salesPeriod.getImportDraughtNetSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "LIQUOR", salesPeriod.getLiquorSales(), salesPeriod.getLiquorNetSales(), openingValues, purchases, closingValues);
         } else {
-            addCogsRow(report, "FOOD", salesPeriod.getFoodSales(), openingValues, purchases, closingValues);
+            addCogsRow(report, "FOOD", salesPeriod.getFoodSales(), salesPeriod.getFoodNetSales(), openingValues, purchases, closingValues);
 
             BigDecimal foodRevenue = salesPeriod.getFoodSales();
             addSuppliesRow(report, "PAPER", foodRevenue, openingValues, purchases, closingValues);
@@ -96,6 +96,7 @@ public class InventoryCostService {
             WeeklyCostReport report,
             String category,
             BigDecimal sales,
+            BigDecimal netSales,
             Map<String, BigDecimal> openingValues,
             Map<String, BigDecimal> purchases,
             Map<String, BigDecimal> closingValues
@@ -112,6 +113,7 @@ public class InventoryCostService {
                 new CategoryCostReportRow(
                         category,
                         sales,
+                        netSales,
                         usage
                 )
         );

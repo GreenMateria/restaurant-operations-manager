@@ -1,6 +1,6 @@
 # CODING_STANDARDS.md
 
-_Last Updated: July 28, 2026_
+_Last Updated: Sunday, August 9, 2026_
 
 This file documents coding conventions and project-specific implementation rules for the Food Inventory / ESM Operations Manager application.
 
@@ -10,7 +10,9 @@ Read this before making broad code changes.
 
 # General Development Rules
 
-- Preserve the current JavaFX + SQLite + Maven architecture.
+- Preserve the current JavaFX + SQLite + PostgreSQL + Maven architecture.
+- Treat Aiven PostgreSQL as the normal shared database for configured work PCs.
+- Keep SQLite as the fresh-install default and local fallback path.
 - Prefer targeted changes over large rewrites.
 - Do not rename packages, models, DAOs, or major screens unless explicitly requested.
 - Do not delete user data or reset the database unless explicitly asked.

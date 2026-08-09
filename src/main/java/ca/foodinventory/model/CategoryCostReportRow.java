@@ -7,14 +7,27 @@ public class CategoryCostReportRow {
 
     private String category;
     private BigDecimal sales;
+    private BigDecimal netSales;
     private BigDecimal usage;
     private BigDecimal costPercent;
+    private BigDecimal netCostPercent;
 
     public CategoryCostReportRow(String category, BigDecimal sales, BigDecimal usage) {
+        this(category, sales, sales, usage);
+    }
+
+    public CategoryCostReportRow(
+            String category,
+            BigDecimal sales,
+            BigDecimal netSales,
+            BigDecimal usage
+    ) {
         this.category = category;
         this.sales = money(sales);
+        this.netSales = money(netSales);
         this.usage = money(usage);
         this.costPercent = calculateCostPercent(this.usage, this.sales);
+        this.netCostPercent = calculateCostPercent(this.usage, this.netSales);
     }
 
     public String getCategory() {
@@ -25,12 +38,20 @@ public class CategoryCostReportRow {
         return sales;
     }
 
+    public BigDecimal getNetSales() {
+        return netSales;
+    }
+
     public BigDecimal getUsage() {
         return usage;
     }
 
     public BigDecimal getCostPercent() {
         return costPercent;
+    }
+
+    public BigDecimal getNetCostPercent() {
+        return netCostPercent;
     }
 
     private BigDecimal calculateCostPercent(BigDecimal usage, BigDecimal sales) {

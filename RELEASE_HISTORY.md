@@ -1,6 +1,22 @@
 # Release History
 
-## v3.0.0 (current codebase state)
+## v3.0.1 (current codebase state)
+
+### Cloud Database / Sync
+
+- Completed the current work-PC cloud database rollout using Aiven PostgreSQL `defaultdb`.
+- Confirmed all current work PCs can connect to the cloud database without error.
+- Cloud PostgreSQL is now the normal operating mode for configured work PCs.
+- The cloud database is now treated as the accurate master data source.
+- SQLite remains the safe default for fresh installs and fallback use.
+- Upload This PC to Cloud and Download Cloud to This PC remain administrator migration/recovery tools, not daily sync actions.
+
+### Sales / Reporting Schema
+
+- Added schema migration 14 for net-sales fields on `sales_periods`.
+- Current database schema version is 14.
+
+## v3.0.0
 
 ### Cloud Database / Sync
 

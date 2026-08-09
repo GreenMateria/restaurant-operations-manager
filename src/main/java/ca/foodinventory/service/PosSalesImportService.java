@@ -20,12 +20,12 @@ public class PosSalesImportService {
 
             ImportedSalesSummary summary = new ImportedSalesSummary();
 
-            summary.addSale("FOOD", readRows(sheet, 7, 15, 18, 33, 36, 40));
-            summary.addSale("BEER", readRows(sheet, 42));
-            summary.addSale("WINE", readRows(sheet, 29));
-            summary.addSale("LIQUOR", readRows(sheet, 25));
-            summary.addSale("DRAUGHT", readRows(sheet, 22, 24));
-            summary.addSale("IMPORT DRAUGHT", readRows(sheet, 23));
+            addSales(summary, "FOOD", readRows(sheet, 7, 15, 18, 33, 36, 38));
+            addSales(summary, "BEER", readRows(sheet, 42));
+            addSales(summary, "WINE", readRows(sheet, 29));
+            addSales(summary, "LIQUOR", readRows(sheet, 25));
+            addSales(summary, "DRAUGHT", readRows(sheet, 22, 23));
+            addSales(summary, "IMPORT DRAUGHT", readRows(sheet, 24));
 
             return summary;
 
@@ -34,8 +34,13 @@ public class PosSalesImportService {
         }
     }
 
-    private BigDecimal readRows(Sheet sheet, int... excelRows) {
-        BigDecimal total = BigDecimal.ZERO;
+    private void addSales(ImportedSalesSummary summary, String category, SalesAmounts amounts) {
+        summary.addSale(category, amounts.grossSales(), amounts.netSales());
+    }
+
+    private SalesAmounts readRows(Sheet sheet, int... excelRows) {
+        BigDecimal grossTotal = BigDecimal.ZERO;
+        BigDecimal netTotal = BigDecimal.ZERO;
 
         for (int excelRow : excelRows) {
             Row row = sheet.getRow(excelRow - 1);
@@ -44,21 +49,22 @@ public class PosSalesImportService {
                 continue;
             }
 
-            BigDecimal value = findSalesAmountInRow(row);
+            SalesAmounts values = findSalesAmountsInRow(row);
 
-            if (value != null) {
-                total = total.add(value);
-            }
+            grossTotal = grossTotal.add(values.grossSales());
+            netTotal = netTotal.add(values.netSales());
         }
 
-        return total.setScale(2, RoundingMode.HALF_UP);
+        return new SalesAmounts(
+                grossTotal.setScale(2, RoundingMode.HALF_UP),
+                netTotal.setScale(2, RoundingMode.HALF_UP)
+        );
     }
 
-    private BigDecimal findSalesAmountInRow(Row row) {
-        /*
-         * Uses the first numeric/currency value after the category name.
-         * If this grabs the wrong column, we will lock it to a specific column next.
-         */
+    private SalesAmounts findSalesAmountsInRow(Row row) {
+        BigDecimal grossSales = null;
+        BigDecimal netSales = null;
+
         for (int i = 1; i < row.getLastCellNum(); i++) {
             Cell cell = row.getCell(i);
 
@@ -69,11 +75,24 @@ public class PosSalesImportService {
             BigDecimal value = getCurrencyValue(cell);
 
             if (value != null) {
-                return value;
+                if (grossSales == null) {
+                    grossSales = value;
+                } else {
+                    netSales = value;
+                    break;
+                }
             }
         }
 
-        return BigDecimal.ZERO;
+        if (grossSales == null) {
+            grossSales = BigDecimal.ZERO;
+        }
+
+        if (netSales == null) {
+            netSales = grossSales;
+        }
+
+        return new SalesAmounts(grossSales, netSales);
     }
 
     private BigDecimal getCurrencyValue(Cell cell) {
@@ -107,5 +126,8 @@ public class PosSalesImportService {
         }
 
         return null;
+    }
+
+    private record SalesAmounts(BigDecimal grossSales, BigDecimal netSales) {
     }
 }

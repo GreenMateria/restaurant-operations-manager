@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 13;
+    public static final int CURRENT_SCHEMA_VERSION = 14;
 
     public void initialize(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
@@ -157,6 +157,12 @@ public class PostgresSchemaInitializer {
                     draught_sales TEXT DEFAULT '0.00',
                     import_draught_sales TEXT DEFAULT '0.00',
                     liquor_sales TEXT DEFAULT '0.00',
+                    food_net_sales TEXT DEFAULT '0.00',
+                    beer_net_sales TEXT DEFAULT '0.00',
+                    wine_net_sales TEXT DEFAULT '0.00',
+                    draught_net_sales TEXT DEFAULT '0.00',
+                    import_draught_net_sales TEXT DEFAULT '0.00',
+                    liquor_net_sales TEXT DEFAULT '0.00',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(period_start_date, period_end_date)
                 )
@@ -364,6 +370,22 @@ public class PostgresSchemaInitializer {
                 "order_guide_case_size",
                 "TEXT"
         );
+        addColumnIfMissing(connection, statement, "sales_periods", "food_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(connection, statement, "sales_periods", "beer_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(connection, statement, "sales_periods", "wine_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(connection, statement, "sales_periods", "draught_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(connection, statement, "sales_periods", "import_draught_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(connection, statement, "sales_periods", "liquor_net_sales", "TEXT DEFAULT '0.00'");
+
+        statement.executeUpdate("""
+                UPDATE sales_periods
+                SET food_net_sales = CASE WHEN food_net_sales IS NULL OR food_net_sales = '0.00' THEN food_sales ELSE food_net_sales END,
+                    beer_net_sales = CASE WHEN beer_net_sales IS NULL OR beer_net_sales = '0.00' THEN beer_sales ELSE beer_net_sales END,
+                    wine_net_sales = CASE WHEN wine_net_sales IS NULL OR wine_net_sales = '0.00' THEN wine_sales ELSE wine_net_sales END,
+                    draught_net_sales = CASE WHEN draught_net_sales IS NULL OR draught_net_sales = '0.00' THEN draught_sales ELSE draught_net_sales END,
+                    import_draught_net_sales = CASE WHEN import_draught_net_sales IS NULL OR import_draught_net_sales = '0.00' THEN import_draught_sales ELSE import_draught_net_sales END,
+                    liquor_net_sales = CASE WHEN liquor_net_sales IS NULL OR liquor_net_sales = '0.00' THEN liquor_sales ELSE liquor_net_sales END
+                """);
     }
 
     private void addColumnIfMissing(

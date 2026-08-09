@@ -27,6 +27,12 @@ public class SalesEntryView {
     private final TextField draughtSalesField = new TextField("0.00");
     private final TextField importDraughtSalesField = new TextField("0.00");
     private final TextField liquorSalesField = new TextField("0.00");
+    private final TextField foodNetSalesField = new TextField("0.00");
+    private final TextField beerNetSalesField = new TextField("0.00");
+    private final TextField wineNetSalesField = new TextField("0.00");
+    private final TextField draughtNetSalesField = new TextField("0.00");
+    private final TextField importDraughtNetSalesField = new TextField("0.00");
+    private final TextField liquorNetSalesField = new TextField("0.00");
 
     private final TableView<SalesPeriod> table = new TableView<>();
 
@@ -82,35 +88,47 @@ public class SalesEntryView {
 
         row++;
 
-        grid.add(new Label("Food Sales:"), 0, row);
-        grid.add(foodSalesField, 1, row);
+        grid.add(new Label("Category"), 0, row);
+        grid.add(new Label("Gross Sales"), 1, row);
+        grid.add(new Label("Net Sales"), 2, row);
 
         row++;
 
-        grid.add(new Label("Beer Sales:"), 0, row);
-        grid.add(beerSalesField, 1, row);
+        addSalesRow(grid, row, "Food:", foodSalesField, foodNetSalesField);
 
         row++;
 
-        grid.add(new Label("Wine Sales:"), 0, row);
-        grid.add(wineSalesField, 1, row);
+        addSalesRow(grid, row, "Beer:", beerSalesField, beerNetSalesField);
 
         row++;
 
-        grid.add(new Label("Draught Sales:"), 0, row);
-        grid.add(draughtSalesField, 1, row);
+        addSalesRow(grid, row, "Wine:", wineSalesField, wineNetSalesField);
 
         row++;
 
-        grid.add(new Label("Import Draught Sales:"), 0, row);
-        grid.add(importDraughtSalesField, 1, row);
+        addSalesRow(grid, row, "Draught:", draughtSalesField, draughtNetSalesField);
 
         row++;
 
-        grid.add(new Label("Liquor Sales:"), 0, row);
-        grid.add(liquorSalesField, 1, row);
+        addSalesRow(grid, row, "Import Draught:", importDraughtSalesField, importDraughtNetSalesField);
+
+        row++;
+
+        addSalesRow(grid, row, "Liquor:", liquorSalesField, liquorNetSalesField);
 
         return grid;
+    }
+
+    private void addSalesRow(
+            GridPane grid,
+            int row,
+            String label,
+            TextField grossSalesField,
+            TextField netSalesField
+    ) {
+        grid.add(new Label(label), 0, row);
+        grid.add(grossSalesField, 1, row);
+        grid.add(netSalesField, 2, row);
     }
 
     private void setupTable() {
@@ -120,22 +138,34 @@ public class SalesEntryView {
         TableColumn<SalesPeriod, String> endCol = new TableColumn<>("Period End");
         endCol.setCellValueFactory(new PropertyValueFactory<>("periodEndDate"));
 
-        TableColumn<SalesPeriod, BigDecimal> foodCol = moneyColumn("Food Sales", "foodSales");
-        TableColumn<SalesPeriod, BigDecimal> beerCol = moneyColumn("Beer Sales", "beerSales");
-        TableColumn<SalesPeriod, BigDecimal> wineCol = moneyColumn("Wine Sales", "wineSales");
-        TableColumn<SalesPeriod, BigDecimal> draughtCol = moneyColumn("Draught Sales", "draughtSales");
-        TableColumn<SalesPeriod, BigDecimal> importDraughtCol = moneyColumn("Import Draught", "importDraughtSales");
-        TableColumn<SalesPeriod, BigDecimal> liquorCol = moneyColumn("Liquor Sales", "liquorSales");
+        TableColumn<SalesPeriod, BigDecimal> foodCol = moneyColumn("Food Gross", "foodSales");
+        TableColumn<SalesPeriod, BigDecimal> foodNetCol = moneyColumn("Food Net", "foodNetSales");
+        TableColumn<SalesPeriod, BigDecimal> beerCol = moneyColumn("Beer Gross", "beerSales");
+        TableColumn<SalesPeriod, BigDecimal> beerNetCol = moneyColumn("Beer Net", "beerNetSales");
+        TableColumn<SalesPeriod, BigDecimal> wineCol = moneyColumn("Wine Gross", "wineSales");
+        TableColumn<SalesPeriod, BigDecimal> wineNetCol = moneyColumn("Wine Net", "wineNetSales");
+        TableColumn<SalesPeriod, BigDecimal> draughtCol = moneyColumn("Draught Gross", "draughtSales");
+        TableColumn<SalesPeriod, BigDecimal> draughtNetCol = moneyColumn("Draught Net", "draughtNetSales");
+        TableColumn<SalesPeriod, BigDecimal> importDraughtCol = moneyColumn("Import Draught Gross", "importDraughtSales");
+        TableColumn<SalesPeriod, BigDecimal> importDraughtNetCol = moneyColumn("Import Draught Net", "importDraughtNetSales");
+        TableColumn<SalesPeriod, BigDecimal> liquorCol = moneyColumn("Liquor Gross", "liquorSales");
+        TableColumn<SalesPeriod, BigDecimal> liquorNetCol = moneyColumn("Liquor Net", "liquorNetSales");
 
         table.getColumns().setAll(
                 startCol,
                 endCol,
                 foodCol,
+                foodNetCol,
                 beerCol,
+                beerNetCol,
                 wineCol,
+                wineNetCol,
                 draughtCol,
+                draughtNetCol,
                 importDraughtCol,
-                liquorCol
+                importDraughtNetCol,
+                liquorCol,
+                liquorNetCol
         );
 
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
@@ -180,6 +210,12 @@ public class SalesEntryView {
             draughtSalesField.setText(summary.getDraughtSales().toPlainString());
             importDraughtSalesField.setText(summary.getImportDraughtSales().toPlainString());
             liquorSalesField.setText(summary.getLiquorSales().toPlainString());
+            foodNetSalesField.setText(summary.getFoodNetSales().toPlainString());
+            beerNetSalesField.setText(summary.getBeerNetSales().toPlainString());
+            wineNetSalesField.setText(summary.getWineNetSales().toPlainString());
+            draughtNetSalesField.setText(summary.getDraughtNetSales().toPlainString());
+            importDraughtNetSalesField.setText(summary.getImportDraughtNetSales().toPlainString());
+            liquorNetSalesField.setText(summary.getLiquorNetSales().toPlainString());
 
             showAlert(
                     Alert.AlertType.INFORMATION,
@@ -219,7 +255,13 @@ public class SalesEntryView {
                     parseMoney(wineSalesField),
                     parseMoney(draughtSalesField),
                     parseMoney(importDraughtSalesField),
-                    parseMoney(liquorSalesField)
+                    parseMoney(liquorSalesField),
+                    parseMoney(foodNetSalesField),
+                    parseMoney(beerNetSalesField),
+                    parseMoney(wineNetSalesField),
+                    parseMoney(draughtNetSalesField),
+                    parseMoney(importDraughtNetSalesField),
+                    parseMoney(liquorNetSalesField)
             );
 
             salesPeriodDao.save(salesPeriod);

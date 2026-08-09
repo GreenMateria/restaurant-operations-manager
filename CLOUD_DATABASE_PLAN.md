@@ -1,9 +1,9 @@
 # CLOUD DATABASE PLAN
 
 _Created: Saturday, August 1, 2026_
-_Last Updated: Tuesday, August 4, 2026_
+_Last Updated: Sunday, August 9, 2026_
 
-This document tracks the planned cloud database transition for ESM Operations Manager.
+This document records the completed cloud database transition for ESM Operations Manager.
 
 ## Goal
 
@@ -21,28 +21,40 @@ Each PC connects outbound to the cloud database. The office PC does not need to 
 
 ## Current State
 
-As of v3.0.0, the application supports a controlled hybrid rollout:
+As of the v3.0.1 release candidate, the cloud database setup is complete for the current work PCs:
 
 ```text
-Default startup -> local SQLite
-Optional mode   -> Aiven PostgreSQL
+Normal work PCs -> Aiven PostgreSQL defaultdb
+Fresh installs  -> local SQLite until cloud mode is configured
 ```
 
-The mode can be changed from the password-protected System module. The selected mode is stored in `%LOCALAPPDATA%\FoodInventory\database.properties` and takes effect after application restart. Fresh installs seed this config file from bundled defaults when it does not already exist.
+All current work PCs have connected to the Aiven PostgreSQL cloud database without error. The cloud database is now treated as the accurate master data source for normal daily use.
 
-The default released application mode uses a local SQLite database on each installed PC:
+The mode can still be changed from the password-protected System module. The selected mode is stored in `%LOCALAPPDATA%\FoodInventory\database.properties` and takes effect after application restart. Fresh installs seed this config file from bundled defaults when it does not already exist.
+
+The safe default for a fresh install remains local SQLite:
 
 ```text
 %LOCALAPPDATA%\FoodInventory\food_inventory.db
 ```
 
-Current manual sync process:
+Previous manual sync process:
 
 ```text
 PC 1 local SQLite -> database backup -> transfer file -> restore on PC 2
 ```
 
-This process works, but it is manual and creates separate database copies that can drift apart.
+This process worked, but it was manual and created separate database copies that could drift apart.
+
+Current normal operating process:
+
+```text
+PC 1 app \
+PC 2 app  -> Aiven PostgreSQL defaultdb
+PC 3 app /
+```
+
+When the app is running in Cloud PostgreSQL mode, normal reads and saves go directly to the shared cloud database. Multiple PCs can be connected at the same time. The application does not currently provide live screen refresh or edit-conflict warnings, so users should reopen or refresh a screen to see another user's recent changes and should avoid editing the same record at the same time.
 
 Cloud connectivity status:
 
@@ -85,6 +97,8 @@ Cloud runtime compatibility status:
 - Production setup/week smoke tests succeeded against Aiven PostgreSQL on Tuesday, August 4, 2026.
 - Tested production stations, production items, production profiles, production profile lines, POS menu items, product mappings, generated weeks, week days, week lines, override save, Freezer Pull setting persistence, and cleanup.
 - A broad PostgreSQL read smoke check passed for order guide, production setup data, existing production weeks, sales category mappings, and system settings.
+- Work PCs were connected to the cloud database without error by Sunday, August 9, 2026.
+- The cloud database is now the master copy for current production data.
 
 SQLite regression check:
 
@@ -116,16 +130,17 @@ Reasoning:
 
 ## Important Implementation Rule
 
-SQLite remains the default startup mode.
+SQLite remains the default startup mode for fresh installs and fallback use.
 
-The v3.0.0 release includes cloud support, but it is intentionally controlled:
+The v3.0.1 release includes completed cloud support for the current internal rollout:
 
 ```text
-Normal users  -> local SQLite default
-Administrator -> optional System-menu mode switch and upload/download tools
+Normal work PCs -> Cloud PostgreSQL mode
+Fresh installs  -> local SQLite default until configured
+Administrator   -> System-menu mode switch and upload/download tools
 ```
 
-Do not make Cloud PostgreSQL the normal operating mode until the v3.0.0 hybrid release has been tested on the intended PCs.
+Cloud PostgreSQL can be the normal operating mode on the current work PCs now that connection testing has succeeded. Do not use Upload This PC to Cloud during normal daily operation; it is an administrative replacement/migration tool that overwrites the cloud database with one PC's local SQLite data.
 
 ## Current Cloud Database
 
@@ -381,10 +396,11 @@ UPLOAD_TO_POSTGRES
 
 ### Phase 6: Release Decision
 
-- v3.0.0 is the controlled hybrid release candidate.
+- v3.0.1 is the cloud-complete release candidate planned for release on Sunday, August 9, 2026.
 - Release installer starts in SQLite mode by default.
 - Database details are hidden from normal workflows.
 - Cloud controls live behind the existing password-protected System module.
+- Current work PCs should run in Cloud PostgreSQL mode for daily shared-data use.
 
 ## Security Notes
 
@@ -392,7 +408,7 @@ UPLOAD_TO_POSTGRES
 - Do not hardcode the Aiven admin password in the app.
 - Use a dedicated app database user.
 - Require SSL.
-- The v3.0.0 rollout seeds local config from safe bundled defaults; cloud credentials must be supplied locally outside source control.
+- The v3.0.1 rollout seeds local config from safe bundled defaults; cloud credentials must be supplied locally outside source control.
 - Consider a backend/API layer later if stronger credential protection is needed.
 
 ## Long-Term Architecture Option

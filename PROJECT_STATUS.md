@@ -2,13 +2,13 @@
 
 ## Current Version
 
-**Current Project Version:** v3.0.0
+**Current Project Version:** v3.0.1 release candidate
 
-Current database schema version: **13**
+Current database schema version: **14**
 
 Application compiles successfully.
 
-All implemented features through v3.0.0 are considered working as intended.
+All implemented features through v3.0.1 are considered working as intended.
 
 # Completed This Session
 
@@ -38,6 +38,11 @@ Completed:
 -   Password-protected System module now includes simple cloud sync controls for testing the cloud connection, uploading this PC's local SQLite data to cloud, and downloading cloud data to this PC's SQLite database
 -   Password-protected System module now includes restart-required database mode switching between Local SQLite and Cloud PostgreSQL using `%LOCALAPPDATA%\FoodInventory\database.properties`
 -   Fresh installs now seed `%LOCALAPPDATA%\FoodInventory\database.properties` from safe bundled defaults, with SQLite as the default startup mode; cloud credentials must be supplied locally outside source control
+-   All current work PCs have connected to the Aiven PostgreSQL cloud database without error
+-   The cloud database is now treated as the accurate master data source for normal daily use
+-   Work PCs should run in Cloud PostgreSQL mode so all normal app saves go directly to the shared cloud database
+-   SQLite mode remains available for fallback, local testing, and fresh installs before cloud configuration
+-   Migration 14 added net-sales fields to `sales_periods` and aligned SQLite/PostgreSQL schema versioning at 14
 -   Order Guide `Case` column is editable and saves per count template line, so manager-specific case labels persist when the guide is regenerated
 -   Backup and restore now refuse non-local database mode instead of copying the SQLite file while cloud mode is active
 -   Automatic GitHub release checking at application startup
@@ -62,9 +67,11 @@ Completed:
 
 Current behaviour:
 
--   Default startup still uses the local SQLite runtime database.
--   PostgreSQL mode must be explicitly enabled for development testing.
+-   Fresh installs still start with the local SQLite runtime database until configured.
+-   Current work PCs should use Cloud PostgreSQL mode for normal shared-data operation.
 -   PostgreSQL mode has passed broad DAO/service smoke tests and manual JavaFX UI testing, including the previously slow Weekly Production, Freezer Pull, and Inventory Valuation screens.
+-   When running in Cloud PostgreSQL mode, normal reads and saves use the shared Aiven database directly.
+-   Upload This PC to Cloud and Download Cloud to This PC are administrator migration/recovery tools, not routine daily sync actions.
 -   Installed versions automatically check GitHub Releases on startup.
 -   If a newer version exists, the user is prompted to download it.
 -   The installer is downloaded inside the application when a Windows installer asset is available.
@@ -86,9 +93,9 @@ Current behaviour:
 
 # Next Development Priorities
 
-1.  Package and publish v3.0.0 when ready.
-2.  Validate the first v3.0.0 installer upgrade on another PC and confirm existing local data/config are preserved.
-3.  Continue controlled live testing of SQLite default mode and optional Cloud PostgreSQL mode.
+1.  Package and publish v3.0.1 on Sunday, August 9, 2026.
+2.  Validate the v3.0.1 installer upgrade on the work PCs and confirm existing local data/config are preserved.
+3.  Run daily operations from Cloud PostgreSQL mode on all configured work PCs.
 4.  Add installer verification / checksum handling.
 5.  Add a manual Check for Updates action.
 6.  Confirm future installer upgrades replace the existing installed app entry and do not create duplicate installs.

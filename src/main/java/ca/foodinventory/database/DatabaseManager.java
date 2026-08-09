@@ -270,10 +270,23 @@ public class DatabaseManager {
                     draught_sales TEXT DEFAULT '0.00',
                     import_draught_sales TEXT DEFAULT '0.00',
                     liquor_sales TEXT DEFAULT '0.00',
+                    food_net_sales TEXT DEFAULT '0.00',
+                    beer_net_sales TEXT DEFAULT '0.00',
+                    wine_net_sales TEXT DEFAULT '0.00',
+                    draught_net_sales TEXT DEFAULT '0.00',
+                    import_draught_net_sales TEXT DEFAULT '0.00',
+                    liquor_net_sales TEXT DEFAULT '0.00',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(period_start_date, period_end_date)
                 )
                 """);
+
+        addColumnIfMissing(stmt, "sales_periods", "food_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(stmt, "sales_periods", "beer_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(stmt, "sales_periods", "wine_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(stmt, "sales_periods", "draught_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(stmt, "sales_periods", "import_draught_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(stmt, "sales_periods", "liquor_net_sales", "TEXT DEFAULT '0.00'");
 
         stmt.execute("""
                 CREATE TABLE IF NOT EXISTS inventory_count_lines (

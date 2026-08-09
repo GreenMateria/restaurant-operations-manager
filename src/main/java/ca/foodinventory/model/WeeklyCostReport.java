@@ -14,8 +14,10 @@ public class WeeklyCostReport {
     private final List<CategoryCostReportRow> suppliesRows = new ArrayList<>();
 
     private BigDecimal totalSales = BigDecimal.ZERO;
+    private BigDecimal totalNetSales = BigDecimal.ZERO;
     private BigDecimal totalUsage = BigDecimal.ZERO;
     private BigDecimal cogsPercent = BigDecimal.ZERO;
+    private BigDecimal netCogsPercent = BigDecimal.ZERO;
 
     private BigDecimal totalSuppliesUsage = BigDecimal.ZERO;
     private BigDecimal suppliesPercent = BigDecimal.ZERO;
@@ -45,12 +47,20 @@ public class WeeklyCostReport {
         return totalSales;
     }
 
+    public BigDecimal getTotalNetSales() {
+        return totalNetSales;
+    }
+
     public BigDecimal getTotalUsage() {
         return totalUsage;
     }
 
     public BigDecimal getCogsPercent() {
         return cogsPercent;
+    }
+
+    public BigDecimal getNetCogsPercent() {
+        return netCogsPercent;
     }
 
     public BigDecimal getTotalSuppliesUsage() {
@@ -77,6 +87,11 @@ public class WeeklyCostReport {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
+        totalNetSales = cogsRows.stream()
+                .map(CategoryCostReportRow::getNetSales)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
         totalUsage = cogsRows.stream()
                 .map(CategoryCostReportRow::getUsage)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -88,6 +103,7 @@ public class WeeklyCostReport {
                 .setScale(2, RoundingMode.HALF_UP);
 
         cogsPercent = calculatePercent(totalUsage, totalSales);
+        netCogsPercent = calculatePercent(totalUsage, totalNetSales);
         suppliesPercent = calculatePercent(totalSuppliesUsage, totalSales);
     }
 

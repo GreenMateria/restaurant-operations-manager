@@ -122,6 +122,17 @@ Date: 2026-08-04 12:50
 - Added support for cloud based database (PostgreSQL) while retaining offline mode (SQLite) this requires adminstrator access to switch modes. Made CASE column editible in order  guide. Other bug fixes and stability improvements
 
 ## v3.0.1
-Date: 2026-08-07 12:34
+Date: 2026-08-09
 
-- Added debug code for Cloud connection
+- Added cloud connection diagnostic/debug support.
+- Completed current work-PC cloud database rollout against Aiven PostgreSQL.
+- Confirmed all current work PCs connect to the cloud database without error.
+- Set Cloud PostgreSQL as the normal operating mode for configured work PCs.
+- Documented that the cloud database is now the accurate master data source.
+- Documented that Upload This PC to Cloud and Download Cloud to This PC are administrator migration/recovery tools, not routine daily sync actions.
+- Updated project documentation snapshot for the v3.0.1 release.
+
+## v3.0.1
+Date: 2026-08-09 14:41
+
+- Added net sales after discounts function. Compelted Cloud Database set up

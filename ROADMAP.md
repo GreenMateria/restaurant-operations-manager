@@ -4,18 +4,22 @@
 
 ### Status
 
--   v3.0.0 includes a controlled hybrid database release path.
--   SQLite remains the default startup mode.
+-   Cloud database setup is complete for the current work PCs.
+-   v3.0.1 includes the completed controlled hybrid database release path.
+-   SQLite remains the default startup mode for fresh installs and fallback use.
+-   Configured work PCs should run in Aiven PostgreSQL cloud mode for daily shared-data operation.
 -   Aiven PostgreSQL cloud mode is available through the password-protected System module and takes effect after restart.
 -   Development connectivity, upload, download, DAO/service smoke tests, and manual UI testing against Aiven PostgreSQL `defaultdb` have been completed.
 -   A lower-access Aiven application database user is configured for normal app access.
+-   All current work PCs have connected to the cloud database without error.
+-   The cloud database is now treated as the accurate master data source.
 -   Full plan is documented in `CLOUD_DATABASE_PLAN.md`.
 
 ### Planned
 
--   Package and publish v3.0.0 after final release verification.
--   Validate v3.0.0 on two PCs using SQLite default mode, System mode switching, upload, and download.
--   Continue controlled cloud-mode live testing before making Cloud PostgreSQL the normal operating mode.
+-   Package and publish v3.0.1 on Sunday, August 9, 2026.
+-   Validate the v3.0.1 installer upgrade on the work PCs.
+-   Continue monitoring cloud-mode daily use for workflow or record-edit conflicts.
 -   Consider a backend/API layer later if the app expands beyond controlled internal use.
 
 ## Update System
@@ -42,7 +46,7 @@
 
 ### Status
 
--   Implemented features through v3.0.0 are working as intended.
+-   Implemented features through v3.0.1 are working as intended.
 -   Alcohol workflow changes should be driven by specific live-data issues when they appear.
 -   Freezer Pull is working as intended and is not an active roadmap item.
 

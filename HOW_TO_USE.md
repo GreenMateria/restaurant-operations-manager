@@ -744,6 +744,8 @@ Do not combine Freezer Pull with normal weekly production prep sheets.
 
 Most managers will not use this often, but they should understand the basics.
 
+For normal daily use on the configured work PCs, the program should run in **Cloud Mode**. In Cloud Mode, normal saves go directly to the shared Aiven PostgreSQL database, so separate PCs use the same current data.
+
 ## Local Backup
 
 1. Open **System**.
@@ -752,9 +754,21 @@ Most managers will not use this often, but they should understand the basics.
 4. Choose where to save the backup.
 5. Confirm the backup completed.
 
+## Cloud Mode Reminder
+
+Use **Cloud Mode** on every configured work PC when the cloud database has the correct current records.
+
+1. Open **System**.
+2. Click **Test Cloud Connection**.
+3. Click **Use Cloud Mode**.
+4. Restart the program.
+5. Reopen **System** and confirm the current mode is Cloud PostgreSQL.
+
+Users may need to reopen a screen to see changes saved from another PC. Avoid editing the same record on two PCs at the same time.
+
 ## Cloud Upload Reminder
 
-Use this order when moving local data to cloud:
+Use this order only when intentionally moving local SQLite data to cloud:
 
 1. Start in SQLite mode on the PC with the correct current data.
 2. Open **System**.
@@ -766,7 +780,7 @@ Use this order when moving local data to cloud:
 
 ![System database sync](docs/images/system-database-sync.png)
 
-Uploading replaces the cloud database with this PC's local SQLite data.
+Uploading replaces the cloud database with this PC's local SQLite data. Do not upload during normal daily cloud operation unless this PC is known to have the correct master data.
 
 ---
 
@@ -804,4 +818,3 @@ Uploading replaces the cloud database with this PC's local SQLite data.
 4. Restart the program.
 
 Mode changes do not take effect until restart.
-
