@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Sunday, August 9, 2026_
+_Last Updated: Monday, August 10, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -500,6 +500,13 @@ Known sales fields include:
 
 Sales data is imported from POS Excel reports and used by cost reporting.
 
+POS Sales import currently uses fixed Apache POI zero-based column indexes in `PosSalesImportService`:
+
+- Gross sales column index `1`
+- Net sales column index `3`
+
+Do not infer net sales by scanning for the next currency value in the row.
+
 Sales periods are selected by start and end date rather than assuming every reporting period is exactly one week.
 
 ---
@@ -706,6 +713,8 @@ Weekly Production currently supports:
 - Prep Sheet selector
 - Preview
 - Print
+
+Cloud-mode usage report import/generation runs in a background task and production profile lines are batch-loaded to avoid repeated cloud round trips during report generation.
 
 Generated production normally uses previous sales plus a buffer and rounds upward as required.
 
@@ -943,8 +952,9 @@ The application currently has a stable foundation for:
 - Controlled SQLite/PostgreSQL mode switching
 - Password-protected cloud upload/download tools
 - Persistent Order Guide case-size overrides
+- Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
 
-All implemented features through version 3.0.1 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 3.0.2 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 
@@ -961,8 +971,8 @@ Primary unfinished areas:
 
 ## Immediate
 
-1. Package and publish v3.0.1 on Sunday, August 9, 2026.
-2. Validate the v3.0.1 installer upgrade on the work PCs.
+1. Package and publish the next installer with the v3.0.2 cloud performance and POS sales import fixes.
+2. Validate the v3.0.2 installer upgrade on the work PCs.
 3. Continue monitoring daily Cloud PostgreSQL use on the configured work PCs.
 4. Add a manual Check for Updates action.
 5. Continue production variance groundwork.

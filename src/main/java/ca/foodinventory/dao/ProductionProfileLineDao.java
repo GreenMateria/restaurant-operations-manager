@@ -5,7 +5,10 @@ import ca.foodinventory.model.ProductionProfileLine;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ProductionProfileLineDao {
 
@@ -44,6 +47,67 @@ public class ProductionProfileLineDao {
         }
 
         return lines;
+    }
+
+    public Map<Integer, List<ProductionProfileLine>> findActiveByProfileIds(Collection<Integer> profileIds) {
+        Map<Integer, List<ProductionProfileLine>> linesByProfileId = new LinkedHashMap<>();
+
+        if (profileIds == null || profileIds.isEmpty()) {
+            return linesByProfileId;
+        }
+
+        for (Integer profileId : profileIds) {
+            if (profileId != null && profileId > 0) {
+                linesByProfileId.putIfAbsent(profileId, new ArrayList<>());
+            }
+        }
+
+        if (linesByProfileId.isEmpty()) {
+            return linesByProfileId;
+        }
+
+        String placeholders = String.join(",", java.util.Collections.nCopies(linesByProfileId.size(), "?"));
+        String sql = """
+            SELECT
+                ppl.id,
+                ppl.profile_id,
+                ppl.production_item_id,
+                pi.name AS production_item_name,
+                ppl.quantity_per_sale,
+                ppl.unit,
+                ppl.sort_order,
+                ppl.active
+            FROM production_profile_lines ppl
+            LEFT JOIN production_items pi ON ppl.production_item_id = pi.id
+            WHERE ppl.active = 1
+              AND ppl.profile_id IN (
+            """ + placeholders + """
+              )
+            ORDER BY ppl.profile_id, ppl.sort_order, pi.name
+        """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            int parameterIndex = 1;
+            for (Integer profileId : linesByProfileId.keySet()) {
+                statement.setInt(parameterIndex++, profileId);
+            }
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    ProductionProfileLine line = mapRow(resultSet);
+                    linesByProfileId
+                            .computeIfAbsent(line.getProfileId(), ignored -> new ArrayList<>())
+                            .add(line);
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load production profile lines", e);
+        }
+
+        return linesByProfileId;
     }
 
     public void replaceForProfile(int profileId, List<ProductionProfileLine> lines) {

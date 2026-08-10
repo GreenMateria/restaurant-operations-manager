@@ -371,35 +371,57 @@ public class WeeklyProductionView extends BorderPane {
             return;
         }
 
-        try {
-            double parMultiplier = getCommittedParMultiplier();
-            ImportedUsageReportSummary usageSummary = usageReportImportService.importUsageReport(file);
-            ProductionReportSummary productionSummary =
-                    productionReportService.generateReport(usageSummary);
+        double parMultiplier = getCommittedParMultiplier();
+        boolean includeAllProductionItems = includeAllProductionItemsCheckBox.isSelected();
+        setDisable(true);
+        summaryLabel.setText("Importing usage report...");
 
-            int productionWeekId = productionWeekDao.saveGeneratedWeek(
-                    weekStartDate,
-                    parMultiplier,
-                    productionSummary,
-                    includeAllProductionItemsCheckBox.isSelected()
-            );
+        Task<ProductionImportResult> task = new Task<>() {
+            @Override
+            protected ProductionImportResult call() {
+                ImportedUsageReportSummary usageSummary = usageReportImportService.importUsageReport(file);
+                ProductionReportSummary productionSummary =
+                        productionReportService.generateReport(usageSummary);
 
-            loadWeeks();
-            selectWeek(productionWeekId);
+                int productionWeekId = productionWeekDao.saveGeneratedWeek(
+                        weekStartDate,
+                        parMultiplier,
+                        productionSummary,
+                        includeAllProductionItems
+                );
+
+                return new ProductionImportResult(
+                        productionWeekId,
+                        productionWeekDao.findAll()
+                );
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            setDisable(false);
+            ProductionImportResult result = task.getValue();
+            weekComboBox.setItems(FXCollections.observableArrayList(result.weeks()));
+            selectWeek(result.productionWeekId());
 
             showAlert(
                     Alert.AlertType.INFORMATION,
                     "Weekly Production Generated",
                     "Generated weekly production across separate daily sheets."
             );
+        });
 
-        } catch (RuntimeException e) {
+        task.setOnFailed(event -> {
+            setDisable(false);
             showAlert(
                     Alert.AlertType.ERROR,
                     "Import Failed",
-                    e.getMessage()
+                    task.getException().getMessage()
             );
-        }
+        });
+
+        Thread thread = new Thread(task, "weekly-production-import");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void saveOverrides() {
@@ -1029,6 +1051,12 @@ public class WeeklyProductionView extends BorderPane {
             ProductionWeek week,
             List<ProductionWeekDay> days,
             Map<Integer, List<ProductionWeekLine>> linesByDayId
+    ) {
+    }
+
+    private record ProductionImportResult(
+            int productionWeekId,
+            List<ProductionWeek> weeks
     ) {
     }
 

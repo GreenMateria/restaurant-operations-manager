@@ -11,6 +11,9 @@ import java.math.RoundingMode;
 
 public class PosSalesImportService {
 
+    private static final int GROSS_SALES_COLUMN = 1;
+    private static final int NET_SALES_COLUMN = 3;
+
     public ImportedSalesSummary importSalesReport(File file) {
         try (
                 FileInputStream fileInputStream = new FileInputStream(file);
@@ -62,34 +65,15 @@ public class PosSalesImportService {
     }
 
     private SalesAmounts findSalesAmountsInRow(Row row) {
-        BigDecimal grossSales = null;
-        BigDecimal netSales = null;
-
-        for (int i = 1; i < row.getLastCellNum(); i++) {
-            Cell cell = row.getCell(i);
-
-            if (cell == null) {
-                continue;
-            }
-
-            BigDecimal value = getCurrencyValue(cell);
-
-            if (value != null) {
-                if (grossSales == null) {
-                    grossSales = value;
-                } else {
-                    netSales = value;
-                    break;
-                }
-            }
-        }
+        BigDecimal grossSales = getCurrencyValue(row.getCell(GROSS_SALES_COLUMN));
+        BigDecimal netSales = getCurrencyValue(row.getCell(NET_SALES_COLUMN));
 
         if (grossSales == null) {
             grossSales = BigDecimal.ZERO;
         }
 
         if (netSales == null) {
-            netSales = grossSales;
+            netSales = BigDecimal.ZERO;
         }
 
         return new SalesAmounts(grossSales, netSales);

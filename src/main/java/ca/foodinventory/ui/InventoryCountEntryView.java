@@ -6,6 +6,7 @@ import ca.foodinventory.dao.InventoryCountLineDao;
 import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -27,6 +28,9 @@ public class InventoryCountEntryView {
     private final VBox rowsBox = new VBox(0);
     private final List<RowBinding> rowBindings = new ArrayList<>();
     private final List<TextField> navigationFields = new ArrayList<>();
+    private Button saveButton;
+    private Button completeButton;
+    private Button refreshButton;
 
     public InventoryCountEntryView(InventoryCount count) {
         this(count, null);
@@ -46,9 +50,9 @@ public class InventoryCountEntryView {
 
         Label dateLabel = new Label("Date: " + count.getCountDate());
 
-        Button saveButton = new Button("Save Quantities");
-        Button completeButton = new Button("Complete Count");
-        Button refreshButton = new Button("Refresh");
+        saveButton = new Button("Save Quantities");
+        completeButton = new Button("Complete Count");
+        refreshButton = new Button("Refresh");
 
         saveButton.getStyleClass().add("primary-button");
         completeButton.getStyleClass().add("primary-button");
@@ -63,7 +67,7 @@ public class InventoryCountEntryView {
         scrollPane.setFitToWidth(true);
         scrollPane.setPannable(true);
 
-        saveButton.setOnAction(e -> saveQuantities(true));
+        saveButton.setOnAction(e -> saveQuantities());
         completeButton.setOnAction(e -> completeCount());
         refreshButton.setOnAction(e -> refreshRows());
 
@@ -357,7 +361,9 @@ public class InventoryCountEntryView {
         }
     }
 
-    private void saveQuantities(boolean showConfirmation) {
+    private List<InventoryCountLine> collectCommittedLines() {
+        List<InventoryCountLine> lines = new ArrayList<>();
+
         for (RowBinding binding : rowBindings) {
             if (isWeightedAlcohol(binding.profile())) {
                 commitWeighted(binding);
@@ -365,27 +371,75 @@ public class InventoryCountEntryView {
                 commitNormal(binding);
             }
 
-            lineDao.updateQuantity(
-                    binding.line().getId(),
-                    binding.line().getQuantity(),
-                    binding.line().getConvertedQuantity()
-            );
+            lines.add(binding.line());
         }
 
-        if (showConfirmation) {
-            showAlert(Alert.AlertType.INFORMATION, "Saved", "Inventory quantities saved.");
-        }
+        return lines;
+    }
+
+    private void saveQuantities() {
+        List<InventoryCountLine> lines = collectCommittedLines();
+        runCountSaveTask(
+                "Saving inventory quantities...",
+                () -> lineDao.updateQuantities(lines),
+                () -> showAlert(Alert.AlertType.INFORMATION, "Saved", "Inventory quantities saved.")
+        );
     }
 
     private void completeCount() {
-        saveQuantities(false);
-        countDao.markCompleted(count.getId());
-
-        showAlert(
-                Alert.AlertType.INFORMATION,
-                "Completed",
-                "Inventory count marked as completed."
+        List<InventoryCountLine> lines = collectCommittedLines();
+        runCountSaveTask(
+                "Completing inventory count...",
+                () -> {
+                    lineDao.updateQuantities(lines);
+                    countDao.markCompleted(count.getId());
+                },
+                () -> showAlert(
+                        Alert.AlertType.INFORMATION,
+                        "Completed",
+                        "Inventory count marked as completed."
+                )
         );
+    }
+
+    private void runCountSaveTask(String statusText, Runnable work, Runnable onSuccess) {
+        setSaving(true);
+
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() {
+                work.run();
+                return null;
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            setSaving(false);
+            onSuccess.run();
+        });
+
+        task.setOnFailed(event -> {
+            setSaving(false);
+            showAlert(Alert.AlertType.ERROR, "Save Failed", task.getException().getMessage());
+        });
+
+        rowsBox.setDisable(true);
+        saveButton.setText(statusText);
+
+        Thread thread = new Thread(task, "inventory-count-save");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void setSaving(boolean saving) {
+        rowsBox.setDisable(saving);
+        saveButton.setDisable(saving);
+        completeButton.setDisable(saving);
+        refreshButton.setDisable(saving);
+
+        if (!saving) {
+            saveButton.setText("Save Quantities");
+        }
     }
 
     private boolean isWeightedAlcohol(AlcoholProductProfile profile) {

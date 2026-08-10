@@ -1,6 +1,22 @@
 # Release History
 
-## v3.0.1 (current codebase state)
+## v3.0.2 (current codebase state)
+
+### Cloud Performance
+
+- Batched inventory count line quantity updates into one transaction for Save Quantities and Complete Count.
+- Moved inventory count save/complete work to a background JavaFX task so cloud writes do not freeze the app window.
+- Moved Sales report import and Sales Period save work to background tasks.
+- Moved Weekly Production usage report import/generation to a background task.
+- Batch-loaded active production profile lines during Weekly Production report generation to reduce repeated cloud database round trips.
+
+### Sales Import
+
+- Updated POS Sales import to read fixed sales amount columns instead of guessing from the next currency value in the row.
+- Gross sales now imports from zero-based column index `1`.
+- Net sales now imports from zero-based column index `3`.
+
+## v3.0.1
 
 ### Cloud Database / Sync
 

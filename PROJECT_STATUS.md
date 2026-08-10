@@ -2,13 +2,13 @@
 
 ## Current Version
 
-**Current Project Version:** v3.0.1 release candidate
+**Current Project Version:** v3.0.2 working tree
 
 Current database schema version: **14**
 
 Application compiles successfully.
 
-All implemented features through v3.0.1 are considered working as intended.
+All implemented features through v3.0.2 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 # Completed This Session
 
@@ -16,6 +16,10 @@ All implemented features through v3.0.1 are considered working as intended.
 
 Completed:
 
+-   August 10, 2026 cloud-mode performance pass: inventory count Save Quantities / Complete Count now batch-updates count lines in one transaction and runs the save work in a background JavaFX task instead of blocking the UI thread
+-   August 10, 2026 cloud-mode performance pass: Sales report import, Sales Period save, and Weekly Production usage report import/generation now run in background tasks so long Excel/database work does not freeze the app window
+-   August 10, 2026 cloud-mode performance pass: Weekly Production report generation now batch-loads active production profile lines instead of querying profile lines one profile at a time
+-   POS Sales import now reads fixed report columns for sales amounts: gross sales from column index `1` and net sales from column index `3` in `PosSalesImportService`
 -   PostgreSQL JDBC dependency and controlled cloud database mode using Aiven PostgreSQL
 -   PostgreSQL mode configuration via `FOOD_INVENTORY_DB_*` environment variables, matching `foodinventory.db.*` JVM system properties, or `%LOCALAPPDATA%\FoodInventory\database.properties`
 -   SQLite remains the default startup mode, while Cloud PostgreSQL can be selected from the password-protected System module and takes effect after restart
@@ -69,6 +73,7 @@ Current behaviour:
 
 -   Fresh installs still start with the local SQLite runtime database until configured.
 -   Current work PCs should use Cloud PostgreSQL mode for normal shared-data operation.
+-   Inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports are expected to remain responsive in cloud mode because long writes/imports are now moved off the JavaFX thread.
 -   PostgreSQL mode has passed broad DAO/service smoke tests and manual JavaFX UI testing, including the previously slow Weekly Production, Freezer Pull, and Inventory Valuation screens.
 -   When running in Cloud PostgreSQL mode, normal reads and saves use the shared Aiven database directly.
 -   Upload This PC to Cloud and Download Cloud to This PC are administrator migration/recovery tools, not routine daily sync actions.
@@ -93,8 +98,8 @@ Current behaviour:
 
 # Next Development Priorities
 
-1.  Package and publish v3.0.1 on Sunday, August 9, 2026.
-2.  Validate the v3.0.1 installer upgrade on the work PCs and confirm existing local data/config are preserved.
+1.  Package and publish the next installer with the v3.0.2 cloud performance and POS sales import fixes.
+2.  Validate the v3.0.2 installer upgrade on the work PCs and confirm existing local data/config are preserved.
 3.  Run daily operations from Cloud PostgreSQL mode on all configured work PCs.
 4.  Add installer verification / checksum handling.
 5.  Add a manual Check for Updates action.

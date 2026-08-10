@@ -5,6 +5,7 @@ import ca.foodinventory.model.ImportedSalesSummary;
 import ca.foodinventory.model.SalesPeriod;
 import ca.foodinventory.service.PosSalesImportService;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
@@ -200,10 +201,16 @@ public class SalesEntryView {
             return;
         }
 
-        try {
-            PosSalesImportService service = new PosSalesImportService();
-            ImportedSalesSummary summary = service.importSalesReport(file);
+        Task<ImportedSalesSummary> task = new Task<>() {
+            @Override
+            protected ImportedSalesSummary call() {
+                PosSalesImportService service = new PosSalesImportService();
+                return service.importSalesReport(file);
+            }
+        };
 
+        task.setOnSucceeded(event -> {
+            ImportedSalesSummary summary = task.getValue();
             foodSalesField.setText(summary.getFoodSales().toPlainString());
             beerSalesField.setText(summary.getBeerSales().toPlainString());
             wineSalesField.setText(summary.getWineSales().toPlainString());
@@ -222,8 +229,10 @@ public class SalesEntryView {
                     "Import Complete",
                     "Sales report imported successfully. Review the totals, then click Save Sales Period."
             );
+        });
 
-        } catch (Exception ex) {
+        task.setOnFailed(event -> {
+            Throwable ex = task.getException();
             ex.printStackTrace();
 
             showAlert(
@@ -231,8 +240,11 @@ public class SalesEntryView {
                     "Import Failed",
                     ex.getMessage()
             );
-        }
+        });
 
+        Thread thread = new Thread(task, "sales-report-import");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void saveSalesPeriod() {
@@ -264,14 +276,32 @@ public class SalesEntryView {
                     parseMoney(liquorNetSalesField)
             );
 
-            salesPeriodDao.save(salesPeriod);
-            loadSalesPeriods();
+            Task<java.util.List<SalesPeriod>> task = new Task<>() {
+                @Override
+                protected java.util.List<SalesPeriod> call() {
+                    salesPeriodDao.save(salesPeriod);
+                    return salesPeriodDao.findAll();
+                }
+            };
 
-            showAlert(
-                    Alert.AlertType.INFORMATION,
-                    "Sales Saved",
-                    "Sales period saved successfully."
-            );
+            task.setOnSucceeded(event -> {
+                table.setItems(FXCollections.observableArrayList(task.getValue()));
+                showAlert(
+                        Alert.AlertType.INFORMATION,
+                        "Sales Saved",
+                        "Sales period saved successfully."
+                );
+            });
+
+            task.setOnFailed(event -> showAlert(
+                    Alert.AlertType.ERROR,
+                    "Save Failed",
+                    task.getException().getMessage()
+            ));
+
+            Thread thread = new Thread(task, "sales-period-save");
+            thread.setDaemon(true);
+            thread.start();
 
         } catch (NumberFormatException ex) {
             showAlert(

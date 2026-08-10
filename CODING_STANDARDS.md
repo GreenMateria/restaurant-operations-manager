@@ -1,6 +1,6 @@
 # CODING_STANDARDS.md
 
-_Last Updated: Sunday, August 9, 2026_
+_Last Updated: Monday, August 10, 2026_
 
 This file documents coding conventions and project-specific implementation rules for the Food Inventory / ESM Operations Manager application.
 
@@ -209,6 +209,12 @@ Important:
 
 Use Apache POI.
 
+For POS Sales Report import in `PosSalesImportService`:
+
+- Gross sales = fixed zero-based column index `1`
+- Net sales = fixed zero-based column index `3`
+- Do not infer net sales as the next currency value found in the row.
+
 For Production Usage Report:
 
 - Column B = SKU/PLU
@@ -227,6 +233,8 @@ Skip KDS-only rows between markers:
 kds dnu.ESM
 Gifts and Selling Suppli.ESM
 ```
+
+Cloud-mode save/import workflows that can touch many rows should run off the JavaFX application thread and batch database writes where practical. This is especially important for inventory count saves/completions, Sales Period save/import, and Weekly Production usage report import/generation.
 
 ---
 

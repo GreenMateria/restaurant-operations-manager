@@ -17,6 +17,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ProductionReportService {
 
@@ -27,7 +29,8 @@ public class ProductionReportService {
     public ProductionReportSummary generateReport(ImportedUsageReportSummary usageReportSummary) {
         Map<String, PosMenuItem> posItemsBySku = loadActivePosItemsBySku();
         Map<Integer, ProductionItem> productionItemsById = loadProductionItemsById();
-        Map<Integer, List<ProductionProfileLine>> profileLinesByProfileId = new HashMap<>();
+        Map<Integer, List<ProductionProfileLine>> profileLinesByProfileId =
+                loadProfileLinesByProfileId(posItemsBySku);
         Map<Integer, ProductionReportLine> reportLinesByItemId = new LinkedHashMap<>();
         int skippedRowsWithoutProfile = 0;
 
@@ -39,9 +42,9 @@ public class ProductionReportService {
                 continue;
             }
 
-            List<ProductionProfileLine> profileLines = profileLinesByProfileId.computeIfAbsent(
+            List<ProductionProfileLine> profileLines = profileLinesByProfileId.getOrDefault(
                     posMenuItem.getProductionProfileId(),
-                    profileLineDao::findByProfileId
+                    List.of()
             );
 
             for (ProductionProfileLine profileLine : profileLines) {
@@ -107,6 +110,18 @@ public class ProductionReportService {
         }
 
         return itemsById;
+    }
+
+    private Map<Integer, List<ProductionProfileLine>> loadProfileLinesByProfileId(
+            Map<String, PosMenuItem> posItemsBySku
+    ) {
+        Set<Integer> profileIds = posItemsBySku.values()
+                .stream()
+                .map(PosMenuItem::getProductionProfileId)
+                .filter(id -> id > 0)
+                .collect(Collectors.toSet());
+
+        return profileLineDao.findActiveByProfileIds(profileIds);
     }
 
     private ProductionReportLine createReportLine(

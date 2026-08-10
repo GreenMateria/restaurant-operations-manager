@@ -95,5 +95,43 @@ public class InventoryCountLineDao {
         }
     }
 
+    public void updateQuantities(List<InventoryCountLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+
+        String sql = """
+                UPDATE inventory_count_lines
+                SET quantity = ?,
+                    converted_quantity = ?
+                WHERE id = ?
+                """;
+
+        try (Connection conn = DatabaseManager.getConnection()) {
+            boolean originalAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                for (InventoryCountLine line : lines) {
+                    ps.setDouble(1, line.getQuantity());
+                    ps.setDouble(2, line.getConvertedQuantity());
+                    ps.setInt(3, line.getId());
+                    ps.addBatch();
+                }
+
+                ps.executeBatch();
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(originalAutoCommit);
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to update inventory count quantities", e);
+        }
+    }
+
 
 }

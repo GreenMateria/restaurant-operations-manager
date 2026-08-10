@@ -140,4 +140,10 @@ Date: 2026-08-09 14:41
 ## v3.0.2
 Date: 2026-08-09 14:42
 
-- 
+- Working tree update on 2026-08-10: improved cloud-mode responsiveness for inventory count save/complete, Sales report import/save, and Weekly Production usage report import/generation by using background tasks and batched database operations.
+- Changed POS Sales import to use fixed zero-based columns for sales amounts: gross sales column index 1 and net sales column index 3.
+
+## v3.0.3
+Date: 2026-08-10 13:35
+
+- Fixed cloud syncing. Fixed sales importer

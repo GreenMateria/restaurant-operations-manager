@@ -23,13 +23,36 @@ public class PostgresSchemaInitializer {
 
     public void validateRequiredSchema(Connection connection) throws SQLException {
         requireTable(connection, "products");
+        requireTable(connection, "product_sku_aliases");
         requireTable(connection, "inventory_count_template_lines");
         requireTable(connection, "inventory_counts");
         requireTable(connection, "inventory_count_lines");
         requireTable(connection, "invoices");
         requireTable(connection, "invoice_lines");
+        requireTable(connection, "invoice_adjustments");
+        requireTable(connection, "sales_periods");
+        requireTable(connection, "sales_category_mappings");
         requireTable(connection, "settings");
+        requireTable(connection, "alcohol_product_profiles");
+        requireTable(connection, "production_stations");
+        requireTable(connection, "production_items");
+        requireTable(connection, "production_profiles");
+        requireTable(connection, "production_profile_lines");
+        requireTable(connection, "pos_menu_items");
+        requireTable(connection, "production_item_product_mappings");
+        requireTable(connection, "production_weeks");
+        requireTable(connection, "production_week_days");
+        requireTable(connection, "production_week_lines");
+        requireTable(connection, "schema_version");
         requireColumn(connection, "inventory_count_template_lines", "order_guide_case_size");
+        requireColumn(connection, "production_items", "yield_factor");
+        requireColumn(connection, "production_profile_lines", "yield_factor");
+        requireColumn(connection, "sales_periods", "food_net_sales");
+        requireColumn(connection, "sales_periods", "beer_net_sales");
+        requireColumn(connection, "sales_periods", "wine_net_sales");
+        requireColumn(connection, "sales_periods", "draught_net_sales");
+        requireColumn(connection, "sales_periods", "import_draught_net_sales");
+        requireColumn(connection, "sales_periods", "liquor_net_sales");
     }
 
     private void createBaseTables(Statement statement) throws SQLException {
