@@ -119,6 +119,8 @@ public class AlcoholManualInvoiceView {
         lineGrid.add(new Label("Bottle Deposit in Line:"), 0, 2);
         lineGrid.add(bottleDepositField, 1, 2);
 
+        hstIncludedCheckBox.setStyle("-fx-text-fill: yellow;");
+        bottleDepositIncludedCheckBox.setStyle("-fx-text-fill: yellow;");
         lineGrid.add(hstIncludedCheckBox, 2, 2);
         lineGrid.add(bottleDepositIncludedCheckBox, 3, 2);
 
@@ -234,8 +236,14 @@ public class AlcoholManualInvoiceView {
 
     private List<Product> loadAlcoholProducts() {
         List<Product> products = productDao.findAll();
-        products.removeIf(product -> !isAlcoholReportingCategory(product.getReportingCategory()));
+        products.removeIf(product -> !isAlcoholManualInvoiceCategory(product.getReportingCategory()));
         return products;
+    }
+
+    private boolean isAlcoholManualInvoiceCategory(String reportingCategory) {
+        String category = reportingCategory == null ? "" : reportingCategory.trim().toUpperCase();
+
+        return category.equals("FOOD") || isAlcoholReportingCategory(category);
     }
 
     private boolean isAlcoholReportingCategory(String reportingCategory) {

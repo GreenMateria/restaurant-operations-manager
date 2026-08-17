@@ -294,6 +294,7 @@ Important behavior:
 - Alcohol uses a dedicated manual invoice workflow.
 - Alcohol invoices may require deposits, HST, freight, or other non-inventory charges to be excluded from inventory merchandise cost.
 - Non-inventory alcohol charges are stored as invoice adjustments and should not flow into inventory valuation.
+- The alcohol manual invoice product picker includes alcohol reporting categories plus `FOOD` items, because some non-alcohol beverages are purchased from alcohol suppliers but allocated to food cost.
 - The alcohol manual invoice screen supports line-level `HST Included` and `Bottle Deposit Included` logic for stripping non-inventory amounts out of paper line totals.
 - The alcohol manual invoice screen also accepts exact paper-invoice HST and exact paper bottle deposit totals for accounting / remittance purposes.
 - Any remaining difference between calculated merchandise + exact paper adjustments and the paper invoice total is reconciled into merchandise categories, not into HST.

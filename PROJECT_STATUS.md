@@ -57,6 +57,8 @@ Completed:
 -   Runtime database backup and restore
 -   Invoice subtotal and adjustment support
 -   Alcohol-specific manual invoice entry
+-   Alcohol manual invoice entry now includes `FOOD` reporting-category products for non-alcohol beverages purchased from alcohol suppliers
+-   Alcohol manual invoice HST Included and Bottle Deposit Included checkbox labels are styled for visibility on the dark screen
 -   Alcohol manual invoice adjustments for non-inventory charges
 -   Exact paper HST and bottle deposit entry for alcohol invoices
 -   Alcohol invoice reconciliation that preserves paper HST and absorbs remaining difference into merchandise categories

@@ -2,6 +2,11 @@
 
 ## v3.0.2 (current codebase state)
 
+### Alcohol Manual Invoice
+
+- Updated the alcohol manual invoice product list to include `FOOD` reporting-category products for non-alcohol beverages purchased from alcohol suppliers.
+- Styled the HST Included and Bottle Deposit Included checkbox labels so they are visible on the dark invoice screen.
+
 ### Cloud Performance
 
 - Batched inventory count line quantity updates into one transaction for Save Quantities and Complete Count.

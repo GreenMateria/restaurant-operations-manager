@@ -147,3 +147,9 @@ Date: 2026-08-09 14:42
 Date: 2026-08-10 13:35
 
 - Fixed cloud syncing. Fixed sales importer
+- Updated alcohol manual invoice entry to include FOOD-category products for non-alcohol beverages bought from alcohol suppliers, and fixed HST/deposit checkbox label visibility.
+
+## v3.0.4
+Date: 2026-08-17 12:34
+
+- Fixed Alcohol Invoicing to Include food items
