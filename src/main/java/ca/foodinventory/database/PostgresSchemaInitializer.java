@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 14;
+    public static final int CURRENT_SCHEMA_VERSION = 15;
 
     public void initialize(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
@@ -221,6 +221,19 @@ public class PostgresSchemaInitializer {
                 """);
 
         statement.execute("""
+                CREATE TABLE IF NOT EXISTS alcohol_sales_mappings (
+                    id SERIAL PRIMARY KEY,
+                    pos_sku TEXT NOT NULL UNIQUE,
+                    pos_item_name TEXT,
+                    reporting_category TEXT NOT NULL,
+                    product_id INTEGER NOT NULL REFERENCES products(id),
+                    quantity_per_sale DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    unit TEXT NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 1
+                )
+                """);
+
+        statement.execute("""
                 CREATE TABLE IF NOT EXISTS schema_version (
                     version INTEGER NOT NULL
                 )
@@ -372,6 +385,14 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE INDEX IF NOT EXISTS idx_production_items_station_active
                 ON production_items(station_id, active)
+                """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_alcohol_sales_mappings_product
+                ON alcohol_sales_mappings(product_id)
+                """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_alcohol_sales_mappings_category_active
+                ON alcohol_sales_mappings(reporting_category, active)
                 """);
     }
 

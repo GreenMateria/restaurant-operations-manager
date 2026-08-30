@@ -37,6 +37,7 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         );
 
         setupTable();
+        installToolbar();
         loadItems();
 
         searchField.textProperty().addListener((obs, oldValue, newValue) -> applySearch());

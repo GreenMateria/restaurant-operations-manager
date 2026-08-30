@@ -1,7 +1,7 @@
 # CLOUD DATABASE PLAN
 
 _Created: Saturday, August 1, 2026_
-_Last Updated: Sunday, August 9, 2026_
+_Last Updated: Sunday, August 30, 2026_
 
 This document records the completed cloud database transition for ESM Operations Manager.
 
@@ -13,7 +13,7 @@ The target workflow is:
 
 ```text
 PC 1 app \
-PC 2 app  -> Aiven PostgreSQL database
+PC 2 app  -> AWS RDS PostgreSQL database
 PC 3 app /
 ```
 
@@ -21,14 +21,14 @@ Each PC connects outbound to the cloud database. The office PC does not need to 
 
 ## Current State
 
-As of the v3.0.1 release candidate, the cloud database setup is complete for the current work PCs:
+As of Sunday, August 30, 2026, the active cloud database target for configured work PCs is AWS RDS PostgreSQL:
 
 ```text
-Normal work PCs -> Aiven PostgreSQL defaultdb
+Normal work PCs -> AWS RDS PostgreSQL postgres database
 Fresh installs  -> local SQLite until cloud mode is configured
 ```
 
-All current work PCs have connected to the Aiven PostgreSQL cloud database without error. The cloud database is now treated as the accurate master data source for normal daily use.
+The previous Aiven PostgreSQL cloud database was dumped and restored into AWS RDS PostgreSQL. Development and installed-app connection tests succeeded, data loaded correctly, and AWS RDS performed faster in the tested workflows. The AWS RDS database is now treated as the accurate master data source for normal daily use.
 
 The mode can still be changed from the password-protected System module. The selected mode is stored in `%LOCALAPPDATA%\FoodInventory\database.properties` and takes effect after application restart. Fresh installs seed this config file from bundled defaults when it does not already exist.
 
@@ -50,7 +50,7 @@ Current normal operating process:
 
 ```text
 PC 1 app \
-PC 2 app  -> Aiven PostgreSQL defaultdb
+PC 2 app  -> AWS RDS PostgreSQL
 PC 3 app /
 ```
 
@@ -58,10 +58,15 @@ When the app is running in Cloud PostgreSQL mode, normal reads and saves go dire
 
 Cloud connectivity status:
 
+- AWS RDS PostgreSQL connection test succeeded on Sunday, August 30, 2026.
+- Aiven PostgreSQL `defaultdb` was dumped with `pg_dump` and restored into AWS RDS PostgreSQL with `pg_restore` on Sunday, August 30, 2026.
+- AWS RDS schema/table restoration was verified, including 24 public tables and key application table counts.
+- The development app and installed app loaded data successfully from AWS RDS PostgreSQL.
+- Normal app access now uses a lower-access AWS RDS `operations_app` database user.
 - Java connection test succeeded on Sunday, August 2, 2026.
 - Connected to Aiven PostgreSQL `defaultdb` using SSL.
 - Initial test used the Aiven admin user only for connection proof and schema/grant setup.
-- Normal app access now uses a lower-access Aiven application database user.
+- The Aiven app user remains historical/fallback only after the AWS RDS cutover.
 
 Cloud upload status:
 
@@ -115,18 +120,26 @@ C:\Users\mrman\AppData\Local\FoodInventory\food_inventory.db
 
 ## Planned Cloud Provider
 
-Initial test provider:
+Current provider:
+
+```text
+AWS RDS for PostgreSQL
+```
+
+Reasoning:
+
+- AWS RDS does not power off from inactivity in the tested provisioned configuration.
+- No inbound access to the office network is required.
+- PostgreSQL is a proper shared database server, unlike a shared SQLite file.
+- AWS RDS provides hosted connection details, SSL-capable PostgreSQL access, backups, and better tested responsiveness for this app than the previous Aiven free-tier service.
+
+Earlier provider:
 
 ```text
 Aiven for PostgreSQL
 ```
 
-Reasoning:
-
-- Free PostgreSQL tier is available.
-- No inbound access to the office network is required.
-- PostgreSQL is a proper shared database server, unlike a shared SQLite file.
-- Aiven provides hosted connection details, SSL support, and managed backups on the free PostgreSQL tier.
+Aiven was used for the initial cloud rollout and remains a temporary fallback copy, but it is no longer the intended active database because the free-tier service can power off after prolonged inactivity.
 
 ## Important Implementation Rule
 
@@ -140,14 +153,26 @@ Fresh installs  -> local SQLite default until configured
 Administrator   -> System-menu mode switch and upload/download tools
 ```
 
-Cloud PostgreSQL can be the normal operating mode on the current work PCs now that connection testing has succeeded. Do not use Upload This PC to Cloud during normal daily operation; it is an administrative replacement/migration tool that overwrites the cloud database with one PC's local SQLite data.
+Cloud PostgreSQL is the normal operating mode on the current work PCs. Do not use Upload This PC to Cloud during normal daily operation; it is an administrative replacement/migration tool that overwrites the cloud database with one PC's local SQLite data.
 
 ## Current Cloud Database
 
-Current Aiven database:
+Current AWS RDS database:
 
 ```text
-defaultdb
+postgres
+```
+
+Current AWS RDS endpoint:
+
+```text
+esm-operations-db.cdcok68as3cr.ca-central-1.rds.amazonaws.com
+```
+
+Current JDBC URL shape:
+
+```text
+jdbc:postgresql://esm-operations-db.cdcok68as3cr.ca-central-1.rds.amazonaws.com:5432/postgres?sslmode=require
 ```
 
 Preferred future production database name, if the app later separates test and production services:
@@ -156,17 +181,17 @@ Preferred future production database name, if the app later separates test and p
 food_inventory_prod
 ```
 
-Use a separate development database or Aiven service for destructive testing once live cloud data is treated as production data.
+Use a separate development database or RDS instance for destructive testing once live cloud data is treated as production data.
 
 ## Recommended App User
 
-Use a dedicated Aiven database user for the app:
+Use a dedicated AWS RDS database user for the app:
 
 ```text
 operations_app
 ```
 
-Do not use the main Aiven admin user inside the desktop application.
+Do not use the main AWS RDS admin user inside the desktop application.
 
 The app user should be used with:
 
@@ -209,7 +234,7 @@ The preferred "just in case" design is cloud-first with local backups, not full 
 Recommended workflow:
 
 ```text
-App writes live data -> Aiven PostgreSQL
+App writes live data -> AWS RDS PostgreSQL
 App periodically saves local safety backup/export
 ```
 
@@ -356,7 +381,7 @@ The visible user flow stays simple:
 - `Data migration complete.`
 - `Data migration failed. Please contact the administrator.`
 
-Upload replaces Aiven with this PC's local SQLite data. Download backs up the local SQLite database first, then replaces this PC's local SQLite data with Aiven data. The download completion message tells the user to restart the application.
+Upload replaces the configured cloud PostgreSQL database with this PC's local SQLite data. Download backs up the local SQLite database first, then replaces this PC's local SQLite data with configured cloud PostgreSQL data. The download completion message tells the user to restart the application.
 
 Mode switching writes the selected next-startup mode to:
 
@@ -400,15 +425,27 @@ UPLOAD_TO_POSTGRES
 - Release installer starts in SQLite mode by default.
 - Database details are hidden from normal workflows.
 - Cloud controls live behind the existing password-protected System module.
-- Current work PCs should run in Cloud PostgreSQL mode for daily shared-data use.
+- Current work PCs should run in AWS RDS Cloud PostgreSQL mode for daily shared-data use.
+
+### Phase 7: AWS RDS Cutover
+
+- Created AWS RDS PostgreSQL database in `ca-central-1`.
+- Confirmed direct Java/JDBC connection from the development environment.
+- Dumped Aiven PostgreSQL `defaultdb` with `pg_dump`.
+- Restored the dump into AWS RDS PostgreSQL database `postgres` with `pg_restore`.
+- Verified restored schema and key table row counts.
+- Launched the development app against AWS RDS and confirmed data loaded.
+- Updated installed-app `database.properties` to AWS RDS and confirmed screens loaded.
+- Created and verified lower-access AWS RDS `operations_app` user for normal app access.
+- Aiven remains temporary fallback only; do not write new production data to Aiven unless intentionally rolling back.
 
 ## Security Notes
 
-- Do not commit Aiven admin passwords.
-- Do not hardcode the Aiven admin password in the app.
+- Do not commit AWS RDS or Aiven admin passwords.
+- Do not hardcode database passwords in the app.
 - Use a dedicated app database user.
 - Require SSL.
-- The v3.0.1 rollout seeds local config from safe bundled defaults; cloud credentials must be supplied locally outside source control.
+- The app seeds local config from safe bundled defaults; cloud credentials must be supplied locally outside source control.
 - Consider a backend/API layer later if stronger credential protection is needed.
 
 ## Long-Term Architecture Option
@@ -417,6 +454,12 @@ The simplest first version is:
 
 ```text
 Desktop app -> Aiven PostgreSQL
+```
+
+The current operational version of that direct-database architecture is:
+
+```text
+Desktop app -> AWS RDS PostgreSQL
 ```
 
 A more secure long-term architecture is:

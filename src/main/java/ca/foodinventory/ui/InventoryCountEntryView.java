@@ -16,6 +16,7 @@ import javafx.scene.layout.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class InventoryCountEntryView {
 
@@ -86,6 +87,9 @@ public class InventoryCountEntryView {
         rowsBox.getChildren().add(createHeaderRow());
 
         List<InventoryCountLine> lines = lineDao.findByCount(count.getId());
+        Map<Integer, AlcoholProductProfile> profilesByProductId = isAlcoholLayout()
+                ? alcoholProfileDao.findAllActiveByProductId()
+                : Map.of();
         String currentSection = null;
 
         for (InventoryCountLine line : lines) {
@@ -97,7 +101,7 @@ public class InventoryCountEntryView {
             }
 
             AlcoholProductProfile profile = isAlcoholLayout()
-                    ? alcoholProfileDao.findByProductId(line.getProductId())
+                    ? profilesByProductId.get(line.getProductId())
                     : null;
             RowBinding binding = createDataRow(line, profile);
             rowBindings.add(binding);

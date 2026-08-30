@@ -23,6 +23,7 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
         );
 
         setupTable();
+        installToolbar();
         loadItems();
 
         searchField.textProperty().addListener((obs, oldValue, newValue) -> applySearch());

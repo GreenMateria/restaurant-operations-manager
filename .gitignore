@@ -26,5 +26,9 @@ Desktop.ini
 *.db-wal
 *.db-shm
 
+# Database dumps/backups
+*.dump
+*.backup
+
 # Runtime folder (created by packaged app)
 runtime/

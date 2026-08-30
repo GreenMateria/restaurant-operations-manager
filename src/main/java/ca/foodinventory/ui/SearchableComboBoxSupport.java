@@ -8,7 +8,12 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListCell;
 import javafx.util.StringConverter;
 
+import java.util.Locale;
+import java.util.function.Predicate;
+
 public final class SearchableComboBoxSupport {
+
+    private static final int MAX_DISPLAYED_MATCHES = 75;
 
     private SearchableComboBoxSupport() {
     }
@@ -18,11 +23,13 @@ public final class SearchableComboBoxSupport {
             ObservableList<T> items,
             StringConverter<T> displayConverter
     ) {
-        FilteredList<T> filteredItems = new FilteredList<>(items, item -> true);
+        ObservableList<T> displayedItems = FXCollections.observableArrayList();
         boolean[] selectingValue = {false};
 
-        comboBox.setItems(filteredItems);
+        refreshDisplayedItems(displayedItems, items, item -> true, comboBox.getValue());
+        comboBox.setItems(displayedItems);
         comboBox.setEditable(true);
+        comboBox.setVisibleRowCount(12);
         comboBox.setConverter(new StringConverter<>() {
             @Override
             public String toString(T item) {
@@ -50,7 +57,7 @@ public final class SearchableComboBoxSupport {
 
         comboBox.valueProperty().addListener((obs, oldValue, newValue) -> {
             selectingValue[0] = true;
-            filteredItems.setPredicate(item -> true);
+            refreshDisplayedItems(displayedItems, items, item -> true, newValue);
             Platform.runLater(() -> selectingValue[0] = false);
         });
 
@@ -59,24 +66,28 @@ public final class SearchableComboBoxSupport {
                 return;
             }
 
-            String search = newText == null ? "" : newText.trim().toLowerCase();
+            String search = newText == null
+                    ? ""
+                    : newText.trim().toLowerCase(Locale.ROOT);
 
-            filteredItems.setPredicate(item -> {
+            refreshDisplayedItems(displayedItems, items, item -> {
                 if (search.isBlank()) {
                     return true;
                 }
 
                 return displayConverter.toString(item)
-                        .toLowerCase()
+                        .toLowerCase(Locale.ROOT)
                         .contains(search);
-            });
+            }, comboBox.getValue());
 
-            if (!comboBox.isShowing()) {
+            if (comboBox.isFocused() && !comboBox.isShowing() && !displayedItems.isEmpty()) {
                 comboBox.show();
             }
         });
 
-        comboBox.setOnHidden(event -> filteredItems.setPredicate(item -> true));
+        comboBox.setOnHidden(event ->
+                refreshDisplayedItems(displayedItems, items, item -> true, comboBox.getValue())
+        );
     }
 
     public static <T> void makeSearchable(
@@ -95,5 +106,30 @@ public final class SearchableComboBoxSupport {
                 setText(empty || item == null ? null : displayConverter.toString(item));
             }
         };
+    }
+
+    private static <T> void refreshDisplayedItems(
+            ObservableList<T> displayedItems,
+            ObservableList<T> sourceItems,
+            Predicate<T> predicate,
+            T selectedItem
+    ) {
+        displayedItems.clear();
+
+        if (selectedItem != null) {
+            displayedItems.add(selectedItem);
+        }
+
+        for (T item : sourceItems) {
+            if (displayedItems.size() >= MAX_DISPLAYED_MATCHES) {
+                break;
+            }
+
+            if (item == selectedItem || !predicate.test(item)) {
+                continue;
+            }
+
+            displayedItems.add(item);
+        }
     }
 }

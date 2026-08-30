@@ -23,6 +23,7 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
         );
 
         setupTable();
+        installToolbar();
         loadStations();
 
         searchField.textProperty().addListener((obs, oldValue, newValue) -> applySearch());

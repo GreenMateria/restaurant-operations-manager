@@ -20,6 +20,7 @@ import javafx.scene.text.FontWeight;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class InventoryCountTemplateEditorView {
 
@@ -599,6 +600,9 @@ public class InventoryCountTemplateEditorView {
         addTemplatePrintCell(tableHeader, "Weight", 4, true, Pos.CENTER);
 
         VBox body = new VBox(0);
+        Map<Integer, AlcoholProductProfile> profilesByProductId = isAlcoholTemplateName()
+                ? alcoholProfileDao.findAllActiveByProductId()
+                : Map.of();
 
         for (TemplatePrintRow printRow : rows) {
             if (printRow.sectionHeader()) {
@@ -619,8 +623,7 @@ public class InventoryCountTemplateEditorView {
             }
 
             InventoryCountTemplateLine line = printRow.line();
-            AlcoholProductProfile profile =
-                    alcoholProfileDao.findByProductId(line.getProductId());
+            AlcoholProductProfile profile = profilesByProductId.get(line.getProductId());
             boolean weighted =
                     profile != null && "WEIGHT".equalsIgnoreCase(profile.getCountMethod());
 
@@ -674,6 +677,11 @@ public class InventoryCountTemplateEditorView {
         column.setMinWidth(width);
         column.setMaxWidth(width);
         return column;
+    }
+
+    private boolean isAlcoholTemplateName() {
+        String templateName = template.getName() == null ? "" : template.getName().toUpperCase();
+        return templateName.contains("ALCOHOL");
     }
 
     private void addTemplatePrintCell(

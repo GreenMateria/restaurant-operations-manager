@@ -25,6 +25,7 @@ public class ProductionProfilesView extends ProductionModuleView<ProductionProfi
         );
 
         setupTable();
+        installToolbar();
         loadProfiles();
 
         searchField.textProperty().addListener((obs, oldValue, newValue) -> applySearch());

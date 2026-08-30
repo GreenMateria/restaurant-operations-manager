@@ -36,6 +36,7 @@ public class DatabaseSyncService {
             "sales_category_mappings",
             "settings",
             "alcohol_product_profiles",
+            "alcohol_sales_mappings",
             "production_stations",
             "production_items",
             "production_profiles",

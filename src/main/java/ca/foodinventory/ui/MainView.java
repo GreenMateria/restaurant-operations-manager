@@ -18,6 +18,8 @@ import ca.foodinventory.dao.SettingsDao;
 import javafx.scene.control.*;
 
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
@@ -41,6 +43,7 @@ public class MainView {
 
     private HBox buildStatusBar() {
         HBox statusBar = new HBox(10);
+        statusBar.getStyleClass().add("status-bar");
         statusBar.setAlignment(Pos.CENTER_LEFT);
         statusBar.setPadding(new Insets(6, 12, 6, 12));
 
@@ -117,13 +120,13 @@ public class MainView {
         dashboard.setAlignment(Pos.CENTER);
 
         Button foodButton =
-                createDashboardButton("Food Inventory", this::showFoodMenu);
+                createDashboardButton("Food Department", this::showFoodMenu);
 
         Button alcoholButton =
-                createDashboardButton("Alcohol Inventory", this::showAlcoholMenu);
+                createDashboardButton("Alcohol Department", this::showAlcoholMenu);
 
         Button suppliesButton =
-                createDashboardButton("Supplies Inventory", this::showSuppliesMenu);
+                createDashboardButton("Supplies Department", this::showSuppliesMenu);
 
         createDashboardButton(
                 "Production Stations",
@@ -154,7 +157,7 @@ public class MainView {
     private void showFoodMenu() {
 
         showSectionMenu(
-                "Food Inventory",
+                "Food Department",
 
                 createDashboardButton(
                         "Products",
@@ -191,7 +194,7 @@ public class MainView {
     private void showAlcoholMenu() {
 
         showSectionMenu(
-                "Alcohol Inventory",
+                "Alcohol Department",
 
                 createDashboardButton(
                         "Manual Invoice",
@@ -216,6 +219,16 @@ public class MainView {
                 createDashboardButton(
                         "Order Guide",
                         () -> showView(new OrderGuideView("ALCOHOL").getView())
+                ),
+
+                createDashboardButton(
+                        "Sales Mappings",
+                        () -> showView(new AlcoholSalesMappingsView())
+                ),
+
+                createDashboardButton(
+                        "Variance Report",
+                        () -> showView(new AlcoholVarianceReportView().getView())
                 )
         );
     }
@@ -223,7 +236,7 @@ public class MainView {
     private void showSuppliesMenu() {
 
         showSectionMenu(
-                "Supplies Inventory",
+                "Supplies Department",
 
                 createDashboardButton(
                         "Manual Invoice",
@@ -290,11 +303,6 @@ public class MainView {
                 createDashboardButton(
                         "Freezer Pull",
                         () -> showView(new FreezerPullView())
-                ),
-
-                createDashboardButton(
-                        "Variance Reports",
-                        () -> showComingSoon("Variance Reports")
                 )
         );
     }
@@ -310,7 +318,7 @@ public class MainView {
                 ),
 
                 createDashboardButton(
-                        "Inventory",
+                        "Inventory Valuation",
                         () -> showView(new InventoryValuationView().getView())
                 ),
 
@@ -361,7 +369,7 @@ public class MainView {
 
         button.getStyleClass().add("menu-button");
 
-        button.setOnAction(e -> action.run());
+        button.setOnAction(e -> runUiAction(text, action));
 
         return button;
     }
@@ -375,16 +383,71 @@ public class MainView {
         button.setPrefWidth(300);
         button.setPrefHeight(150);
 
-        button.setOnAction(e -> action.run());
+        button.setOnAction(e -> runUiAction(text, action));
 
         return button;
     }
 
+    private void runUiAction(String actionName, Runnable action) {
+        try {
+            action.run();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle(actionName);
+            alert.setHeaderText("Unable to open " + actionName);
+            alert.setContentText(getRootCauseMessage(ex));
+
+            TextArea details = new TextArea(getStackTrace(ex));
+            details.setEditable(false);
+            details.setWrapText(false);
+            details.setMaxWidth(Double.MAX_VALUE);
+            details.setMaxHeight(Double.MAX_VALUE);
+            GridPane.setVgrow(details, Priority.ALWAYS);
+            GridPane.setHgrow(details, Priority.ALWAYS);
+
+            GridPane expandableContent = new GridPane();
+            expandableContent.setMaxWidth(Double.MAX_VALUE);
+            expandableContent.add(new Label("Details:"), 0, 0);
+            expandableContent.add(details, 0, 1);
+
+            alert.getDialogPane().setExpandableContent(expandableContent);
+            alert.getDialogPane().setExpanded(true);
+            alert.getDialogPane().setPrefWidth(760);
+            alert.showAndWait();
+        }
+    }
+
+    private String getRootCauseMessage(Throwable throwable) {
+        Throwable rootCause = throwable;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+
+        String message = rootCause.getMessage();
+        if (message == null || message.isBlank()) {
+            return rootCause.getClass().getSimpleName();
+        }
+
+        return rootCause.getClass().getSimpleName() + ": " + message;
+    }
+
+    private String getStackTrace(Throwable throwable) {
+        StringWriter writer = new StringWriter();
+        throwable.printStackTrace(new PrintWriter(writer));
+        return writer.toString();
+    }
+
     private void showComingSoon(String featureName) {
+        showComingSoon(featureName, "Operations Manager");
+    }
+
+    private void showComingSoon(String featureName, String areaName) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(featureName);
         alert.setHeaderText(featureName);
-        alert.setContentText(featureName + " will be added in a future Production module update.");
+        alert.setContentText(featureName + " will be added in a future " + areaName + " update.");
         alert.showAndWait();
     }
 

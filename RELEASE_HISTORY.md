@@ -1,6 +1,58 @@
 # Release History
 
-## v3.0.2 (current codebase state)
+## v3.0.5 (development working tree, not stable)
+
+This section documents local development work saved in the repository working tree. It has not been packaged, tagged, published, or promoted to stable release yet.
+
+### Navigation / UI
+
+- Renamed the main department navigation to Food Department, Alcohol Department, and Supplies Department.
+- Added alcohol-specific Sales Mappings and Variance Report entry points under Alcohol Department.
+- Removed the generic Variance Reports placeholder from the Production menu.
+- Added shared UI styling for section titles, status bar, danger buttons, and primary-button hover states.
+
+### Alcohol Variance
+
+- Added schema migration 15 for `alcohol_sales_mappings`.
+- Added Alcohol Sales Mappings screen for POS SKU/PLU to alcohol inventory product setup.
+- Included alcohol sales mappings in PostgreSQL schema initialization and cloud upload/download table sync.
+- Reused the existing Production POS Menu Items catalog in Alcohol Sales Mapping add/edit dialogs through a searchable POS item picker.
+- Kept manual POS SKU/name entry available as a fallback, while the normal mapping workflow now fills those fields from the selected POS item.
+- Added a placeholder Alcohol Variance Report entry point under Alcohol Department for the next calculation step.
+
+### Cloud / UI Reliability
+
+- Migrated the active cloud database target from Aiven PostgreSQL to AWS RDS PostgreSQL after a successful dump/restore and application load test.
+- Added and verified restricted AWS RDS `operations_app` access for normal installed-app use.
+- Avoided repeated PostgreSQL create/index attempts when `alcohol_sales_mappings` already exists, allowing lower-access cloud app users to open Sales Mappings after schema setup.
+- Improved menu-open error dialogs with root-cause text, console stack traces, and expandable details.
+- Adjusted shared searchable ComboBox behavior to cap live popup matches for large POS/product lists and reduce JavaFX VirtualFlow warnings.
+- Fixed the shared production-module view toolbar initialization order used by Production and Alcohol Sales Mapping screens.
+
+### Alcohol Products
+
+- Fixed saved keg-size display so reopening an alcohol product shows the saved container type instead of defaulting visually to Full Keg.
+
+### Cloud Performance
+
+- Reduced PostgreSQL connection-pool validation round trips for recently validated idle connections.
+- Batch-loaded alcohol profile data in alcohol inventory count entry and count-sheet printing paths.
+
+## v3.0.4
+
+### Alcohol Manual Invoice
+
+- Fixed alcohol manual invoice entry to include `FOOD` reporting-category products for non-alcohol beverages purchased from alcohol suppliers.
+- Confirmed the alcohol manual invoice FOOD-item fix is implemented and working as intended.
+
+## v3.0.3
+
+### Alcohol Manual Invoice
+
+- Updated alcohol manual invoice entry to include FOOD-category products for non-alcohol beverages bought from alcohol suppliers.
+- Fixed HST Included and Bottle Deposit Included checkbox label visibility.
+
+## v3.0.2
 
 ### Alcohol Manual Invoice
 

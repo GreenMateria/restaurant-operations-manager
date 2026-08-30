@@ -11,7 +11,7 @@ Read this before making broad code changes.
 # General Development Rules
 
 - Preserve the current JavaFX + SQLite + PostgreSQL + Maven architecture.
-- Treat Aiven PostgreSQL as the normal shared database for configured work PCs.
+- Treat AWS RDS PostgreSQL as the normal shared database for configured work PCs.
 - Keep SQLite as the fresh-install default and local fallback path.
 - Prefer targeted changes over large rewrites.
 - Do not rename packages, models, DAOs, or major screens unless explicitly requested.

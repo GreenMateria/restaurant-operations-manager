@@ -25,9 +25,9 @@ You should see the main dashboard with buttons for the main areas of the program
 
 The most common manager workflows are:
 
-- **Food Inventory** - food count sheets, food counts, food valuation, and food order guide.
-- **Alcohol Inventory** - alcohol count sheets, alcohol counts, alcohol invoices, and alcohol order guide.
-- **Supplies Inventory** - supplies count sheets, supplies counts, supplies valuation, and supplies order guide.
+- **Food Department** - food count sheets, food counts, food valuation, and food order guide.
+- **Alcohol Department** - alcohol count sheets, alcohol counts, alcohol invoices, alcohol order guide, and alcohol variance workflows.
+- **Supplies Department** - supplies count sheets, supplies counts, supplies valuation, and supplies order guide.
 - **Purchasing** - supplier invoices and purchase history.
 - **Reports** - weekly cost reports and inventory valuation.
 - **Production** - weekly production and prep sheets.
@@ -62,7 +62,7 @@ Check products
 
 Use this when a food item is missing, named wrong, or has the wrong category.
 
-1. From the dashboard, click **Food Inventory**.
+1. From the dashboard, click **Food Department**.
 2. Open the food product list or product management screen.
 3. Click in the search box.
 4. Search by SKU or product description.
@@ -96,7 +96,7 @@ Before moving on, search for the product again and confirm it now appears correc
 
 Use this when a product exists but does not appear on the printed food count sheet.
 
-1. From **Food Inventory**, open the count template screen.
+1. From **Food Department**, open the count template screen.
 2. Select the food count template.
 3. Look through the sections to find where the item belongs.
 4. Click **Add Product** or the equivalent add button.
@@ -118,7 +118,7 @@ Important: if you already started a count before adding this item, the item will
 
 Use this before physically counting inventory.
 
-1. From **Food Inventory**, open the food count area.
+1. From **Food Department**, open the food count area.
 2. Select the food count template.
 3. Choose **Print Count Sheet** or **Preview Count Sheet**.
 4. Look through the preview.
@@ -134,7 +134,7 @@ You should have a paper count sheet grouped by section.
 
 Use this after the physical count sheet has been printed or when you are ready to enter the count.
 
-1. From **Food Inventory**, open the count entry screen.
+1. From **Food Department**, open the count entry screen.
 2. Choose **New Count** or **Start Count**.
 3. Select the food count template.
 4. Enter the count date.
@@ -199,7 +199,7 @@ If a value looks wrong, check the product cost history and recent invoices.
 
 Use this after the opening and closing counts are complete.
 
-1. Open **Food Inventory**.
+1. Open **Food Department**.
 2. Choose **Order Guide**.
 3. Select the opening count.
 4. Select the closing count.
@@ -267,7 +267,7 @@ For weighted items, the program uses the product profile to calculate the decima
 
 Use this before counting if a bottle, keg, or alcohol item does not calculate correctly.
 
-1. From the dashboard, click **Alcohol Inventory**.
+1. From the dashboard, click **Alcohol Department**.
 2. Open the alcohol products or alcohol profile screen.
 3. Search for the product.
 4. Select the product.
@@ -284,7 +284,7 @@ Managers should not type tare weight during every count. It should already be sa
 
 ## ALCOHOL 3 - Print The Alcohol Count Sheet
 
-1. From **Alcohol Inventory**, open the alcohol count area.
+1. From **Alcohol Department**, open the alcohol count area.
 2. Select the alcohol count template.
 3. Choose **Preview Count Sheet** or **Print Count Sheet**.
 4. Review the sections:
@@ -301,7 +301,7 @@ Managers should not type tare weight during every count. It should already be sa
 
 ## ALCOHOL 4 - Start A New Alcohol Count
 
-1. From **Alcohol Inventory**, open count entry.
+1. From **Alcohol Department**, open count entry.
 2. Choose **New Count** or **Start Count**.
 3. Select the alcohol template.
 4. Enter the count date.
@@ -374,7 +374,7 @@ Important: HST should match the paper invoice. Do not change HST just to make th
 
 ## ALCOHOL 8 - Generate The Alcohol Order Guide
 
-1. Open **Alcohol Inventory**.
+1. Open **Alcohol Department**.
 2. Choose **Order Guide**.
 3. Select the opening alcohol count.
 4. Select the closing alcohol count.
@@ -386,6 +386,26 @@ Important: HST should match the paper invoice. Do not change HST just to make th
 10. Print the order guide.
 
 ![Alcohol order guide](docs/images/alcohol-order-guide.png)
+
+## ALCOHOL 9 - Map POS Alcohol Items
+
+Use Sales Mappings to connect sold POS alcohol items to the inventory product they consume. This is the setup step for alcohol variance reporting.
+
+1. Open **Alcohol Department**.
+2. Choose **Sales Mappings**.
+3. Click **Add**.
+4. Search the **POS Menu Item** dropdown and select the POS item.
+5. Confirm the POS SKU / PLU and item name were filled in.
+6. Select the alcohol inventory product.
+7. Enter the quantity used per sale.
+8. Choose the usage unit.
+9. Save the mapping.
+
+The POS Menu Item dropdown uses the same POS item catalog maintained in the Production area. If a POS item is missing from the dropdown, import or add it in **Production -> POS Menu Items** first.
+
+## ALCOHOL 10 - Alcohol Variance Report
+
+The Alcohol Department includes the Variance Report entry point for the next reporting step. The current development build has the setup shell in place; final variance calculation/output is still pending before stable release.
 
 ---
 
@@ -407,7 +427,7 @@ Check supplies products
 
 ## SUPPLIES 1 - Check Or Add Supplies Products
 
-1. From the dashboard, click **Supplies Inventory**.
+1. From the dashboard, click **Supplies Department**.
 2. Open the supplies product list.
 3. Search by SKU or description.
 4. Select the product if it exists.
@@ -431,7 +451,7 @@ If the product is missing:
 
 ## SUPPLIES 2 - Add A Supplies Product To The Count Sheet
 
-1. From **Supplies Inventory**, open the count template screen.
+1. From **Supplies Department**, open the count template screen.
 2. Select the supplies template.
 3. Click **Add Product**.
 4. Search for the supply item.
@@ -445,7 +465,7 @@ If the product is missing:
 
 ## SUPPLIES 3 - Print The Supplies Count Sheet
 
-1. Open **Supplies Inventory**.
+1. Open **Supplies Department**.
 2. Open the supplies count area.
 3. Select the supplies template.
 4. Choose **Preview Count Sheet** or **Print Count Sheet**.
@@ -473,7 +493,7 @@ If the product is missing:
 
 ## SUPPLIES 5 - Generate The Supplies Order Guide
 
-1. Open **Supplies Inventory**.
+1. Open **Supplies Department**.
 2. Choose **Order Guide**.
 3. Select the opening supplies count.
 4. Select the closing supplies count.
@@ -744,7 +764,7 @@ Do not combine Freezer Pull with normal weekly production prep sheets.
 
 Most managers will not use this often, but they should understand the basics.
 
-For normal daily use on the configured work PCs, the program should run in **Cloud Mode**. In Cloud Mode, normal saves go directly to the shared Aiven PostgreSQL database, so separate PCs use the same current data.
+For normal daily use on the configured work PCs, the program should run in **Cloud Mode**. In Cloud Mode, normal saves go directly to the shared AWS RDS PostgreSQL database, so separate PCs use the same current data.
 
 ## Local Backup
 

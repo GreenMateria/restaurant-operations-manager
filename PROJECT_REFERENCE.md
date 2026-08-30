@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Monday, August 10, 2026_
+_Last Updated: Saturday, August 22, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -39,7 +39,7 @@ Printed count sheets, prep sheets, and order guides are core parts of the workfl
 - JavaFX 25
 - Maven
 - SQLite
-- PostgreSQL on Aiven for optional cloud database mode
+- PostgreSQL on AWS RDS for optional cloud database mode
 - Apache POI for Excel imports
 - Git and GitHub
 - GitHub Releases
@@ -85,10 +85,11 @@ Important:
 - SQLite is the default startup mode.
 - Cloud PostgreSQL mode is selected through `%LOCALAPPDATA%\FoodInventory\database.properties` and can be changed from the password-protected System module.
 - Fresh installs seed `database.properties` from safe bundled defaults when the local config file does not exist; cloud credentials must be supplied locally outside source control.
-- For the current work PCs, Aiven PostgreSQL is the normal operating mode and the cloud database is the accurate master data source.
+- For the current work PCs, AWS RDS PostgreSQL is the normal operating mode and the cloud database is the accurate master data source.
 - Upload/download cloud sync controls are administrator migration/recovery tools, not routine daily sync actions.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
+- Current v3.0.5 development changes are saved locally but are not packaged, tagged, published, or promoted to stable release yet.
 
 ---
 
@@ -103,7 +104,7 @@ Service / Business Logic
    ↓
 DAO
    ↓
-SQLite Database or Aiven PostgreSQL
+SQLite Database or AWS RDS PostgreSQL
 ```
 
 Main packages:
@@ -173,9 +174,9 @@ The startup update check does not block the main UI.
 
 The dashboard is organized around these operational areas:
 
-- Food Inventory
-- Alcohol Inventory
-- Supplies Inventory
+- Food Department
+- Alcohol Department
+- Supplies Department
 - Purchasing
 - Reports
 - Sales
@@ -593,17 +594,23 @@ The alcohol workflow foundation exists, including:
 - Alcohol product profiles
 - Alcohol count templates and count entry support
 - Alcohol-specific manual invoice entry
+- Alcohol manual invoice entry includes `FOOD` reporting-category products for non-alcohol beverages purchased from alcohol suppliers; this v3.0.4 fix is implemented and working as intended
 - Alcohol manual invoice adjustments for non-inventory charges
 - Exact paper HST and bottle deposit entry for accounting accuracy
 - Automatic reconciliation of remaining invoice differences into merchandise categories
 - Alcohol inclusion in valuation and weekly cost reporting
+- Alcohol Department navigation now includes alcohol-specific Sales Mappings and Variance Report entry points so bar variance work does not overload the Production menu
+- Alcohol Sales Mappings stores POS SKU/PLU to alcohol inventory product mappings with quantity used per sale and usage unit
+- Alcohol Sales Mapping add/edit reuses active records from the existing Production POS Menu Items catalog, filling POS SKU/PLU and POS Item Name automatically while leaving manual fields editable as a fallback
+- Alcohol Variance Report currently has the department entry point and setup shell; variance calculation/output is the next build step
 
-Remaining priorities focus on validation and workflow polish:
+Remaining priorities focus on future alcohol reporting, order guide, and printing polish when a specific live-data issue or workflow request appears:
 
-1. Continue validating alcohol valuation against live purchasing data.
-2. Continue refining alcohol cost reporting behaviour.
-3. Continue alcohol order guide workflow review.
-4. Finalize alcohol-specific printing and user workflow polish where needed.
+1. Populate alcohol-only sales-to-inventory mappings from the POS Menu Items picker for variance reporting.
+2. Build alcohol variance calculation/output before starting any food variance workflow.
+3. Refine alcohol cost reporting behaviour only when live validation identifies a concrete issue.
+4. Continue alcohol order guide workflow review as needed.
+5. Finalize alcohol-specific printing and user workflow polish where needed.
 
 ---
 
@@ -688,6 +695,8 @@ Then the selected par multiplier is applied. Existing production items use a yie
 POS menu items map POS SKUs or PLUs to production profiles.
 
 Multiple POS SKUs may map into the same production requirement.
+
+Alcohol Sales Mappings also reuse this POS Menu Items catalog as the selectable POS item source. This avoids maintaining a second POS item list while keeping alcohol inventory variance mappings separate from production profiles.
 
 ## Product Mappings
 
@@ -955,12 +964,12 @@ The application currently has a stable foundation for:
 - Persistent Order Guide case-size overrides
 - Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
 
-All implemented features through version 3.0.2 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 3.0.5 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 
-- Alcohol workflow validation and polish against live data
-- Production-to-inventory variance
+- Alcohol sales mappings and alcohol-only variance reporting
+- Food production-to-inventory variance later, after alcohol variance is working
 - Recipe costing
 - Yield tracking
 - Advanced reporting
@@ -972,19 +981,21 @@ Primary unfinished areas:
 
 ## Immediate
 
-1. Package and publish the next installer with the v3.0.2 cloud performance and POS sales import fixes.
-2. Validate the v3.0.2 installer upgrade on the work PCs.
-3. Continue monitoring daily Cloud PostgreSQL use on the configured work PCs.
-4. Add a manual Check for Updates action.
-5. Continue production variance groundwork.
+1. Keep the current v3.0.5 development tree out of stable release until alcohol Sales Mappings setup is validated.
+2. Populate alcohol sales mappings from the POS Menu Items picker.
+3. Build alcohol variance calculation/output inside the Alcohol Department.
+4. Package and publish the next installer only after the current development tree is approved for stable.
+5. Validate the v3.0.5 installer upgrade on the work PCs.
+6. Continue monitoring daily Cloud PostgreSQL use on the configured work PCs.
+7. Add a manual Check for Updates action.
 
 ## Medium Term
 
-1. Finish production item to inventory product mappings.
-2. Build theoretical usage calculations.
-3. Build production variance reporting.
-4. Add recipe and yield management.
-5. Improve advanced report filtering.
+1. Finish alcohol sales-to-inventory mappings.
+2. Build alcohol theoretical usage calculations.
+3. Build alcohol variance reporting.
+4. Resume food production item to inventory product mappings after alcohol variance is working.
+5. Add recipe and yield management.
 
 ## Long Term
 

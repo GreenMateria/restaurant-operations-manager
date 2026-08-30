@@ -65,6 +65,8 @@ public class OrderGuideView {
 
         Button generateButton = new Button("Generate");
         Button printButton = new Button("Print");
+        generateButton.getStyleClass().add("primary-button");
+        printButton.getStyleClass().add("primary-button");
 
         generateButton.setOnAction(e -> generateGuide());
         printButton.setOnAction(e -> printGuide());

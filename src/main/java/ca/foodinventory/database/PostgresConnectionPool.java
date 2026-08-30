@@ -13,11 +13,12 @@ class PostgresConnectionPool {
 
     private static final int MAX_IDLE_CONNECTIONS = 4;
     private static final int VALIDATION_TIMEOUT_SECONDS = 2;
+    private static final long VALIDATION_INTERVAL_MILLIS = 30_000;
 
     private final String url;
     private final String user;
     private final String password;
-    private final Deque<Connection> idleConnections = new ArrayDeque<>();
+    private final Deque<IdleConnection> idleConnections = new ArrayDeque<>();
 
     PostgresConnectionPool(String url, String user, String password) {
         this.url = Objects.requireNonNull(url);
@@ -26,19 +27,31 @@ class PostgresConnectionPool {
     }
 
     synchronized Connection borrowConnection() throws SQLException {
+        long now = System.currentTimeMillis();
+
         while (!idleConnections.isEmpty()) {
-            Connection connection = idleConnections.removeFirst();
-            if (isUsable(connection)) {
+            IdleConnection idleConnection = idleConnections.removeFirst();
+            Connection connection = idleConnection.connection();
+
+            if (isRecentlyValidated(connection, idleConnection.lastValidatedAtMillis(), now)) {
                 return pooledConnection(connection);
+            }
+
+            if (isUsable(connection)) {
+                return pooledConnection(connection, now);
             }
             closePhysicalConnection(connection);
         }
 
-        return pooledConnection(DriverManager.getConnection(url, user, password));
+        return pooledConnection(DriverManager.getConnection(url, user, password), now);
     }
 
     private Connection pooledConnection(Connection connection) {
-        InvocationHandler handler = new PooledConnectionHandler(connection);
+        return pooledConnection(connection, System.currentTimeMillis());
+    }
+
+    private Connection pooledConnection(Connection connection, long lastValidatedAtMillis) {
+        InvocationHandler handler = new PooledConnectionHandler(connection, lastValidatedAtMillis);
         return (Connection) Proxy.newProxyInstance(
                 Connection.class.getClassLoader(),
                 new Class<?>[]{Connection.class},
@@ -46,8 +59,8 @@ class PostgresConnectionPool {
         );
     }
 
-    private synchronized void releaseConnection(Connection connection) throws SQLException {
-        if (!isUsable(connection)) {
+    private synchronized void releaseConnection(Connection connection, long lastValidatedAtMillis) throws SQLException {
+        if (connection == null || connection.isClosed()) {
             closePhysicalConnection(connection);
             return;
         }
@@ -62,7 +75,21 @@ class PostgresConnectionPool {
         if (idleConnections.size() >= MAX_IDLE_CONNECTIONS) {
             closePhysicalConnection(connection);
         } else {
-            idleConnections.addLast(connection);
+            idleConnections.addLast(new IdleConnection(connection, lastValidatedAtMillis));
+        }
+    }
+
+    private boolean isRecentlyValidated(
+            Connection connection,
+            long lastValidatedAtMillis,
+            long now
+    ) {
+        try {
+            return connection != null
+                    && !connection.isClosed()
+                    && now - lastValidatedAtMillis < VALIDATION_INTERVAL_MILLIS;
+        } catch (SQLException e) {
+            return false;
         }
     }
 
@@ -85,13 +112,18 @@ class PostgresConnectionPool {
         }
     }
 
+    private record IdleConnection(Connection connection, long lastValidatedAtMillis) {
+    }
+
     private class PooledConnectionHandler implements InvocationHandler {
 
         private final Connection physicalConnection;
+        private final long lastValidatedAtMillis;
         private boolean closed;
 
-        private PooledConnectionHandler(Connection physicalConnection) {
+        private PooledConnectionHandler(Connection physicalConnection, long lastValidatedAtMillis) {
             this.physicalConnection = physicalConnection;
+            this.lastValidatedAtMillis = lastValidatedAtMillis;
         }
 
         @Override
@@ -101,7 +133,7 @@ class PostgresConnectionPool {
             if ("close".equals(methodName)) {
                 if (!closed) {
                     closed = true;
-                    releaseConnection(physicalConnection);
+                    releaseConnection(physicalConnection, lastValidatedAtMillis);
                 }
                 return null;
             }

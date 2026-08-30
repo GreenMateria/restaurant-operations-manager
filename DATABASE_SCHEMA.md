@@ -1,6 +1,6 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: Sunday, August 9, 2026_
+_Last Updated: Saturday, August 22, 2026_
 
 This file documents the current database structure for the Food Inventory / ESM Operations Manager application.
 
@@ -11,7 +11,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 # General Rules
 
 - Default fresh-install database engine: SQLite.
-- Normal shared database engine for configured work PCs: PostgreSQL on Aiven.
+- Normal shared database engine for configured work PCs: PostgreSQL on AWS RDS.
 - SQLite remains available for fresh installs, fallback, and local testing.
 - PostgreSQL mode is selected through the password-protected System module or local runtime configuration and takes effect after restart.
 - Runtime database path is controlled by `DatabaseManager`.
@@ -28,7 +28,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **14**.
+- Current migration version: **15**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -51,16 +51,19 @@ Current known migration files:
 - `Migration12`
 - `Migration13`
 - `Migration14`
+- `Migration15`
 
 PostgreSQL support:
 
 - `PostgresSchemaInitializer`
   - Creates or repairs a PostgreSQL-compatible version of the current schema when the connected user has schema privileges.
   - Validates required schema for lower-access application users.
+  - Lower-access application users may use existing tables after a schema-capable user applies new PostgreSQL schema changes.
 - `SQLiteToPostgresUploadTool`
   - Copies data from the runtime SQLite database into PostgreSQL through `DatabaseSyncService`.
   - Requires explicit upload confirmation before replacing PostgreSQL table data.
   - Initial upload to Aiven `defaultdb` copied 6,576 rows on Sunday, August 2, 2026.
+  - Production cloud data was later copied from Aiven PostgreSQL to AWS RDS PostgreSQL on Sunday, August 30, 2026.
 - `DatabaseSyncService`
   - Uploads local SQLite data to cloud PostgreSQL.
   - Downloads cloud PostgreSQL data to local SQLite, backing up the local database first.
@@ -93,6 +96,8 @@ Migration responsibilities:
     `food_net_sales`, `beer_net_sales`, `wine_net_sales`, `draught_net_sales`,
     `import_draught_net_sales`, and `liquor_net_sales`.
   - Existing net-sales values are seeded from the matching gross sales fields when missing.
+- `Migration15`
+  - Added `alcohol_sales_mappings` for alcohol-only POS item to inventory product variance mappings.
 
 ---
 
@@ -309,6 +314,33 @@ Notes:
 
 - Imported from POS sales `.xlsx`.
 - Weekly/category cost reporting uses these values.
+
+---
+
+# Alcohol Variance Tables
+
+## alcohol_sales_mappings
+
+Maps POS alcohol items from the item-level POS usage report to alcohol inventory products.
+
+Important fields:
+
+- `id`
+- `pos_sku`
+- `pos_item_name`
+- `reporting_category`
+- `product_id`
+- `quantity_per_sale`
+- `unit`
+- `active`
+
+Notes:
+
+- This table is intentionally separate from production item mappings.
+- It supports alcohol variance reporting without adding bar workflows to the Production menu.
+- `pos_sku` should match the SKU/PLU from the POS usage report used by Weekly Production.
+- The Alcohol Sales Mapping dialog reuses active records from `pos_menu_items` to fill `pos_sku` and `pos_item_name`, but `alcohol_sales_mappings` remains the authoritative alcohol variance mapping table.
+- `quantity_per_sale` and `unit` describe how much inventory product is consumed by one sale, such as `20 OZ` for a draught pint or `1 EACH` for a bottle.
 
 ---
 

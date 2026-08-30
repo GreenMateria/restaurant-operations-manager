@@ -49,6 +49,7 @@ public class ProductEditorView {
     private TextField tareWeightField;
     private Label containerTypeLabel;
     private Label tareWeightLabel;
+    private String pendingContainerTypeCode;
 
     public ProductEditorView(Product product, Runnable onSave) {
         this.product = product;
@@ -258,6 +259,7 @@ public class ProductEditorView {
 
         if (product.hasAlcoholProfile()) {
             AlcoholProductProfile profile = product.getAlcoholProfile();
+            pendingContainerTypeCode = profile.getContainerType();
 
             if ("EACH".equals(profile.getCountMethod())) {
                 eachRadio.setSelected(true);
@@ -299,11 +301,15 @@ public class ProductEditorView {
         }
 
         String previousCode = getSelectedContainerCode();
+        if (previousCode == null) {
+            previousCode = pendingContainerTypeCode;
+        }
 
         containerTypeBox.getItems().clear();
         containerTypeBox.getItems().addAll(containerOptionsForCategory(category));
 
         selectContainer(previousCode);
+        pendingContainerTypeCode = null;
 
         boolean each = "EACH".equals(getSelectedCountMethod());
 

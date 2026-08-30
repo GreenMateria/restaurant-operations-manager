@@ -9,6 +9,7 @@ public abstract class ProductionModuleView<T> extends BorderPane {
 
     protected final TableView<T> table = new TableView<>();
     protected final TextField searchField = new TextField();
+    private final HBox searchBar = new HBox(15);
 
     protected ProductionModuleView(String titleText, String subtitleText) {
         getStyleClass().add("root-dark");
@@ -22,9 +23,7 @@ public abstract class ProductionModuleView<T> extends BorderPane {
         searchField.setPromptText("Search...");
         searchField.setPrefWidth(350);
 
-        HBox toolbar = buildToolbar();
-
-        HBox searchBar = new HBox(15, searchField, toolbar);
+        searchBar.getChildren().add(searchField);
         searchBar.setAlignment(Pos.CENTER_LEFT);
 
         VBox top = new VBox(15, title, subtitle, searchBar);
@@ -40,6 +39,10 @@ public abstract class ProductionModuleView<T> extends BorderPane {
     }
 
     protected abstract HBox buildToolbar();
+
+    protected final void installToolbar() {
+        searchBar.getChildren().setAll(searchField, buildToolbar());
+    }
 
     protected Button createPrimaryButton(String text, Runnable action) {
         Button button = new Button(text);

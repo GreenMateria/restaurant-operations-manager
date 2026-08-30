@@ -153,3 +153,21 @@ Date: 2026-08-10 13:35
 Date: 2026-08-17 12:34
 
 - Fixed Alcohol Invoicing to Include food items
+
+## v3.0.5 development working tree
+Date: 2026-08-22
+
+Status: Not packaged or promoted to stable release.
+
+- Added Alcohol Department Sales Mappings and initial Variance Report entry points.
+- Added schema version 15 with `alcohol_sales_mappings`.
+- Reused the existing Production POS Menu Items catalog in Alcohol Sales Mapping add/edit.
+- Migrated the active cloud database target from Aiven PostgreSQL to AWS RDS PostgreSQL after dump/restore and app-load verification.
+- Added and verified restricted AWS RDS `operations_app` access for installed-app use.
+- Improved PostgreSQL Sales Mappings schema handling for lower-access app users after schema setup.
+- Improved menu error dialogs and large searchable ComboBox behavior.
+
+## v3.0.5
+Date: 2026-08-30 15:17
+
+- Migrated to AWS database. Faster queries. Updated department names,

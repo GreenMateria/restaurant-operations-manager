@@ -49,12 +49,15 @@ public class ImportInvoiceView {
         chooseFileButton.setOnAction(e -> chooseCsvFile());
 
         Button addLineButton = new Button("Add Manual Line");
+        addLineButton.getStyleClass().add("primary-button");
         addLineButton.setOnAction(e -> addManualLine());
 
         Button editLineButton = new Button("Edit Selected Line");
+        editLineButton.getStyleClass().add("primary-button");
         editLineButton.setOnAction(e -> editSelectedLine());
 
         Button removeLineButton = new Button("Remove Selected Line");
+        removeLineButton.getStyleClass().add("primary-button");
         removeLineButton.setOnAction(e -> removeSelectedLine());
 
         Button saveButton = new Button("Save Invoice");

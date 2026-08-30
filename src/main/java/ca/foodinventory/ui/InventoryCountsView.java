@@ -21,6 +21,7 @@ import javafx.stage.Stage;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public class InventoryCountsView {
 
@@ -464,6 +465,9 @@ public class InventoryCountsView {
         }
 
         VBox body = new VBox(0);
+        Map<Integer, AlcoholProductProfile> profilesByProductId = alcoholLayout
+                ? alcoholProfileDao.findAllActiveByProductId()
+                : Map.of();
 
         for (CountPrintRow printRow : rows) {
             if (printRow.sectionHeader()) {
@@ -485,7 +489,7 @@ public class InventoryCountsView {
 
             InventoryCountLine line = printRow.line();
             AlcoholProductProfile profile = alcoholLayout
-                    ? alcoholProfileDao.findByProductId(line.getProductId())
+                    ? profilesByProductId.get(line.getProductId())
                     : null;
             boolean weighted =
                     profile != null && "WEIGHT".equalsIgnoreCase(profile.getCountMethod());

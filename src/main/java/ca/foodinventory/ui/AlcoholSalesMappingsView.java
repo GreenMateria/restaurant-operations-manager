@@ -1,7 +1,7 @@
 package ca.foodinventory.ui;
 
-import ca.foodinventory.dao.ProductionItemProductMappingDao;
-import ca.foodinventory.model.ProductionItemProductMapping;
+import ca.foodinventory.dao.AlcoholSalesMappingDao;
+import ca.foodinventory.model.AlcoholSalesMapping;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
@@ -11,21 +11,20 @@ import javafx.scene.layout.HBox;
 
 import java.util.Optional;
 
-public class ProductionItemProductMappingsView extends ProductionModuleView<ProductionItemProductMapping> {
+public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesMapping> {
 
-    private final ProductionItemProductMappingDao dao = new ProductionItemProductMappingDao();
-    private FilteredList<ProductionItemProductMapping> filteredMappings;
+    private final AlcoholSalesMappingDao dao = new AlcoholSalesMappingDao();
+    private FilteredList<AlcoholSalesMapping> filteredMappings;
 
-    public ProductionItemProductMappingsView() {
+    public AlcoholSalesMappingsView() {
         super(
-                "Product Mappings",
-                "Connect production items to the inventory products they consume."
+                "Alcohol Sales Mappings",
+                "Connect POS alcohol items to inventory products for variance reporting."
         );
 
         setupTable();
         installToolbar();
         loadMappings();
-
         searchField.textProperty().addListener((obs, oldValue, newValue) -> applySearch());
     }
 
@@ -39,38 +38,45 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
     }
 
     private void setupTable() {
-        TableColumn<ProductionItemProductMapping, String> productionItemCol =
-                new TableColumn<>("Production Item");
-        productionItemCol.setCellValueFactory(new PropertyValueFactory<>("productionItemName"));
+        TableColumn<AlcoholSalesMapping, String> posSkuCol = new TableColumn<>("POS SKU / PLU");
+        posSkuCol.setCellValueFactory(new PropertyValueFactory<>("posSku"));
 
-        TableColumn<ProductionItemProductMapping, String> skuCol = new TableColumn<>("SKU");
+        TableColumn<AlcoholSalesMapping, String> posNameCol = new TableColumn<>("POS Item");
+        posNameCol.setCellValueFactory(new PropertyValueFactory<>("posItemName"));
+        posNameCol.setPrefWidth(220);
+
+        TableColumn<AlcoholSalesMapping, String> categoryCol = new TableColumn<>("Category");
+        categoryCol.setCellValueFactory(new PropertyValueFactory<>("reportingCategory"));
+
+        TableColumn<AlcoholSalesMapping, String> productCol = new TableColumn<>("Inventory Product");
+        productCol.setCellValueFactory(new PropertyValueFactory<>("productDescription"));
+        productCol.setPrefWidth(260);
+
+        TableColumn<AlcoholSalesMapping, String> skuCol = new TableColumn<>("Product SKU");
         skuCol.setCellValueFactory(new PropertyValueFactory<>("productSku"));
 
-        TableColumn<ProductionItemProductMapping, String> productCol =
-                new TableColumn<>("Inventory Product");
-        productCol.setCellValueFactory(new PropertyValueFactory<>("productDescription"));
+        TableColumn<AlcoholSalesMapping, Double> quantityCol = new TableColumn<>("Qty Per Sale");
+        quantityCol.setCellValueFactory(new PropertyValueFactory<>("quantityPerSale"));
 
-        TableColumn<ProductionItemProductMapping, Double> quantityCol =
-                new TableColumn<>("Qty Per Unit");
-        quantityCol.setCellValueFactory(new PropertyValueFactory<>("quantityPerUnit"));
-
-        TableColumn<ProductionItemProductMapping, String> unitCol = new TableColumn<>("Unit");
+        TableColumn<AlcoholSalesMapping, String> unitCol = new TableColumn<>("Unit");
         unitCol.setCellValueFactory(new PropertyValueFactory<>("unit"));
 
-        TableColumn<ProductionItemProductMapping, Boolean> activeCol = new TableColumn<>("Active");
+        TableColumn<AlcoholSalesMapping, Boolean> activeCol = new TableColumn<>("Active");
         activeCol.setCellValueFactory(new PropertyValueFactory<>("active"));
 
         table.getColumns().setAll(
-                productionItemCol,
-                skuCol,
+                posSkuCol,
+                posNameCol,
+                categoryCol,
                 productCol,
+                skuCol,
                 quantityCol,
                 unitCol,
                 activeCol
         );
 
         table.setRowFactory(tv -> {
-            TableRow<ProductionItemProductMapping> row = new TableRow<>();
+            TableRow<AlcoholSalesMapping> row = new TableRow<>();
 
             row.itemProperty().addListener((obs, oldItem, newItem) -> {
                 if (newItem == null || newItem.isActive()) {
@@ -108,13 +114,14 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
         }
 
         String search = searchField.getText();
-
         filteredMappings.setPredicate(mapping -> {
             if (search == null || search.isBlank()) {
                 return true;
             }
 
-            return containsIgnoreCase(mapping.getProductionItemName(), search)
+            return containsIgnoreCase(mapping.getPosSku(), search)
+                    || containsIgnoreCase(mapping.getPosItemName(), search)
+                    || containsIgnoreCase(mapping.getReportingCategory(), search)
                     || containsIgnoreCase(mapping.getProductSku(), search)
                     || containsIgnoreCase(mapping.getProductDescription(), search)
                     || containsIgnoreCase(mapping.getUnit(), search);
@@ -122,8 +129,8 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
     }
 
     private void addMapping() {
-        ProductionItemProductMappingDialog dialog = new ProductionItemProductMappingDialog(null);
-        Optional<ProductionItemProductMapping> result = dialog.showAndWait();
+        AlcoholSalesMappingDialog dialog = new AlcoholSalesMappingDialog(null);
+        Optional<AlcoholSalesMapping> result = dialog.showAndWait();
 
         result.ifPresent(mapping -> {
             dao.save(mapping);
@@ -132,19 +139,19 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
     }
 
     private void editSelectedMapping() {
-        ProductionItemProductMapping selected = table.getSelectionModel().getSelectedItem();
+        AlcoholSalesMapping selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No Selection", "Please select a product mapping.");
+            showAlert(Alert.AlertType.WARNING, "No Selection", "Please select an alcohol sales mapping.");
             return;
         }
 
         editMapping(selected);
     }
 
-    private void editMapping(ProductionItemProductMapping mapping) {
-        ProductionItemProductMappingDialog dialog = new ProductionItemProductMappingDialog(mapping);
-        Optional<ProductionItemProductMapping> result = dialog.showAndWait();
+    private void editMapping(AlcoholSalesMapping mapping) {
+        AlcoholSalesMappingDialog dialog = new AlcoholSalesMappingDialog(mapping);
+        Optional<AlcoholSalesMapping> result = dialog.showAndWait();
 
         result.ifPresent(updated -> {
             dao.save(updated);
@@ -153,17 +160,17 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
     }
 
     private void deactivateSelectedMapping() {
-        ProductionItemProductMapping selected = table.getSelectionModel().getSelectedItem();
+        AlcoholSalesMapping selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No Selection", "Please select a product mapping.");
+            showAlert(Alert.AlertType.WARNING, "No Selection", "Please select an alcohol sales mapping.");
             return;
         }
 
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Deactivate Product Mapping");
+        confirm.setTitle("Deactivate Alcohol Sales Mapping");
         confirm.setHeaderText(null);
-        confirm.setContentText("Deactivate mapping for " + selected.getProductionItemName() + "?");
+        confirm.setContentText("Deactivate mapping for " + selected.getPosSku() + "?");
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {
