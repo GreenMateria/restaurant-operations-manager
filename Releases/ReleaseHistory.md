@@ -171,3 +171,8 @@ Status: Not packaged or promoted to stable release.
 Date: 2026-08-30 15:17
 
 - Migrated to AWS database. Faster queries. Updated department names,
+
+## v3.0.6
+Date: 2026-08-31 11:04
+
+- Fixed combo box support

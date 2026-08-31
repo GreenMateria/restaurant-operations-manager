@@ -9,11 +9,8 @@ import javafx.scene.control.ListCell;
 import javafx.util.StringConverter;
 
 import java.util.Locale;
-import java.util.function.Predicate;
 
 public final class SearchableComboBoxSupport {
-
-    private static final int MAX_DISPLAYED_MATCHES = 75;
 
     private SearchableComboBoxSupport() {
     }
@@ -23,11 +20,10 @@ public final class SearchableComboBoxSupport {
             ObservableList<T> items,
             StringConverter<T> displayConverter
     ) {
-        ObservableList<T> displayedItems = FXCollections.observableArrayList();
+        FilteredList<T> filteredItems = new FilteredList<>(items, item -> true);
         boolean[] selectingValue = {false};
 
-        refreshDisplayedItems(displayedItems, items, item -> true, comboBox.getValue());
-        comboBox.setItems(displayedItems);
+        comboBox.setItems(filteredItems);
         comboBox.setEditable(true);
         comboBox.setVisibleRowCount(12);
         comboBox.setConverter(new StringConverter<>() {
@@ -39,7 +35,7 @@ public final class SearchableComboBoxSupport {
             @Override
             public T fromString(String text) {
                 if (text == null || text.isBlank()) {
-                    return null;
+                    return comboBox.getValue();
                 }
 
                 for (T item : items) {
@@ -57,8 +53,11 @@ public final class SearchableComboBoxSupport {
 
         comboBox.valueProperty().addListener((obs, oldValue, newValue) -> {
             selectingValue[0] = true;
-            refreshDisplayedItems(displayedItems, items, item -> true, newValue);
-            Platform.runLater(() -> selectingValue[0] = false);
+            filteredItems.setPredicate(item -> true);
+            Platform.runLater(() -> {
+                renderSelectedValue(comboBox, displayConverter);
+                selectingValue[0] = false;
+            });
         });
 
         comboBox.getEditor().textProperty().addListener((obs, oldText, newText) -> {
@@ -70,7 +69,7 @@ public final class SearchableComboBoxSupport {
                     ? ""
                     : newText.trim().toLowerCase(Locale.ROOT);
 
-            refreshDisplayedItems(displayedItems, items, item -> {
+            filteredItems.setPredicate(item -> {
                 if (search.isBlank()) {
                     return true;
                 }
@@ -78,16 +77,21 @@ public final class SearchableComboBoxSupport {
                 return displayConverter.toString(item)
                         .toLowerCase(Locale.ROOT)
                         .contains(search);
-            }, comboBox.getValue());
+            });
 
-            if (comboBox.isFocused() && !comboBox.isShowing() && !displayedItems.isEmpty()) {
+            if (comboBox.isFocused() && !comboBox.isShowing() && !filteredItems.isEmpty()) {
                 comboBox.show();
             }
         });
 
-        comboBox.setOnHidden(event ->
-                refreshDisplayedItems(displayedItems, items, item -> true, comboBox.getValue())
-        );
+        comboBox.setOnHidden(event -> {
+            selectingValue[0] = true;
+            Platform.runLater(() -> {
+                filteredItems.setPredicate(item -> true);
+                renderSelectedValue(comboBox, displayConverter);
+                selectingValue[0] = false;
+            });
+        });
     }
 
     public static <T> void makeSearchable(
@@ -108,28 +112,16 @@ public final class SearchableComboBoxSupport {
         };
     }
 
-    private static <T> void refreshDisplayedItems(
-            ObservableList<T> displayedItems,
-            ObservableList<T> sourceItems,
-            Predicate<T> predicate,
-            T selectedItem
+    private static <T> void renderSelectedValue(
+            ComboBox<T> comboBox,
+            StringConverter<T> displayConverter
     ) {
-        displayedItems.clear();
-
-        if (selectedItem != null) {
-            displayedItems.add(selectedItem);
+        T selectedItem = comboBox.getValue();
+        if (selectedItem == null) {
+            return;
         }
 
-        for (T item : sourceItems) {
-            if (displayedItems.size() >= MAX_DISPLAYED_MATCHES) {
-                break;
-            }
-
-            if (item == selectedItem || !predicate.test(item)) {
-                continue;
-            }
-
-            displayedItems.add(item);
-        }
+        comboBox.getEditor().setText(displayConverter.toString(selectedItem));
+        comboBox.getEditor().positionCaret(comboBox.getEditor().getText().length());
     }
 }
