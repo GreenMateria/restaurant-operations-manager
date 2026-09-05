@@ -3,10 +3,14 @@ package ca.foodinventory.ui;
 import ca.foodinventory.dao.AlcoholProductProfileDao;
 import ca.foodinventory.dao.InventoryCountTemplateLineDao;
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCountTemplate;
 import ca.foodinventory.model.InventoryCountTemplateLine;
 import ca.foodinventory.model.Product;
+import ca.foodinventory.service.AlcoholProductProfileApiClient;
+import ca.foodinventory.service.InventoryApiClient;
+import ca.foodinventory.service.ProductApiClient;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -36,6 +40,10 @@ public class InventoryCountTemplateEditorView {
     private final InventoryCountTemplateLineDao lineDao = new InventoryCountTemplateLineDao();
     private final ProductDao productDao = new ProductDao();
     private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
+    private final InventoryApiClient apiClient = new InventoryApiClient();
+    private final ProductApiClient productApiClient = new ProductApiClient();
+    private final AlcoholProductProfileApiClient alcoholProfileApiClient =
+            new AlcoholProductProfileApiClient();
 
     private final TableView<InventoryCountTemplateLine> table = new TableView<>();
 
@@ -131,7 +139,9 @@ public class InventoryCountTemplateEditorView {
     }
 
     private void refreshTable() {
-        List<InventoryCountTemplateLine> lines = lineDao.findByTemplate(template.getId());
+        List<InventoryCountTemplateLine> lines = isMigratedDepartmentApiMode()
+                ? apiClient.findTemplateLines(template.getId())
+                : lineDao.findByTemplate(template.getId());
         table.setItems(FXCollections.observableArrayList(lines));
     }
 
@@ -142,7 +152,9 @@ public class InventoryCountTemplateEditorView {
         ButtonType addButtonType = new ButtonType("Add", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(addButtonType, ButtonType.CANCEL);
 
-        List<Product> allProducts = productDao.findAll();
+        List<Product> allProducts = isMigratedDepartmentApiMode()
+                ? productApiClient.findAllActiveProducts()
+                : productDao.findAll();
 
         TextField productSearchField = new TextField();
         productSearchField.setPromptText("Search by SKU or description...");
@@ -280,7 +292,7 @@ public class InventoryCountTemplateEditorView {
         });
 
         dialog.showAndWait().ifPresent(line -> {
-            if (lineDao.productExistsInTemplate(line.getTemplateId(), line.getProductId())) {
+            if (productExistsInTemplate(line.getTemplateId(), line.getProductId())) {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
                 alert.setTitle("Duplicate Product");
                 alert.setHeaderText(null);
@@ -289,7 +301,11 @@ public class InventoryCountTemplateEditorView {
                 return;
             }
 
-            lineDao.add(line);
+            if (isMigratedDepartmentApiMode()) {
+                apiClient.addTemplateLine(line);
+            } else {
+                lineDao.add(line);
+            }
             refreshTable();
         });
     }
@@ -323,7 +339,11 @@ public class InventoryCountTemplateEditorView {
             return;
         }
 
-        lineDao.deactivate(selected.getId());
+        if (isMigratedDepartmentApiMode()) {
+            apiClient.deactivateTemplateLine(selected.getId());
+        } else {
+            lineDao.deactivate(selected.getId());
+        }
         refreshTable();
     }
 
@@ -412,7 +432,11 @@ public class InventoryCountTemplateEditorView {
         });
 
         dialog.showAndWait().ifPresent(line -> {
-            lineDao.update(line);
+            if (isMigratedDepartmentApiMode()) {
+                apiClient.updateTemplateLine(line);
+            } else {
+                lineDao.update(line);
+            }
             refreshTable();
         });
     }
@@ -434,7 +458,7 @@ public class InventoryCountTemplateEditorView {
         table.getItems().remove(currentIndex);
         table.getItems().add(newIndex, selected);
 
-        lineDao.updateSortOrders(table.getItems());
+        updateSortOrders(new ArrayList<>(table.getItems()));
 
         refreshTable();
         table.getSelectionModel().select(newIndex);
@@ -445,12 +469,14 @@ public class InventoryCountTemplateEditorView {
             return;
         }
 
-        lineDao.updateSortOrders(table.getItems());
+        updateSortOrders(new ArrayList<>(table.getItems()));
         refreshTable();
     }
 
     private void printBlankCountSheet() {
-        List<InventoryCountTemplateLine> lines = lineDao.findByTemplate(template.getId());
+        List<InventoryCountTemplateLine> lines = isMigratedDepartmentApiMode()
+                ? apiClient.findTemplateLines(template.getId())
+                : lineDao.findByTemplate(template.getId());
 
         if (lines.isEmpty()) {
             showSimpleAlert(
@@ -494,6 +520,42 @@ public class InventoryCountTemplateEditorView {
         if (success) {
             job.endJob();
         }
+    }
+
+    private boolean productExistsInTemplate(int templateId, int productId) {
+        if (!isMigratedDepartmentApiMode()) {
+            return lineDao.productExistsInTemplate(templateId, productId);
+        }
+
+        return apiClient.findTemplateLines(templateId)
+                .stream()
+                .anyMatch(line -> line.getProductId() == productId);
+    }
+
+    private void updateSortOrders(List<InventoryCountTemplateLine> lines) {
+        if (isMigratedDepartmentApiMode()) {
+            apiClient.updateTemplateLineSortOrders(template.getId(), lines);
+        } else {
+            lineDao.updateSortOrders(lines);
+        }
+    }
+
+    private boolean isMigratedDepartmentApiMode() {
+        String templateName = template.getName() == null ? "" : template.getName().toUpperCase();
+        return DatabaseManager.isApiDatabase()
+                && (templateName.contains("FOOD")
+                || templateName.contains("ALCOHOL")
+                || templateName.contains("SUPPLIES"));
+    }
+
+    private Map<Integer, AlcoholProductProfile> loadAlcoholProfilesIfNeeded() {
+        if (!isAlcoholTemplateName()) {
+            return Map.of();
+        }
+
+        return isMigratedDepartmentApiMode()
+                ? alcoholProfileApiClient.findAllActiveByProductId()
+                : alcoholProfileDao.findAllActiveByProductId();
     }
 
     private List<List<TemplatePrintRow>> paginateTemplateLines(
@@ -600,9 +662,7 @@ public class InventoryCountTemplateEditorView {
         addTemplatePrintCell(tableHeader, "Weight", 4, true, Pos.CENTER);
 
         VBox body = new VBox(0);
-        Map<Integer, AlcoholProductProfile> profilesByProductId = isAlcoholTemplateName()
-                ? alcoholProfileDao.findAllActiveByProductId()
-                : Map.of();
+        Map<Integer, AlcoholProductProfile> profilesByProductId = loadAlcoholProfilesIfNeeded();
 
         for (TemplatePrintRow printRow : rows) {
             if (printRow.sectionHeader()) {

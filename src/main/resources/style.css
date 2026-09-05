@@ -30,6 +30,30 @@
     -fx-border-width: 1 0 0 0;
 }
 
+.database-status-label {
+    -fx-text-fill: #d8d8d8;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.database-status-checking {
+    -fx-fill: #d6a437;
+    -fx-stroke: #f0cf72;
+    -fx-stroke-width: 1;
+}
+
+.database-status-connected {
+    -fx-fill: #2da44e;
+    -fx-stroke: #6fd18b;
+    -fx-stroke-width: 1;
+}
+
+.database-status-disconnected {
+    -fx-fill: #c43d3d;
+    -fx-stroke: #ef7777;
+    -fx-stroke-width: 1;
+}
+
 .primary-button {
     -fx-background-color: #2d89ef;
     -fx-text-fill: white;

@@ -2,9 +2,11 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionItemDao;
 import ca.foodinventory.dao.ProductionProfileLineDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ProductionItem;
 import ca.foodinventory.model.ProductionProfile;
 import ca.foodinventory.model.ProductionProfileLine;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -27,6 +29,7 @@ public class ProductionProfileDialog extends Dialog<ProductionProfileDialog.Resu
 
     private final ProductionItemDao productionItemDao = new ProductionItemDao();
     private final ProductionProfileLineDao lineDao = new ProductionProfileLineDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
 
     private final TextField nameField = new TextField();
     private final TextField categoryField = new TextField();
@@ -180,7 +183,11 @@ public class ProductionProfileDialog extends Dialog<ProductionProfileDialog.Resu
     }
 
     private void loadProductionItems() {
-        SearchableComboBoxSupport.makeSearchable(productionItemComboBox, productionItemDao.findActive(), new StringConverter<>() {
+        List<ProductionItem> activeItems = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findActiveProductionItems()
+                : productionItemDao.findActive();
+
+        SearchableComboBoxSupport.makeSearchable(productionItemComboBox, activeItems, new StringConverter<>() {
             @Override
             public String toString(ProductionItem item) {
                 return item == null ? "" : item.getName();
@@ -216,7 +223,9 @@ public class ProductionProfileDialog extends Dialog<ProductionProfileDialog.Resu
         categoryField.setText(existingProfile.getCategory());
         activeCheckBox.setSelected(existingProfile.isActive());
 
-        lines.setAll(lineDao.findByProfileId(existingProfile.getId()));
+        lines.setAll(DatabaseManager.isApiDatabase()
+                ? productionApiClient.findProfileLines(existingProfile.getId())
+                : lineDao.findByProfileId(existingProfile.getId()));
         sortOrderField.setText(String.valueOf(lines.size() * 10 + 10));
     }
 

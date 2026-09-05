@@ -2,8 +2,10 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.FreezerPullParDao;
 import ca.foodinventory.dao.ProductionItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ProductionItem;
 import ca.foodinventory.model.ProductionReportLine;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -41,6 +43,7 @@ public class FreezerPullView extends BorderPane {
     private static final String FREEZER_PULL_STATION = "Freezer Pull";
     private final ProductionItemDao productionItemDao = new ProductionItemDao();
     private final FreezerPullParDao freezerPullParDao = new FreezerPullParDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
     private final TableView<ProductionReportLine> table = new TableView<>();
     private final Label summaryLabel = new Label("Load the table, then enter quantities directly for each day.");
 
@@ -116,18 +119,7 @@ public class FreezerPullView extends BorderPane {
                         event.getNewValue()
                 );
 
-                freezerPullParDao.save(
-                        row.getProductionItemId(),
-                        new double[]{
-                                row.getMondayQuantity(),
-                                row.getTuesdayQuantity(),
-                                row.getWednesdayQuantity(),
-                                row.getThursdayQuantity(),
-                                row.getFridayQuantity(),
-                                row.getSaturdayQuantity(),
-                                row.getSundayQuantity()
-                        }
-                );
+                saveDailyPars(row);
 
                 table.refresh();
 
@@ -174,6 +166,10 @@ public class FreezerPullView extends BorderPane {
     }
 
     private List<ProductionReportLine> loadManualParLines() {
+            if (DatabaseManager.isApiDatabase()) {
+                return productionApiClient.findFreezerPullLines();
+            }
+
             List<ProductionReportLine> lines = new ArrayList<>();
             Map<Integer, double[]> savedByItemId = freezerPullParDao.loadAll();
 
@@ -190,13 +186,38 @@ public class FreezerPullView extends BorderPane {
             return lines;
     }
 
+    private void saveDailyPars(ProductionReportLine row) {
+        double[] values = new double[]{
+                row.getMondayQuantity(),
+                row.getTuesdayQuantity(),
+                row.getWednesdayQuantity(),
+                row.getThursdayQuantity(),
+                row.getFridayQuantity(),
+                row.getSaturdayQuantity(),
+                row.getSundayQuantity()
+        };
+
+        if (DatabaseManager.isApiDatabase()) {
+            productionApiClient.saveFreezerPullPar(row.getProductionItemId(), values);
+        } else {
+            freezerPullParDao.save(row.getProductionItemId(), values);
+        }
+    }
+
     private void saveManualPar(ProductionReportLine line, Double value) {
         if (value == null || value < 0 || !Double.isFinite(value)) {
             table.refresh();
             return;
         }
         try {
-            productionItemDao.updatePermanentOverridePar(line.getProductionItemId(), (int) Math.round(value));
+            if (DatabaseManager.isApiDatabase()) {
+                productionApiClient.updatePermanentOverridePar(
+                        line.getProductionItemId(),
+                        (int) Math.round(value)
+                );
+            } else {
+                productionItemDao.updatePermanentOverridePar(line.getProductionItemId(), (int) Math.round(value));
+            }
             line.setManualPar(Math.round(value));
             table.refresh();
         } catch (RuntimeException e) {

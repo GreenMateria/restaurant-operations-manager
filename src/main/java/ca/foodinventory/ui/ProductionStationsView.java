@@ -1,7 +1,9 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionStationDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ProductionStation;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
@@ -14,6 +16,7 @@ import java.util.Optional;
 public class ProductionStationsView extends ProductionModuleView<ProductionStation> {
 
     private final ProductionStationDao dao = new ProductionStationDao();
+    private final ProductionApiClient apiClient = new ProductionApiClient();
     private FilteredList<ProductionStation> filteredStations;
 
     public ProductionStationsView() {
@@ -83,7 +86,9 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
 
     private void loadStations() {
         filteredStations = new FilteredList<>(
-                FXCollections.observableArrayList(dao.findAll()),
+                FXCollections.observableArrayList(DatabaseManager.isApiDatabase()
+                        ? apiClient.findStations()
+                        : dao.findAll()),
                 station -> true
         );
 
@@ -114,7 +119,7 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
         Optional<ProductionStation> result = dialog.showAndWait();
 
         result.ifPresent(station -> {
-            dao.save(station);
+            saveStation(station);
             loadStations();
         });
     }
@@ -135,7 +140,7 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
         Optional<ProductionStation> result = dialog.showAndWait();
 
         result.ifPresent(updated -> {
-            dao.save(updated);
+            saveStation(updated);
             loadStations();
         });
     }
@@ -155,9 +160,21 @@ public class ProductionStationsView extends ProductionModuleView<ProductionStati
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {
-                dao.deactivate(selected.getId());
+                if (DatabaseManager.isApiDatabase()) {
+                    apiClient.deactivateStation(selected.getId());
+                } else {
+                    dao.deactivate(selected.getId());
+                }
                 loadStations();
             }
         });
+    }
+
+    private void saveStation(ProductionStation station) {
+        if (DatabaseManager.isApiDatabase()) {
+            apiClient.saveStation(station);
+        } else {
+            dao.save(station);
+        }
     }
 }

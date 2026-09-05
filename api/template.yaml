@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ESM Operations Manager API proof for API Gateway HTTP API, Lambda, and AWS RDS PostgreSQL.
+
+Parameters:
+  ApiStageName:
+    Type: String
+    Default: prod
+  DbUrl:
+    Type: String
+    NoEcho: true
+    Description: JDBC URL for AWS RDS PostgreSQL.
+  DbUser:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL application user.
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL application password.
+  ApiKey:
+    Type: String
+    NoEcho: true
+    Description: Shared API key required for protected endpoints.
+  LambdaSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets that can route to the RDS instance.
+  LambdaSecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security group IDs for the API Lambda.
+  ReservedConcurrency:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 20
+    Description: Set to 0 to leave function reserved concurrency unset.
+
+Conditions:
+  UseReservedConcurrency: !Not [!Equals [!Ref ReservedConcurrency, 0]]
+
+Globals:
+  Function:
+    Runtime: java25
+    MemorySize: 512
+    Timeout: 30
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        FOOD_INVENTORY_API_DB_URL: !Ref DbUrl
+        FOOD_INVENTORY_API_DB_USER: !Ref DbUser
+        FOOD_INVENTORY_API_DB_PASSWORD: !Ref DbPassword
+        FOOD_INVENTORY_API_KEY: !Ref ApiKey
+        FOOD_INVENTORY_API_ERROR_DETAILS: 'false'
+
+Resources:
+  FoodInventoryHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref ApiStageName
+
+  FoodInventoryApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: target/foodinventory-api-lambda.jar
+      Handler: ca.foodinventory.api.LambdaApiHandler::handleRequest
+      ReservedConcurrentExecutions: !If
+        - UseReservedConcurrency
+        - !Ref ReservedConcurrency
+        - !Ref AWS::NoValue
+      VpcConfig:
+        SecurityGroupIds: !Ref LambdaSecurityGroupIds
+        SubnetIds: !Ref LambdaSubnetIds
+      Events:
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FoodInventoryHttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway HTTP API URL.
+    Value: !Sub 'https://${FoodInventoryHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}'

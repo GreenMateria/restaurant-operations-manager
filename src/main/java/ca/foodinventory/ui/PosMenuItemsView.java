@@ -1,15 +1,19 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.PosMenuItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.PosMenuItem;
 import ca.foodinventory.model.PosMenuItemImportSummary;
 import ca.foodinventory.model.ProductionReportSummary;
 import ca.foodinventory.service.PosMenuItemImportService;
+import ca.foodinventory.service.ProductionApiClient;
 import ca.foodinventory.service.ProductionReportService;
 import ca.foodinventory.service.ProductionUsageReportImportService;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
+import javafx.concurrent.Task;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.MouseButton;
@@ -23,12 +27,19 @@ import java.util.Set;
 public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
     private final PosMenuItemDao dao = new PosMenuItemDao();
+    private final ProductionApiClient apiClient = new ProductionApiClient();
     private final ProductionUsageReportImportService usageReportImportService =
             new ProductionUsageReportImportService();
     private final PosMenuItemImportService posMenuItemImportService =
             new PosMenuItemImportService();
     private final ProductionReportService productionReportService = new ProductionReportService();
     private FilteredList<PosMenuItem> filteredItems;
+    private Button addButton;
+    private Button editButton;
+    private Button deactivateButton;
+    private Button setupImportButton;
+    private Button deleteKdsButton;
+    private Button importButton;
 
     public PosMenuItemsView() {
         super(
@@ -45,12 +56,12 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
     @Override
     protected HBox buildToolbar() {
-        Button addButton = createPrimaryButton("Add", this::addItem);
-        Button editButton = createPrimaryButton("Edit", this::editSelectedItem);
-        Button deactivateButton = createPrimaryButton("Deactivate", this::deactivateSelectedItem);
-        Button setupImportButton = createPrimaryButton("Import Menu Items", this::importMenuItems);
-        Button deleteKdsButton = createPrimaryButton("Delete KDS Items", this::deleteKdsItems);
-        Button importButton = createPrimaryButton("Import Usage Report", this::importUsageReport);
+        addButton = createPrimaryButton("Add", this::addItem);
+        editButton = createPrimaryButton("Edit", this::editSelectedItem);
+        deactivateButton = createPrimaryButton("Deactivate", this::deactivateSelectedItem);
+        setupImportButton = createPrimaryButton("Import Menu Items", this::importMenuItems);
+        deleteKdsButton = createPrimaryButton("Delete KDS Items", this::deleteKdsItems);
+        importButton = createPrimaryButton("Import Usage Report", this::importUsageReport);
 
         return new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton, importButton);
     }
@@ -103,6 +114,11 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
     }
 
     private void loadItems() {
+        if (DatabaseManager.isApiDatabase()) {
+            loadItemsFromApi();
+            return;
+        }
+
         filteredItems = new FilteredList<>(
                 FXCollections.observableArrayList(dao.findAll()),
                 item -> true
@@ -110,6 +126,50 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
         table.setItems(filteredItems);
         applySearch();
+    }
+
+    private void loadItemsFromApi() {
+        table.setPlaceholder(new Label("Loading POS menu items..."));
+
+        Task<java.util.List<PosMenuItem>> task = new Task<>() {
+            @Override
+            protected java.util.List<PosMenuItem> call() {
+                return apiClient.findPosMenuItems();
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            filteredItems = new FilteredList<>(
+                    FXCollections.observableArrayList(task.getValue()),
+                    item -> true
+            );
+
+            table.setItems(filteredItems);
+            applySearch();
+        });
+
+        task.setOnFailed(event -> {
+            Throwable exception = task.getException();
+            if (exception != null) {
+                exception.printStackTrace();
+            }
+
+            filteredItems = new FilteredList<>(
+                    FXCollections.observableArrayList(),
+                    item -> true
+            );
+            table.setItems(filteredItems);
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "POS Menu Items API Failed",
+                    "POS menu items could not be loaded from the API."
+                            + formatFailureDetails(exception)
+            );
+        });
+
+        Thread thread = new Thread(task, "pos-menu-items-api-load");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void applySearch() {
@@ -136,7 +196,7 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         Optional<PosMenuItem> result = dialog.showAndWait();
 
         result.ifPresent(item -> {
-            dao.save(item);
+            saveItem(item);
             loadItems();
         });
     }
@@ -157,7 +217,7 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         Optional<PosMenuItem> result = dialog.showAndWait();
 
         result.ifPresent(updated -> {
-            dao.save(updated);
+            saveItem(updated);
             loadItems();
         });
     }
@@ -177,7 +237,11 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {
-                dao.deactivate(selected.getId());
+                if (DatabaseManager.isApiDatabase()) {
+                    apiClient.deactivatePosMenuItem(selected.getId());
+                } else {
+                    dao.deactivate(selected.getId());
+                }
                 loadItems();
             }
         });
@@ -295,7 +359,9 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
             confirm.showAndWait().ifPresent(button -> {
                 if (button == ButtonType.OK) {
-                    int deletedCount = dao.deleteByPosSkus(kdsPosSkus);
+                    int deletedCount = DatabaseManager.isApiDatabase()
+                            ? apiClient.deletePosMenuItemsBySkus(kdsPosSkus.stream().toList())
+                            : dao.deleteByPosSkus(kdsPosSkus);
                     loadItems();
 
                     showAlert(
@@ -321,5 +387,44 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         }
 
         return String.valueOf(value);
+    }
+
+    private void saveItem(PosMenuItem item) {
+        if (DatabaseManager.isApiDatabase()) {
+            apiClient.savePosMenuItem(item);
+        } else {
+            dao.save(item);
+        }
+    }
+
+    private String formatFailureDetails(Throwable exception) {
+        if (exception == null) {
+            return "";
+        }
+
+        Throwable rootCause = exception;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+
+        String message = rootCause.getMessage();
+        if (message == null || message.isBlank()) {
+            message = exception.getMessage();
+        }
+
+        return message == null || message.isBlank()
+                ? ""
+                : "\n\nDetails: " + message;
+    }
+
+    @Override
+    protected void showAlert(Alert.AlertType type, String title, String message) {
+        Runnable show = () -> super.showAlert(type, title, message);
+
+        if (Platform.isFxApplicationThread()) {
+            show.run();
+        } else {
+            Platform.runLater(show);
+        }
     }
 }

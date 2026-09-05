@@ -1,7 +1,9 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InventoryCountTemplateDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InventoryCountTemplate;
+import ca.foodinventory.service.InventoryApiClient;
 import javafx.collections.FXCollections;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -12,6 +14,7 @@ import javafx.stage.Stage;
 public class InventoryCountTemplatesView {
 
     private final InventoryCountTemplateDao dao = new InventoryCountTemplateDao();
+    private final InventoryApiClient apiClient = new InventoryApiClient();
     private final TableView<InventoryCountTemplate> table = new TableView<>();
 
     private final String department;
@@ -72,6 +75,13 @@ public class InventoryCountTemplatesView {
     }
 
     private void loadTemplates() {
+        if (isMigratedDepartmentApiMode()) {
+            table.setItems(FXCollections.observableArrayList(
+                    apiClient.findActiveTemplates(department)
+            ));
+            return;
+        }
+
         var templates = dao.findAllActive();
 
         if (department != null) {
@@ -105,7 +115,11 @@ public class InventoryCountTemplatesView {
                 return;
             }
 
-            dao.add(cleanName);
+            if (isMigratedDepartmentApiMode()) {
+                apiClient.addTemplate(department, cleanName);
+            } else {
+                dao.add(cleanName);
+            }
             loadTemplates();
         });
     }
@@ -134,7 +148,11 @@ public class InventoryCountTemplatesView {
             return;
         }
 
-        dao.deactivate(selected.getId());
+        if (isMigratedDepartmentApiMode()) {
+            apiClient.deactivateTemplate(selected.getId());
+        } else {
+            dao.deactivate(selected.getId());
+        }
         loadTemplates();
     }
 
@@ -192,10 +210,14 @@ public class InventoryCountTemplatesView {
                 return;
             }
 
-            dao.duplicateTemplate(
-                    selected.getId(),
-                    cleanName
-            );
+            if (isMigratedDepartmentApiMode()) {
+                apiClient.duplicateTemplate(selected.getId(), cleanName);
+            } else {
+                dao.duplicateTemplate(
+                        selected.getId(),
+                        cleanName
+                );
+            }
 
             loadTemplates();
 
@@ -218,6 +240,13 @@ public class InventoryCountTemplatesView {
             case "SUPPLIES" -> "Supplies Count Templates";
             default -> "Inventory Count Templates";
         };
+    }
+
+    private boolean isMigratedDepartmentApiMode() {
+        return DatabaseManager.isApiDatabase()
+                && ("FOOD".equals(department)
+                || "ALCOHOL".equals(department)
+                || "SUPPLIES".equals(department));
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {

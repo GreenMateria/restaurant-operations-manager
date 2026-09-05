@@ -2,7 +2,9 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionProfileDao;
 import ca.foodinventory.dao.ProductionProfileLineDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ProductionProfile;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
@@ -16,6 +18,7 @@ public class ProductionProfilesView extends ProductionModuleView<ProductionProfi
 
     private final ProductionProfileDao profileDao = new ProductionProfileDao();
     private final ProductionProfileLineDao lineDao = new ProductionProfileLineDao();
+    private final ProductionApiClient apiClient = new ProductionApiClient();
     private FilteredList<ProductionProfile> filteredProfiles;
 
     public ProductionProfilesView() {
@@ -81,7 +84,9 @@ public class ProductionProfilesView extends ProductionModuleView<ProductionProfi
 
     private void loadProfiles() {
         filteredProfiles = new FilteredList<>(
-                FXCollections.observableArrayList(profileDao.findAll()),
+                FXCollections.observableArrayList(DatabaseManager.isApiDatabase()
+                        ? apiClient.findProfiles()
+                        : profileDao.findAll()),
                 profile -> true
         );
 
@@ -132,8 +137,15 @@ public class ProductionProfilesView extends ProductionModuleView<ProductionProfi
     }
 
     private void saveProfile(ProductionProfileDialog.Result result) {
-        int profileId = profileDao.save(result.profile());
-        lineDao.replaceForProfile(profileId, result.lines());
+        int profileId;
+        if (DatabaseManager.isApiDatabase()) {
+            ProductionProfile savedProfile = apiClient.saveProfile(result.profile());
+            profileId = savedProfile.getId();
+            apiClient.replaceProfileLines(profileId, result.lines());
+        } else {
+            profileId = profileDao.save(result.profile());
+            lineDao.replaceForProfile(profileId, result.lines());
+        }
         loadProfiles();
     }
 
@@ -152,7 +164,11 @@ public class ProductionProfilesView extends ProductionModuleView<ProductionProfi
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {
-                profileDao.deactivate(selected.getId());
+                if (DatabaseManager.isApiDatabase()) {
+                    apiClient.deactivateProfile(selected.getId());
+                } else {
+                    profileDao.deactivate(selected.getId());
+                }
                 loadProfiles();
             }
         });

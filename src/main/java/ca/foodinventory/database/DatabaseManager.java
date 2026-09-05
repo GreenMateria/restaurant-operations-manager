@@ -21,27 +21,42 @@ public class DatabaseManager {
     private static final String DB_URL_PROPERTY = "foodinventory.db.url";
     private static final String DB_USER_PROPERTY = "foodinventory.db.user";
     private static final String DB_PASSWORD_PROPERTY = "foodinventory.db.password";
+    private static final String API_URL_PROPERTY = "foodinventory.api.url";
+    private static final String API_KEY_PROPERTY = "foodinventory.api.key";
     private static final String DB_MODE_ENV = "FOOD_INVENTORY_DB_MODE";
     private static final String DB_URL_ENV = "FOOD_INVENTORY_DB_URL";
     private static final String DB_USER_ENV = "FOOD_INVENTORY_DB_USER";
     private static final String DB_PASSWORD_ENV = "FOOD_INVENTORY_DB_PASSWORD";
+    private static final String API_URL_ENV = "FOOD_INVENTORY_API_URL";
+    private static final String API_KEY_ENV = "FOOD_INVENTORY_API_KEY";
     private static final String POSTGRES_MODE = "postgres";
     private static final String SQLITE_MODE = "sqlite";
+    private static final String API_MODE = "api";
     private static final String CONFIG_FILE_NAME = "database.properties";
     private static final String DEFAULT_CONFIG_RESOURCE = "/database-default.properties";
+    private static final String RELEASE_CONFIG_RESOURCE = "/database-release.properties";
     private static final String CONFIG_MODE_KEY = "mode";
     private static final String CONFIG_URL_KEY = "cloud.url";
     private static final String CONFIG_USER_KEY = "cloud.user";
     private static final String CONFIG_PASSWORD_KEY = "cloud.password";
-    private static final String ACTIVE_DATABASE_MODE = normalizeMode(
-            configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV)
-    );
+    private static final String CONFIG_API_URL_KEY = "api.url";
+    private static final String CONFIG_API_KEY_KEY = "api.key";
+    private static final String RELEASE_AUTO_CONFIGURE_API_KEY = "auto.configure.api";
+    private static final String RELEASE_CONFIG_ID_KEY = "release.config.id";
+    private static final String LOCAL_APPLIED_RELEASE_CONFIG_ID_KEY = "applied.release.config.id";
+    private static final String ACTIVE_DATABASE_MODE = initializeActiveDatabaseMode();
     private static PostgresConnectionPool postgresConnectionPool;
     private static String postgresConnectionPoolKey;
 
     public static Connection getConnection() throws SQLException {
         if (isPostgresMode()) {
             return getPostgresConnectionPool().borrowConnection();
+        }
+
+        if (isApiMode()) {
+            throw new IllegalStateException(
+                    "API mode does not provide direct database connections."
+            );
         }
 
         return DriverManager.getConnection(getSqliteUrl());
@@ -57,15 +72,40 @@ public class DatabaseManager {
                 && !configuredValue(DB_PASSWORD_PROPERTY, DB_PASSWORD_ENV).isBlank();
     }
 
+    public static boolean hasConfiguredApiConnection() {
+        return !getConfiguredApiUrl().isBlank()
+                && !getConfiguredApiKey().isBlank();
+    }
+
+    public static String getConfiguredApiUrl() {
+        return configuredValue(API_URL_PROPERTY, API_URL_ENV);
+    }
+
+    public static String getConfiguredApiKey() {
+        return configuredValue(API_KEY_PROPERTY, API_KEY_ENV);
+    }
+
     public static String getActiveDatabaseModeLabel() {
-        return isPostgresMode() ? "Cloud PostgreSQL" : "Local SQLite";
+        if (isPostgresMode()) {
+            return "Cloud PostgreSQL";
+        }
+
+        if (isApiMode()) {
+            return "Cloud API";
+        }
+
+        return "Local SQLite";
     }
 
     public static String getPreferredDatabaseModeLabel() {
         String preferredMode = normalizeMode(
                 configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV)
         );
-        return POSTGRES_MODE.equals(preferredMode) ? "Cloud PostgreSQL" : "Local SQLite";
+        return switch (preferredMode) {
+            case POSTGRES_MODE -> "Cloud PostgreSQL";
+            case API_MODE -> "Cloud API";
+            default -> "Local SQLite";
+        };
     }
 
     public static File getDatabaseConfigFile() {
@@ -81,6 +121,11 @@ public class DatabaseManager {
             copyConfiguredPostgresValue(properties, DB_URL_PROPERTY, DB_URL_ENV, CONFIG_URL_KEY);
             copyConfiguredPostgresValue(properties, DB_USER_PROPERTY, DB_USER_ENV, CONFIG_USER_KEY);
             copyConfiguredPostgresValue(properties, DB_PASSWORD_PROPERTY, DB_PASSWORD_ENV, CONFIG_PASSWORD_KEY);
+        }
+
+        if (API_MODE.equals(normalizedMode)) {
+            copyConfiguredValue(properties, API_URL_PROPERTY, API_URL_ENV, CONFIG_API_URL_KEY);
+            copyConfiguredValue(properties, API_KEY_PROPERTY, API_KEY_ENV, CONFIG_API_KEY_KEY);
         }
 
         saveDatabaseProperties(properties);
@@ -126,6 +171,12 @@ public class DatabaseManager {
 
 
     public static void initializeDatabase() {
+
+        if (isApiMode()) {
+            System.out.println("Database initialization skipped in API mode.");
+            System.out.println("API URL: " + getConfiguredApiUrl());
+            return;
+        }
 
         try (Connection conn = getConnection()) {
             if (isPostgresMode()) {
@@ -356,11 +407,15 @@ public class DatabaseManager {
     }
 
     public static boolean isLocalFileDatabase() {
-        return !isPostgresMode();
+        return !isPostgresMode() && !isApiMode();
     }
 
     public static boolean isPostgresDatabase() {
         return isPostgresMode();
+    }
+
+    public static boolean isApiDatabase() {
+        return isApiMode();
     }
 
     public static File getDatabaseFile() {
@@ -395,6 +450,11 @@ public class DatabaseManager {
         }
     }
 
+    private static String initializeActiveDatabaseMode() {
+        applyReleaseDatabaseConfig();
+        return normalizeMode(configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV));
+    }
+
     private static String configuredValue(String propertyName, String envName) {
         String propertyValue = System.getProperty(propertyName);
         if (propertyValue != null && !propertyValue.isBlank()) {
@@ -422,6 +482,8 @@ public class DatabaseManager {
             case DB_URL_PROPERTY -> properties.getProperty(CONFIG_URL_KEY);
             case DB_USER_PROPERTY -> properties.getProperty(CONFIG_USER_KEY);
             case DB_PASSWORD_PROPERTY -> properties.getProperty(CONFIG_PASSWORD_KEY);
+            case API_URL_PROPERTY -> properties.getProperty(CONFIG_API_URL_KEY);
+            case API_KEY_PROPERTY -> properties.getProperty(CONFIG_API_KEY_KEY);
             default -> "";
         };
     }
@@ -448,6 +510,74 @@ public class DatabaseManager {
         }
 
         return properties;
+    }
+
+    private static void applyReleaseDatabaseConfig() {
+        Properties releaseProperties = loadReleaseDatabaseProperties();
+        if (!Boolean.parseBoolean(
+                releaseProperties.getProperty(RELEASE_AUTO_CONFIGURE_API_KEY, "false")
+        )) {
+            return;
+        }
+
+        String releaseApiUrl = releaseProperties.getProperty(CONFIG_API_URL_KEY, "").trim();
+        String releaseApiKey = releaseProperties.getProperty(CONFIG_API_KEY_KEY, "").trim();
+        String releaseConfigId = releaseProperties.getProperty(RELEASE_CONFIG_ID_KEY, "").trim();
+        if (releaseApiUrl.isBlank() || releaseApiKey.isBlank() || releaseConfigId.isBlank()) {
+            return;
+        }
+
+        Properties localProperties = loadDatabaseProperties();
+        if (releaseConfigId.equals(localProperties.getProperty(LOCAL_APPLIED_RELEASE_CONFIG_ID_KEY))) {
+            return;
+        }
+
+        boolean changed = false;
+
+        changed |= setPropertyIfDifferent(localProperties, CONFIG_MODE_KEY, API_MODE);
+        changed |= setPropertyIfDifferent(localProperties, CONFIG_API_URL_KEY, releaseApiUrl);
+        changed |= setPropertyIfDifferent(localProperties, CONFIG_API_KEY_KEY, releaseApiKey);
+        changed |= setPropertyIfDifferent(
+                localProperties,
+                LOCAL_APPLIED_RELEASE_CONFIG_ID_KEY,
+                releaseConfigId
+        );
+
+        if (changed) {
+            saveDatabaseProperties(localProperties);
+        }
+    }
+
+    private static Properties loadReleaseDatabaseProperties() {
+        Properties properties = new Properties();
+
+        try (InputStream inputStream =
+                     DatabaseManager.class.getResourceAsStream(RELEASE_CONFIG_RESOURCE)) {
+            if (inputStream == null) {
+                return properties;
+            }
+
+            properties.load(inputStream);
+            return properties;
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "Failed to load release database configuration.",
+                    e
+            );
+        }
+    }
+
+    private static boolean setPropertyIfDifferent(
+            Properties properties,
+            String key,
+            String value
+    ) {
+        if (value.equals(properties.getProperty(key))) {
+            return false;
+        }
+
+        properties.setProperty(key, value);
+        return true;
     }
 
     private static void createDatabaseConfigFromDefaults(File configFile) {
@@ -502,6 +632,15 @@ public class DatabaseManager {
             String envName,
             String configKey
     ) {
+        copyConfiguredValue(properties, propertyName, envName, configKey);
+    }
+
+    private static void copyConfiguredValue(
+            Properties properties,
+            String propertyName,
+            String envName,
+            String configKey
+    ) {
         String value = configuredValue(propertyName, envName);
         if (!value.isBlank()) {
             properties.setProperty(configKey, value);
@@ -514,7 +653,9 @@ public class DatabaseManager {
         }
 
         String normalizedMode = mode.trim().toLowerCase();
-        if (POSTGRES_MODE.equals(normalizedMode) || SQLITE_MODE.equals(normalizedMode)) {
+        if (POSTGRES_MODE.equals(normalizedMode)
+                || SQLITE_MODE.equals(normalizedMode)
+                || API_MODE.equals(normalizedMode)) {
             return normalizedMode;
         }
 
@@ -534,5 +675,9 @@ public class DatabaseManager {
         }
 
         return value;
+    }
+
+    private static boolean isApiMode() {
+        return API_MODE.equals(ACTIVE_DATABASE_MODE);
     }
 }

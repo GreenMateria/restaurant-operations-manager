@@ -1,7 +1,7 @@
 # CLOUD DATABASE PLAN
 
 _Created: Saturday, August 1, 2026_
-_Last Updated: Sunday, August 30, 2026_
+_Last Updated: Friday, September 4, 2026_
 
 This document records the completed cloud database transition for ESM Operations Manager.
 
@@ -31,6 +31,14 @@ Fresh installs  -> local SQLite until cloud mode is configured
 The previous Aiven PostgreSQL cloud database was dumped and restored into AWS RDS PostgreSQL. Development and installed-app connection tests succeeded, data loaded correctly, and AWS RDS performed faster in the tested workflows. The AWS RDS database is now treated as the accurate master data source for normal daily use.
 
 The mode can still be changed from the password-protected System module. The selected mode is stored in `%LOCALAPPDATA%\FoodInventory\database.properties` and takes effect after application restart. Fresh installs seed this config file from bundled defaults when it does not already exist.
+
+An API layer proof now exists for the next credential-protection step:
+
+```text
+Desktop app -> API Gateway HTTP API -> AWS Lambda -> AWS RDS PostgreSQL
+```
+
+The API stack is deployed as `esm-operations-api` in `ca-central-1`. The desktop app can use API mode for migrated Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, GFS product guide import persistence, product purchase history, and administrative upload/download sync workflows. Current work PCs can continue using direct Cloud PostgreSQL mode as a fallback while API mode is validated through normal daily workflows.
 
 The safe default for a fresh install remains local SQLite:
 
@@ -446,7 +454,7 @@ UPLOAD_TO_POSTGRES
 - Use a dedicated app database user.
 - Require SSL.
 - The app seeds local config from safe bundled defaults; cloud credentials must be supplied locally outside source control.
-- Consider a backend/API layer later if stronger credential protection is needed.
+- Continue moving toward the backend/API layer so PostgreSQL credentials do not need to live on client PCs.
 
 ## Long-Term Architecture Option
 
@@ -468,4 +476,4 @@ A more secure long-term architecture is:
 Desktop app -> application backend/API -> PostgreSQL
 ```
 
-The direct PostgreSQL approach is acceptable for a controlled internal desktop app test, but the backend/API design should be reconsidered if the app expands to more users, more locations, or more sensitive permissions.
+The first version of this architecture has been deployed with API Gateway HTTP API and AWS Lambda. API mode now covers Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, GFS product guide import persistence, product purchase history, and administrative upload/download sync workflows, while direct PostgreSQL mode remains available as a fallback until API mode is proven through normal daily use.

@@ -2,6 +2,7 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionWeekDao;
 import ca.foodinventory.dao.ProductionItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.ProductionReportSummary;
 import ca.foodinventory.model.ProductionWeek;
@@ -9,6 +10,7 @@ import ca.foodinventory.model.ProductionWeekDay;
 import ca.foodinventory.model.ProductionWeekLine;
 import ca.foodinventory.service.ProductionReportService;
 import ca.foodinventory.service.ProductionUsageReportImportService;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -62,6 +64,7 @@ public class WeeklyProductionView extends BorderPane {
 
     private final ProductionWeekDao productionWeekDao = new ProductionWeekDao();
     private final ProductionItemDao productionItemDao = new ProductionItemDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
     private final ProductionUsageReportImportService usageReportImportService =
             new ProductionUsageReportImportService();
     private final ProductionReportService productionReportService = new ProductionReportService();
@@ -182,7 +185,9 @@ public class WeeklyProductionView extends BorderPane {
     }
 
     private void loadWeeks() {
-        List<ProductionWeek> weeks = productionWeekDao.findAll();
+        List<ProductionWeek> weeks = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findWeeks()
+                : productionWeekDao.findAll();
         weekComboBox.setItems(FXCollections.observableArrayList(weeks));
 
         if (!weeks.isEmpty()) {
@@ -208,9 +213,13 @@ public class WeeklyProductionView extends BorderPane {
         Task<WeekLoadData> task = new Task<>() {
             @Override
             protected WeekLoadData call() {
-                List<ProductionWeekDay> days = productionWeekDao.findDaysByWeekId(week.getId());
+                List<ProductionWeekDay> days = DatabaseManager.isApiDatabase()
+                        ? productionApiClient.findWeekDays(week.getId())
+                        : productionWeekDao.findDaysByWeekId(week.getId());
                 Map<Integer, List<ProductionWeekLine>> linesByDayId =
-                        productionWeekDao.findLinesByWeekId(week.getId());
+                        DatabaseManager.isApiDatabase()
+                                ? productionApiClient.findWeekLinesByDayId(week.getId())
+                                : productionWeekDao.findLinesByWeekId(week.getId());
                 return new WeekLoadData(week, days, linesByDayId);
             }
         };
@@ -383,7 +392,14 @@ public class WeeklyProductionView extends BorderPane {
                 ProductionReportSummary productionSummary =
                         productionReportService.generateReport(usageSummary);
 
-                int productionWeekId = productionWeekDao.saveGeneratedWeek(
+                int productionWeekId = DatabaseManager.isApiDatabase()
+                        ? productionApiClient.saveGeneratedWeek(
+                        weekStartDate,
+                        parMultiplier,
+                        productionSummary,
+                        includeAllProductionItems
+                )
+                        : productionWeekDao.saveGeneratedWeek(
                         weekStartDate,
                         parMultiplier,
                         productionSummary,
@@ -392,7 +408,9 @@ public class WeeklyProductionView extends BorderPane {
 
                 return new ProductionImportResult(
                         productionWeekId,
-                        productionWeekDao.findAll()
+                        DatabaseManager.isApiDatabase()
+                                ? productionApiClient.findWeeks()
+                                : productionWeekDao.findAll()
                 );
             }
         };
@@ -443,7 +461,11 @@ public class WeeklyProductionView extends BorderPane {
         }
 
         try {
-            productionWeekDao.updateLineOverrides(lines);
+            if (DatabaseManager.isApiDatabase()) {
+                productionApiClient.updateLineOverrides(lines);
+            } else {
+                productionWeekDao.updateLineOverrides(lines);
+            }
 
             showAlert(
                     Alert.AlertType.INFORMATION,
@@ -474,11 +496,19 @@ public class WeeklyProductionView extends BorderPane {
 
         try {
             int selectedWeekId = selectedWeek.getId();
-            productionWeekDao.refreshWeekLines(
-                    selectedWeek,
-                    getCommittedParMultiplier(),
-                    includeAllProductionItemsCheckBox.isSelected()
-            );
+            if (DatabaseManager.isApiDatabase()) {
+                productionApiClient.refreshWeek(
+                        selectedWeek,
+                        getCommittedParMultiplier(),
+                        includeAllProductionItemsCheckBox.isSelected()
+                );
+            } else {
+                productionWeekDao.refreshWeekLines(
+                        selectedWeek,
+                        getCommittedParMultiplier(),
+                        includeAllProductionItemsCheckBox.isSelected()
+                );
+            }
             loadWeeks();
             selectWeek(selectedWeekId);
 
@@ -539,10 +569,17 @@ public class WeeklyProductionView extends BorderPane {
         }
 
         try {
-            productionItemDao.updatePermanentOverridePar(
-                    selectedLine.getProductionItemId(),
-                    selectedLine.getOverridePar()
-            );
+            if (DatabaseManager.isApiDatabase()) {
+                productionApiClient.updatePermanentOverridePar(
+                        selectedLine.getProductionItemId(),
+                        selectedLine.getOverridePar()
+                );
+            } else {
+                productionItemDao.updatePermanentOverridePar(
+                        selectedLine.getProductionItemId(),
+                        selectedLine.getOverridePar()
+                );
+            }
 
             showAlert(
                     Alert.AlertType.INFORMATION,

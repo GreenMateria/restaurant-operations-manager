@@ -2,9 +2,12 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.model.Product;
+import ca.foodinventory.service.InvoiceApiClient;
+import ca.foodinventory.service.ProductApiClient;
 import javafx.collections.FXCollections;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -21,6 +24,8 @@ public class ManualInvoiceView {
 
     private final InvoiceDao invoiceDao = new InvoiceDao();
     private final ProductDao productDao = new ProductDao();
+    private final InvoiceApiClient invoiceApiClient = new InvoiceApiClient();
+    private final ProductApiClient productApiClient = new ProductApiClient();
 
     private final List<InvoiceLine> lines = new ArrayList<>();
     private final TableView<InvoiceLine> table = new TableView<>();
@@ -267,7 +272,9 @@ public class ManualInvoiceView {
     }
 
     private List<Product> loadProductsForInvoice() {
-        List<Product> products = productDao.findAll();
+        List<Product> products = isDepartmentApiMode()
+                ? productApiClient.findAllActiveProducts()
+                : productDao.findAll();
 
         if (department != null) {
             products.removeIf(product -> !matchesDepartment(product.getReportingCategory()));
@@ -457,14 +464,14 @@ public class ManualInvoiceView {
             return;
         }
 
-        if (invoiceDao.invoiceExists(invoiceNumber)) {
+        if (invoiceExists(invoiceNumber)) {
             boolean overwrite = showDuplicateInvoiceDialog(invoiceNumber);
 
             if (!overwrite) {
                 return;
             }
 
-            invoiceDao.deleteInvoice(invoiceNumber);
+            deleteInvoice(invoiceNumber);
         }
 
         if (isAlcoholInvoice()) {
@@ -476,6 +483,15 @@ public class ManualInvoiceView {
                     merchandiseSubtotal,
                     total,
                     buildAdjustments(),
+                    lines
+            );
+        } else if (isDepartmentApiMode()) {
+            invoiceApiClient.saveInvoice(
+                    department,
+                    supplier,
+                    invoiceNumber,
+                    invoiceDate,
+                    total,
                     lines
             );
         } else {
@@ -588,6 +604,25 @@ public class ManualInvoiceView {
 
     private boolean isAlcoholInvoice() {
         return "ALCOHOL".equals(department);
+    }
+
+    private boolean isDepartmentApiMode() {
+        return DatabaseManager.isApiDatabase()
+                && ("FOOD".equals(department) || "SUPPLIES".equals(department));
+    }
+
+    private boolean invoiceExists(String invoiceNumber) {
+        return isDepartmentApiMode()
+                ? invoiceApiClient.invoiceExists(invoiceNumber)
+                : invoiceDao.invoiceExists(invoiceNumber);
+    }
+
+    private void deleteInvoice(String invoiceNumber) {
+        if (isDepartmentApiMode()) {
+            invoiceApiClient.deleteInvoice(invoiceNumber);
+        } else {
+            invoiceDao.deleteInvoice(invoiceNumber);
+        }
     }
 
     private double parseDouble(String value) {

@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Saturday, August 22, 2026_
+_Last Updated: Friday, September 4, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -84,12 +84,16 @@ Important:
 - The packaged application uses the database under `%LOCALAPPDATA%`.
 - SQLite is the default startup mode.
 - Cloud PostgreSQL mode is selected through `%LOCALAPPDATA%\FoodInventory\database.properties` and can be changed from the password-protected System module.
-- Fresh installs seed `database.properties` from safe bundled defaults when the local config file does not exist; cloud credentials must be supplied locally outside source control.
+- Fresh installs seed `database.properties` from safe bundled defaults when the local config file does not exist; source-controlled defaults must keep credentials blank.
+- Release-built installers can include an ignored generated `database-release.properties` resource that configures API mode once per release from secret values supplied at packaging time.
 - For the current work PCs, AWS RDS PostgreSQL is the normal operating mode and the cloud database is the accurate master data source.
 - Upload/download cloud sync controls are administrator migration/recovery tools, not routine daily sync actions.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
-- Current v3.0.5 development changes are saved locally but are not packaged, tagged, published, or promoted to stable release yet.
+- Current project version is v3.0.6.
+- API layer stack `esm-operations-api` is deployed in AWS and the desktop app can use API mode for migrated workflows.
+- Current API-mode migrated areas are Food Department workflows, Alcohol Department workflows, Supplies Department workflows, Production workflows, Reporting/Sales workflows, GFS product guide import persistence, product purchase history, and administrative upload/download sync.
+- Current API-mode gaps are deferred variance reporting and local backup/export polish.
 
 ---
 
@@ -726,6 +730,8 @@ Weekly Production currently supports:
 
 Cloud-mode usage report import/generation runs in a background task and production profile lines are batch-loaded to avoid repeated cloud round trips during report generation.
 
+In API mode, Production setup, POS Menu Items, Weekly Production, product mappings, production report import/generation, and Freezer Pull are backed by the deployed API stack.
+
 Generated production normally uses previous sales plus a buffer and rounds upward as required.
 
 Permanent override PAR values can replace calculated values where a fixed production level is preferred.
@@ -908,17 +914,18 @@ Release.ps1
 
 Typical release process:
 
-1. Enter version.
-2. Enter release notes.
-3. Update project version.
-4. Run Maven build.
-5. Build Windows installer with `jpackage`.
-6. Update release history.
-7. Commit changes.
-8. Create Git tag.
-9. Push code and tag.
-10. Publish installer to GitHub Releases.
-11. Copy installer to the local Releases folder.
+1. Set `FOOD_INVENTORY_RELEASE_API_KEY` in the local release shell or make sure `%TEMP%\esm-api-key.txt` contains the current API key.
+2. Enter version.
+3. Enter release notes.
+4. Update project version.
+5. Commit and push source changes before generating release credentials.
+6. Generate ignored `database-release.properties` for the installer build.
+7. Run Maven build.
+8. Build Windows installer with `jpackage`.
+9. Remove the generated release config from the source tree.
+10. Create Git tag.
+11. Push tag and publish installer to GitHub Releases.
+12. Copy installer to the local Releases folder.
 
 Installer format:
 
@@ -961,14 +968,22 @@ The application currently has a stable foundation for:
 - Automatic updating
 - Controlled SQLite/PostgreSQL mode switching
 - Password-protected cloud upload/download tools
+- Deployed API Gateway/Lambda stack for API mode
+- API-backed Food Department workflows
+- API-backed Alcohol Department workflows, including alcohol profile maintenance
+- API-backed Supplies Department workflows
+- API-backed Production workflows, including POS Menu Items, Weekly Production, production report import/generation, Product Mappings, and Freezer Pull
+- API-backed Reporting/Sales workflows, including Invoice History, Sales Entry/import persistence, Inventory Valuation, and Weekly Cost Report generation
+- API-backed GFS product guide import persistence and product purchase history lookup
+- API-backed administrative upload/download sync for cloud replacement and local recovery workflows
 - Persistent Order Guide case-size overrides
 - Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
 
-All implemented features through version 3.0.5 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 3.0.6 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 
-- Alcohol sales mappings and alcohol-only variance reporting
+- Alcohol-only variance reporting
 - Food production-to-inventory variance later, after alcohol variance is working
 - Recipe costing
 - Yield tracking
@@ -981,13 +996,11 @@ Primary unfinished areas:
 
 ## Immediate
 
-1. Keep the current v3.0.5 development tree out of stable release until alcohol Sales Mappings setup is validated.
-2. Populate alcohol sales mappings from the POS Menu Items picker.
-3. Build alcohol variance calculation/output inside the Alcohol Department.
-4. Package and publish the next installer only after the current development tree is approved for stable.
-5. Validate the v3.0.5 installer upgrade on the work PCs.
-6. Continue monitoring daily Cloud PostgreSQL use on the configured work PCs.
-7. Add a manual Check for Updates action.
+1. Continue monitoring daily Cloud PostgreSQL use on the configured work PCs.
+2. Validate the v3.0.6 installer upgrade on the work PCs.
+3. Validate Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase-history, and admin sync API mode from the IntelliJ desktop app using normal live workflows.
+4. Build alcohol variance calculation/output inside the Alcohol Department after operational workflows are stable.
+5. Add a manual Check for Updates action.
 
 ## Medium Term
 

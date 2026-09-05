@@ -1,9 +1,11 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.SalesPeriodDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ImportedSalesSummary;
 import ca.foodinventory.model.SalesPeriod;
 import ca.foodinventory.service.PosSalesImportService;
+import ca.foodinventory.service.ReportingApiClient;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.scene.control.*;
@@ -18,6 +20,7 @@ import java.math.RoundingMode;
 public class SalesEntryView {
 
     private final SalesPeriodDao salesPeriodDao = new SalesPeriodDao();
+    private final ReportingApiClient reportingApiClient = new ReportingApiClient();
 
     private final DatePicker periodStartPicker = new DatePicker();
     private final DatePicker periodEndPicker = new DatePicker();
@@ -279,6 +282,11 @@ public class SalesEntryView {
             Task<java.util.List<SalesPeriod>> task = new Task<>() {
                 @Override
                 protected java.util.List<SalesPeriod> call() {
+                    if (DatabaseManager.isApiDatabase()) {
+                        reportingApiClient.saveSalesPeriod(salesPeriod);
+                        return reportingApiClient.findSalesPeriods();
+                    }
+
                     salesPeriodDao.save(salesPeriod);
                     return salesPeriodDao.findAll();
                 }
@@ -313,7 +321,11 @@ public class SalesEntryView {
     }
 
     private void loadSalesPeriods() {
-        table.setItems(FXCollections.observableArrayList(salesPeriodDao.findAll()));
+        table.setItems(FXCollections.observableArrayList(
+                DatabaseManager.isApiDatabase()
+                        ? reportingApiClient.findSalesPeriods()
+                        : salesPeriodDao.findAll()
+        ));
     }
 
     private BigDecimal parseMoney(TextField field) {

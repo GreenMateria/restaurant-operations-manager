@@ -1,9 +1,13 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.AlcoholSalesMappingDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholSalesMapping;
+import ca.foodinventory.service.AlcoholSalesMappingApiClient;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
+import javafx.concurrent.Task;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.MouseButton;
@@ -14,6 +18,7 @@ import java.util.Optional;
 public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesMapping> {
 
     private final AlcoholSalesMappingDao dao = new AlcoholSalesMappingDao();
+    private final AlcoholSalesMappingApiClient apiClient = new AlcoholSalesMappingApiClient();
     private FilteredList<AlcoholSalesMapping> filteredMappings;
 
     public AlcoholSalesMappingsView() {
@@ -99,6 +104,11 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
     }
 
     private void loadMappings() {
+        if (DatabaseManager.isApiDatabase()) {
+            loadMappingsFromApi();
+            return;
+        }
+
         filteredMappings = new FilteredList<>(
                 FXCollections.observableArrayList(dao.findAll()),
                 mapping -> true
@@ -106,6 +116,49 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
 
         table.setItems(filteredMappings);
         applySearch();
+    }
+
+    private void loadMappingsFromApi() {
+        table.setPlaceholder(new Label("Loading alcohol sales mappings..."));
+
+        Task<java.util.List<AlcoholSalesMapping>> task = new Task<>() {
+            @Override
+            protected java.util.List<AlcoholSalesMapping> call() {
+                return apiClient.findAll();
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            filteredMappings = new FilteredList<>(
+                    FXCollections.observableArrayList(task.getValue()),
+                    mapping -> true
+            );
+            table.setItems(filteredMappings);
+            applySearch();
+        });
+
+        task.setOnFailed(event -> {
+            Throwable exception = task.getException();
+            if (exception != null) {
+                exception.printStackTrace();
+            }
+
+            filteredMappings = new FilteredList<>(
+                    FXCollections.observableArrayList(),
+                    mapping -> true
+            );
+            table.setItems(filteredMappings);
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Alcohol Sales Mappings API Failed",
+                    "Alcohol sales mappings could not be loaded from the API."
+                            + formatFailureDetails(exception)
+            );
+        });
+
+        Thread thread = new Thread(task, "alcohol-sales-mappings-api-load");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void applySearch() {
@@ -133,7 +186,7 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
         Optional<AlcoholSalesMapping> result = dialog.showAndWait();
 
         result.ifPresent(mapping -> {
-            dao.save(mapping);
+            saveMapping(mapping);
             loadMappings();
         });
     }
@@ -154,7 +207,7 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
         Optional<AlcoholSalesMapping> result = dialog.showAndWait();
 
         result.ifPresent(updated -> {
-            dao.save(updated);
+            saveMapping(updated);
             loadMappings();
         });
     }
@@ -174,9 +227,58 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {
-                dao.deactivate(selected.getId());
+                deactivateMapping(selected.getId());
                 loadMappings();
             }
         });
+    }
+
+    private void saveMapping(AlcoholSalesMapping mapping) {
+        if (DatabaseManager.isApiDatabase()) {
+            apiClient.save(mapping);
+            return;
+        }
+
+        dao.save(mapping);
+    }
+
+    private void deactivateMapping(int id) {
+        if (DatabaseManager.isApiDatabase()) {
+            apiClient.deactivate(id);
+            return;
+        }
+
+        dao.deactivate(id);
+    }
+
+    private String formatFailureDetails(Throwable exception) {
+        if (exception == null) {
+            return "";
+        }
+
+        Throwable rootCause = exception;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+
+        String message = rootCause.getMessage();
+        if (message == null || message.isBlank()) {
+            message = exception.getMessage();
+        }
+
+        return message == null || message.isBlank()
+                ? ""
+                : "\n\nDetails: " + message;
+    }
+
+    @Override
+    protected void showAlert(Alert.AlertType type, String title, String message) {
+        Runnable show = () -> super.showAlert(type, title, message);
+
+        if (Platform.isFxApplicationThread()) {
+            show.run();
+        } else {
+            Platform.runLater(show);
+        }
     }
 }

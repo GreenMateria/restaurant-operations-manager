@@ -3,6 +3,7 @@ package ca.foodinventory.service;
 import ca.foodinventory.dao.PosMenuItemDao;
 import ca.foodinventory.dao.ProductionItemDao;
 import ca.foodinventory.dao.ProductionProfileLineDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ImportedUsageReportLine;
 import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.PosMenuItem;
@@ -25,6 +26,7 @@ public class ProductionReportService {
     private final PosMenuItemDao posMenuItemDao = new PosMenuItemDao();
     private final ProductionProfileLineDao profileLineDao = new ProductionProfileLineDao();
     private final ProductionItemDao productionItemDao = new ProductionItemDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
 
     public ProductionReportSummary generateReport(ImportedUsageReportSummary usageReportSummary) {
         Map<String, PosMenuItem> posItemsBySku = loadActivePosItemsBySku();
@@ -95,7 +97,11 @@ public class ProductionReportService {
     private Map<String, PosMenuItem> loadActivePosItemsBySku() {
         Map<String, PosMenuItem> itemsBySku = new HashMap<>();
 
-        for (PosMenuItem item : posMenuItemDao.findActive()) {
+        List<PosMenuItem> items = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findActivePosMenuItems()
+                : posMenuItemDao.findActive();
+
+        for (PosMenuItem item : items) {
             itemsBySku.put(normalizeSku(item.getPosSku()), item);
         }
 
@@ -105,7 +111,11 @@ public class ProductionReportService {
     private Map<Integer, ProductionItem> loadProductionItemsById() {
         Map<Integer, ProductionItem> itemsById = new HashMap<>();
 
-        for (ProductionItem item : productionItemDao.findAll()) {
+        List<ProductionItem> items = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findProductionItems()
+                : productionItemDao.findAll();
+
+        for (ProductionItem item : items) {
             itemsById.put(item.getId(), item);
         }
 
@@ -121,7 +131,19 @@ public class ProductionReportService {
                 .filter(id -> id > 0)
                 .collect(Collectors.toSet());
 
-        return profileLineDao.findActiveByProfileIds(profileIds);
+        if (!DatabaseManager.isApiDatabase()) {
+            return profileLineDao.findActiveByProfileIds(profileIds);
+        }
+
+        Map<Integer, List<ProductionProfileLine>> linesByProfileId = new LinkedHashMap<>();
+        for (Integer profileId : profileIds) {
+            List<ProductionProfileLine> activeLines = productionApiClient.findProfileLines(profileId)
+                    .stream()
+                    .filter(ProductionProfileLine::isActive)
+                    .toList();
+            linesByProfileId.put(profileId, activeLines);
+        }
+        return linesByProfileId;
     }
 
     private ProductionReportLine createReportLine(

@@ -2,10 +2,13 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.Product;
 import ca.foodinventory.service.GfsCsvImportService;
+import ca.foodinventory.service.InvoiceApiClient;
+import ca.foodinventory.service.ProductApiClient;
 import javafx.collections.FXCollections;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -27,6 +30,8 @@ public class ImportInvoiceView {
     private final GfsCsvImportService importService = new GfsCsvImportService();
     private final InvoiceDao invoiceDao = new InvoiceDao();
     private final ProductDao productDao = new ProductDao();
+    private final InvoiceApiClient invoiceApiClient = new InvoiceApiClient();
+    private final ProductApiClient productApiClient = new ProductApiClient();
 
     private final TableView<InvoiceLine> table = new TableView<>();
 
@@ -427,7 +432,7 @@ public class ImportInvoiceView {
 
         confirmedDetails.ifPresent(details -> {
             try {
-                if (invoiceDao.invoiceExists(details.invoiceNumber())) {
+                if (invoiceExists(details.invoiceNumber())) {
 
                     boolean overwrite =
                             showDuplicateInvoiceWarning(details.invoiceNumber());
@@ -436,10 +441,10 @@ public class ImportInvoiceView {
                         return;
                     }
 
-                    invoiceDao.deleteInvoice(details.invoiceNumber());
+                    deleteInvoice(details.invoiceNumber());
                 }
 
-                invoiceDao.saveInvoice(
+                saveInvoice(
                         "GFS",
                         details.invoiceNumber(),
                         details.invoiceDate(),
@@ -497,7 +502,11 @@ public class ImportInvoiceView {
     }
 
     private List<Product> loadSortedProducts() {
-        return productDao.findAll()
+        List<Product> products = isFoodApiMode()
+                ? productApiClient.findAllActiveProducts()
+                : productDao.findAll();
+
+        return products
                 .stream()
                 .sorted((a, b) -> {
                     int categoryCompare = a.getCategory().compareToIgnoreCase(b.getCategory());
@@ -819,9 +828,66 @@ public class ImportInvoiceView {
     }
 
     private List<InvoiceLine> findUnknownSkus() {
+        if (isFoodApiMode()) {
+            return List.of();
+        }
+
         return currentLines.stream()
                 .filter(line -> productDao.findIdBySkuOrAlias(line.getSku()) == null)
                 .toList();
+    }
+
+    private boolean invoiceExists(String invoiceNumber) {
+        return isFoodApiMode()
+                ? invoiceApiClient.invoiceExists(invoiceNumber)
+                : invoiceDao.invoiceExists(invoiceNumber);
+    }
+
+    private void deleteInvoice(String invoiceNumber) {
+        if (isFoodApiMode()) {
+            invoiceApiClient.deleteInvoice(invoiceNumber);
+        } else {
+            invoiceDao.deleteInvoice(invoiceNumber);
+        }
+    }
+
+    private void saveInvoice(
+            String supplier,
+            String invoiceNumber,
+            String invoiceDate,
+            BigDecimal importedTotal,
+            BigDecimal merchandiseSubtotal,
+            BigDecimal invoiceTotal,
+            List<InvoiceAdjustment> adjustments,
+            List<InvoiceLine> lines
+    ) {
+        if (isFoodApiMode()) {
+            invoiceApiClient.saveInvoice(
+                    supplier,
+                    invoiceNumber,
+                    invoiceDate,
+                    importedTotal,
+                    merchandiseSubtotal,
+                    invoiceTotal,
+                    adjustments,
+                    lines
+            );
+        } else {
+            invoiceDao.saveInvoice(
+                    supplier,
+                    invoiceNumber,
+                    invoiceDate,
+                    importedTotal,
+                    merchandiseSubtotal,
+                    invoiceTotal,
+                    adjustments,
+                    lines
+            );
+        }
+    }
+
+    private boolean isFoodApiMode() {
+        return DatabaseManager.isApiDatabase();
     }
 
     private double parseDouble(String value) {

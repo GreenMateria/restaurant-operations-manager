@@ -1,7 +1,9 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionItemProductMappingDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ProductionItemProductMapping;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
@@ -14,6 +16,7 @@ import java.util.Optional;
 public class ProductionItemProductMappingsView extends ProductionModuleView<ProductionItemProductMapping> {
 
     private final ProductionItemProductMappingDao dao = new ProductionItemProductMappingDao();
+    private final ProductionApiClient apiClient = new ProductionApiClient();
     private FilteredList<ProductionItemProductMapping> filteredMappings;
 
     public ProductionItemProductMappingsView() {
@@ -94,7 +97,9 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
 
     private void loadMappings() {
         filteredMappings = new FilteredList<>(
-                FXCollections.observableArrayList(dao.findAll()),
+                FXCollections.observableArrayList(DatabaseManager.isApiDatabase()
+                        ? apiClient.findProductMappings()
+                        : dao.findAll()),
                 mapping -> true
         );
 
@@ -126,7 +131,7 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
         Optional<ProductionItemProductMapping> result = dialog.showAndWait();
 
         result.ifPresent(mapping -> {
-            dao.save(mapping);
+            saveMapping(mapping);
             loadMappings();
         });
     }
@@ -147,7 +152,7 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
         Optional<ProductionItemProductMapping> result = dialog.showAndWait();
 
         result.ifPresent(updated -> {
-            dao.save(updated);
+            saveMapping(updated);
             loadMappings();
         });
     }
@@ -167,9 +172,21 @@ public class ProductionItemProductMappingsView extends ProductionModuleView<Prod
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {
-                dao.deactivate(selected.getId());
+                if (DatabaseManager.isApiDatabase()) {
+                    apiClient.deactivateProductMapping(selected.getId());
+                } else {
+                    dao.deactivate(selected.getId());
+                }
                 loadMappings();
             }
         });
+    }
+
+    private void saveMapping(ProductionItemProductMapping mapping) {
+        if (DatabaseManager.isApiDatabase()) {
+            apiClient.saveProductMapping(mapping);
+        } else {
+            dao.save(mapping);
+        }
     }
 }

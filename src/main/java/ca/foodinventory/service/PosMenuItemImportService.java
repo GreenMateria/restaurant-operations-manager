@@ -1,6 +1,7 @@
 package ca.foodinventory.service;
 
 import ca.foodinventory.dao.PosMenuItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.PosMenuItem;
 import ca.foodinventory.model.PosMenuItemImportSummary;
 import org.apache.poi.ss.usermodel.Cell;
@@ -22,6 +23,7 @@ public class PosMenuItemImportService {
     private static final int POS_SKU_COLUMN = 1;
 
     private final PosMenuItemDao posMenuItemDao = new PosMenuItemDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
 
     public PosMenuItemImportSummary importMenuItems(File file) {
         try (
@@ -34,6 +36,7 @@ public class PosMenuItemImportService {
             int updatedCount = 0;
             int skippedCount = 0;
             boolean skippingKdsSection = false;
+            java.util.List<PosMenuItem> apiItems = new java.util.ArrayList<>();
 
             for (int rowIndex = 0; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
@@ -77,11 +80,22 @@ public class PosMenuItemImportService {
                 rowsRead++;
                 PosMenuItem item = new PosMenuItem(posSku, itemName, null, 0, true);
 
-                if (posMenuItemDao.upsertFromSetupImport(item)) {
-                    insertedCount++;
+                if (DatabaseManager.isApiDatabase()) {
+                    apiItems.add(item);
                 } else {
-                    updatedCount++;
+                    if (posMenuItemDao.upsertFromSetupImport(item)) {
+                        insertedCount++;
+                    } else {
+                        updatedCount++;
+                    }
                 }
+            }
+
+            if (DatabaseManager.isApiDatabase() && !apiItems.isEmpty()) {
+                ProductionApiClient.ImportCounts counts =
+                        productionApiClient.upsertPosMenuItems(apiItems);
+                insertedCount = counts.inserted();
+                updatedCount = counts.updated();
             }
 
             return new PosMenuItemImportSummary(

@@ -2,8 +2,10 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InventoryCountDao;
 import ca.foodinventory.dao.InventoryCountTemplateLineDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.OrderGuideRow;
+import ca.foodinventory.service.InventoryApiClient;
 import ca.foodinventory.service.OrderGuideService;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -34,6 +36,7 @@ public class OrderGuideView {
     private final InventoryCountTemplateLineDao templateLineDao =
             new InventoryCountTemplateLineDao();
     private final OrderGuideService orderGuideService = new OrderGuideService();
+    private final InventoryApiClient apiClient = new InventoryApiClient();
 
     private final ComboBox<InventoryCount> openingCountBox = new ComboBox<>();
     private final ComboBox<InventoryCount> closingCountBox = new ComboBox<>();
@@ -178,7 +181,9 @@ public class OrderGuideView {
 
         List<InventoryCount> counts;
 
-        if (department == null) {
+        if (isMigratedDepartmentApiMode()) {
+            counts = apiClient.findCompletedCounts(department);
+        } else if (department == null) {
             counts = countDao.findCompleted();
         } else {
             counts = countDao.findCompletedByDepartment(department);
@@ -205,7 +210,9 @@ public class OrderGuideView {
             return;
         }
 
-        List<OrderGuideRow> rows = orderGuideService.generateOrderGuide(
+        List<OrderGuideRow> rows = isMigratedDepartmentApiMode()
+                ? apiClient.generateOrderGuide(opening.getId(), closing.getId())
+                : orderGuideService.generateOrderGuide(
                 opening.getId(),
                 closing.getId()
         );
@@ -222,7 +229,11 @@ public class OrderGuideView {
 
         try {
             row.setCaseSize(caseSize);
-            templateLineDao.updateOrderGuideCaseSize(row.getTemplateLineId(), caseSize);
+            if (isMigratedDepartmentApiMode()) {
+                apiClient.updateOrderGuideCaseSize(row.getTemplateLineId(), caseSize);
+            } else {
+                templateLineDao.updateOrderGuideCaseSize(row.getTemplateLineId(), caseSize);
+            }
             table.refresh();
         } catch (RuntimeException ex) {
             ex.printStackTrace();
@@ -473,5 +484,12 @@ public class OrderGuideView {
             case "SUPPLIES" -> "Supplies Order Guide";
             default -> "Order Guide";
         };
+    }
+
+    private boolean isMigratedDepartmentApiMode() {
+        return DatabaseManager.isApiDatabase()
+                && ("FOOD".equals(department)
+                || "ALCOHOL".equals(department)
+                || "SUPPLIES".equals(department));
     }
 }

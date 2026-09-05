@@ -3,9 +3,12 @@ package ca.foodinventory.ui;
 import ca.foodinventory.dao.AlcoholProductProfileDao;
 import ca.foodinventory.dao.InventoryCountDao;
 import ca.foodinventory.dao.InventoryCountLineDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
+import ca.foodinventory.service.AlcoholProductProfileApiClient;
+import ca.foodinventory.service.InventoryApiClient;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -24,6 +27,9 @@ public class InventoryCountEntryView {
     private final InventoryCountLineDao lineDao = new InventoryCountLineDao();
     private final InventoryCountDao countDao = new InventoryCountDao();
     private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
+    private final InventoryApiClient apiClient = new InventoryApiClient();
+    private final AlcoholProductProfileApiClient alcoholProfileApiClient =
+            new AlcoholProductProfileApiClient();
     private final String department;
 
     private final VBox rowsBox = new VBox(0);
@@ -86,10 +92,10 @@ public class InventoryCountEntryView {
 
         rowsBox.getChildren().add(createHeaderRow());
 
-        List<InventoryCountLine> lines = lineDao.findByCount(count.getId());
-        Map<Integer, AlcoholProductProfile> profilesByProductId = isAlcoholLayout()
-                ? alcoholProfileDao.findAllActiveByProductId()
-                : Map.of();
+        List<InventoryCountLine> lines = isMigratedDepartmentApiMode()
+                ? apiClient.findCountLines(count.getId())
+                : lineDao.findByCount(count.getId());
+        Map<Integer, AlcoholProductProfile> profilesByProductId = loadAlcoholProfilesIfNeeded();
         String currentSection = null;
 
         for (InventoryCountLine line : lines) {
@@ -385,7 +391,13 @@ public class InventoryCountEntryView {
         List<InventoryCountLine> lines = collectCommittedLines();
         runCountSaveTask(
                 "Saving inventory quantities...",
-                () -> lineDao.updateQuantities(lines),
+                () -> {
+                    if (isMigratedDepartmentApiMode()) {
+                        apiClient.updateCountLines(count.getId(), lines);
+                    } else {
+                        lineDao.updateQuantities(lines);
+                    }
+                },
                 () -> showAlert(Alert.AlertType.INFORMATION, "Saved", "Inventory quantities saved.")
         );
     }
@@ -395,8 +407,12 @@ public class InventoryCountEntryView {
         runCountSaveTask(
                 "Completing inventory count...",
                 () -> {
-                    lineDao.updateQuantities(lines);
-                    countDao.markCompleted(count.getId());
+                    if (isMigratedDepartmentApiMode()) {
+                        apiClient.completeCount(count.getId(), lines);
+                    } else {
+                        lineDao.updateQuantities(lines);
+                        countDao.markCompleted(count.getId());
+                    }
                 },
                 () -> showAlert(
                         Alert.AlertType.INFORMATION,
@@ -459,6 +475,23 @@ public class InventoryCountEntryView {
 
         String templateName = count.getTemplateName() == null ? "" : count.getTemplateName().toUpperCase();
         return templateName.contains("ALCOHOL");
+    }
+
+    private Map<Integer, AlcoholProductProfile> loadAlcoholProfilesIfNeeded() {
+        if (!isAlcoholLayout()) {
+            return Map.of();
+        }
+
+        return isMigratedDepartmentApiMode()
+                ? alcoholProfileApiClient.findAllActiveByProductId()
+                : alcoholProfileDao.findAllActiveByProductId();
+    }
+
+    private boolean isMigratedDepartmentApiMode() {
+        return DatabaseManager.isApiDatabase()
+                && ("FOOD".equals(department)
+                || "ALCOHOL".equals(department)
+                || "SUPPLIES".equals(department));
     }
 
     private String resolveUnit(

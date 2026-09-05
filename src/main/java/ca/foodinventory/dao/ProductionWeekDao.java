@@ -572,6 +572,13 @@ public class ProductionWeekDao {
             statement.executeBatch();
         }
 
+        deleteRemovedProductionItemLines(
+                connection,
+                productionWeekDayId,
+                existingLinesByProductionItemId,
+                activeItemsById
+        );
+
         if (!includeAllActiveProductionItems) {
             return;
         }
@@ -580,6 +587,33 @@ public class ProductionWeekDao {
             if (!existingLinesByProductionItemId.containsKey(item.getId())) {
                 insertManualRefreshLine(connection, productionWeekDayId, item);
             }
+        }
+    }
+
+    private void deleteRemovedProductionItemLines(
+            Connection connection,
+            int productionWeekDayId,
+            Map<Integer, RefreshLine> existingLinesByProductionItemId,
+            Map<Integer, ProductionItem> activeItemsById
+    ) throws SQLException {
+        String sql = """
+            DELETE FROM production_week_lines
+            WHERE production_week_day_id = ?
+              AND production_item_id = ?
+        """;
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (RefreshLine line : existingLinesByProductionItemId.values()) {
+                if (activeItemsById.containsKey(line.productionItemId())) {
+                    continue;
+                }
+
+                statement.setInt(1, productionWeekDayId);
+                statement.setInt(2, line.productionItemId());
+                statement.addBatch();
+            }
+
+            statement.executeBatch();
         }
     }
 

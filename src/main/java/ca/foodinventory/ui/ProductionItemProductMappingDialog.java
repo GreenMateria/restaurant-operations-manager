@@ -2,9 +2,12 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductDao;
 import ca.foodinventory.dao.ProductionItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.Product;
 import ca.foodinventory.model.ProductionItem;
 import ca.foodinventory.model.ProductionItemProductMapping;
+import ca.foodinventory.service.ProductApiClient;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -15,6 +18,8 @@ public class ProductionItemProductMappingDialog extends Dialog<ProductionItemPro
 
     private final ProductionItemDao productionItemDao = new ProductionItemDao();
     private final ProductDao productDao = new ProductDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
+    private final ProductApiClient productApiClient = new ProductApiClient();
 
     private final ComboBox<ProductionItem> productionItemComboBox = new ComboBox<>();
     private final ComboBox<Product> productComboBox = new ComboBox<>();
@@ -86,7 +91,11 @@ public class ProductionItemProductMappingDialog extends Dialog<ProductionItemPro
     }
 
     private void loadProductionItems() {
-        SearchableComboBoxSupport.makeSearchable(productionItemComboBox, productionItemDao.findActive(), new StringConverter<>() {
+        java.util.List<ProductionItem> productionItems = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findActiveProductionItems()
+                : productionItemDao.findActive();
+
+        SearchableComboBoxSupport.makeSearchable(productionItemComboBox, productionItems, new StringConverter<>() {
             @Override
             public String toString(ProductionItem item) {
                 return item == null ? "" : item.getName();
@@ -100,7 +109,11 @@ public class ProductionItemProductMappingDialog extends Dialog<ProductionItemPro
     }
 
     private void loadProducts() {
-        SearchableComboBoxSupport.makeSearchable(productComboBox, productDao.getAllActiveProducts(), new StringConverter<>() {
+        java.util.List<Product> products = DatabaseManager.isApiDatabase()
+                ? productApiClient.findAllActiveProducts()
+                : productDao.getAllActiveProducts();
+
+        SearchableComboBoxSupport.makeSearchable(productComboBox, products, new StringConverter<>() {
             @Override
             public String toString(Product product) {
                 if (product == null) {

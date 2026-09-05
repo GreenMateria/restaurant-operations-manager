@@ -1,8 +1,10 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionProfileDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.PosMenuItem;
 import ca.foodinventory.model.ProductionProfile;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -13,6 +15,7 @@ import javafx.util.StringConverter;
 public class PosMenuItemDialog extends Dialog<PosMenuItem> {
 
     private final ProductionProfileDao productionProfileDao = new ProductionProfileDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
 
     private final TextField posNumberField = new TextField();
     private final TextField nameField = new TextField();
@@ -84,7 +87,11 @@ public class PosMenuItemDialog extends Dialog<PosMenuItem> {
     }
 
     private void loadProductionProfiles() {
-        SearchableComboBoxSupport.makeSearchable(productionProfileComboBox, productionProfileDao.findAll(), new StringConverter<>() {
+        java.util.List<ProductionProfile> profiles = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findProfiles()
+                : productionProfileDao.findAll();
+
+        SearchableComboBoxSupport.makeSearchable(productionProfileComboBox, profiles, new StringConverter<>() {
             @Override
             public String toString(ProductionProfile profile) {
                 return profile == null ? "" : profile.getName();

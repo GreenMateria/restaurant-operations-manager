@@ -1,5 +1,12 @@
 # Release History
 
+## v3.0.6
+Date: 2026-08-31
+
+- Added AWS API mode support across Food, Alcohol, Supplies, Production, Reporting/Sales, product import persistence, product purchase history, and administrative upload/download sync workflows.
+- Kept CSV/Excel parsing and local SQLite backup/restore on the desktop client; the API receives normalized records and table snapshots for persistence.
+- Consolidated API Gateway routing to one Lambda proxy trigger to avoid Lambda resource-policy size limits as routes grow.
+
 ## v3.0.0
 Date: 2026-08-04
 
@@ -154,10 +161,8 @@ Date: 2026-08-17 12:34
 
 - Fixed Alcohol Invoicing to Include food items
 
-## v3.0.5 development working tree
+## v3.0.5 pre-release notes
 Date: 2026-08-22
-
-Status: Not packaged or promoted to stable release.
 
 - Added Alcohol Department Sales Mappings and initial Variance Report entry points.
 - Added schema version 15 with `alcohol_sales_mappings`.
@@ -176,3 +181,19 @@ Date: 2026-08-30 15:17
 Date: 2026-08-31 11:04
 
 - Fixed combo box support
+- Added initial desktop API mode support with API URL/key configuration, System API health testing, and read-only Product list loading through the deployed API.
+- Added deployed `GET /pos-menu-items` and read-only desktop POS Menu Items loading through API mode.
+- Added deployed Alcohol Sales Mappings API endpoints for list, add, edit, and deactivate, and wired the desktop Alcohol Sales Mappings screen to use them in API mode.
+- Migrated Food Department API mode workflows: Products, Import Invoice, Manual Invoice, Count Templates, Inventory Counts, and Order Guide.
+- Migrated Alcohol Department API mode workflows: Products with alcohol profile maintenance, Manual Invoice, Count Templates, Inventory Counts, Order Guide, Product Profiles for weighted counts, and Sales Mappings.
+- Added Production API backing in the development build for production setup, POS menu item maintenance/import/KDS cleanup, Weekly Production generation/loading/refresh/override saves, product mappings, and Freezer Pull manual quantities.
+- Deployed Production API routes to `esm-operations-api` and read-only smoke-tested production setup, POS, weekly production, product mapping, and Freezer Pull endpoints.
+- Deployed and smoke-tested the Food and Alcohol API routes against AWS RDS.
+- Confirmed Production CSV/report import and Weekly Production generation work in API mode.
+- Added the missing Log4j runtime provider required by Apache POI so production report imports no longer print a missing logging provider warning.
+- API migration now covers operational departments, Reporting/Sales, product support, and administrative upload/download sync; variance reporting remains deferred.
+
+## v3.1.1
+Date: 2026-09-05 15:31
+
+- Completed API migration, Users no longer need to configure client connections. Database status indicator added. 

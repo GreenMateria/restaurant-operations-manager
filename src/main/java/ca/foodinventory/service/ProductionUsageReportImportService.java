@@ -1,6 +1,7 @@
 package ca.foodinventory.service;
 
 import ca.foodinventory.dao.PosMenuItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ImportedUsageReportLine;
 import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.PosMenuItem;
@@ -27,6 +28,7 @@ public class ProductionUsageReportImportService {
     private static final int WEEKLY_QUANTITY_COLUMN = 17;
 
     private final PosMenuItemDao posMenuItemDao = new PosMenuItemDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
 
     public ImportedUsageReportSummary importUsageReport(File file) {
         try (
@@ -106,7 +108,11 @@ public class ProductionUsageReportImportService {
     private Set<String> loadActivePosSkus() {
         Set<String> posSkus = new HashSet<>();
 
-        for (PosMenuItem item : posMenuItemDao.findActive()) {
+        List<PosMenuItem> items = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findActivePosMenuItems()
+                : posMenuItemDao.findActive();
+
+        for (PosMenuItem item : items) {
             if (item.getPosSku() != null && !item.getPosSku().isBlank()) {
                 posSkus.add(item.getPosSku().trim().toLowerCase());
             }

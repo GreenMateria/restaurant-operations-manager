@@ -1,8 +1,10 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionStationDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ProductionItem;
 import ca.foodinventory.model.ProductionStation;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
@@ -17,6 +19,7 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
     private static final String FREEZER_PULL_STATION = "Freezer Pull";
 
     private final ProductionStationDao productionStationDao = new ProductionStationDao();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
 
     private final TextField nameField = new TextField();
     private final ComboBox<ProductionStation> stationComboBox = new ComboBox<>();
@@ -104,7 +107,9 @@ public class ProductionItemDialog extends Dialog<ProductionItem> {
     }
 
     private void loadStations() {
-        List<ProductionStation> stations = productionStationDao.findActive();
+        List<ProductionStation> stations = DatabaseManager.isApiDatabase()
+                ? productionApiClient.findActiveStations()
+                : productionStationDao.findActive();
 
         stationComboBox.setItems(FXCollections.observableArrayList(stations));
 

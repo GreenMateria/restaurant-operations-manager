@@ -4,10 +4,12 @@ import ca.foodinventory.dao.AlcoholProductProfileDao;
 import ca.foodinventory.dao.InventoryCountDao;
 import ca.foodinventory.dao.InventoryCountLineDao;
 import ca.foodinventory.dao.InventoryCountTemplateDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
 import ca.foodinventory.model.InventoryCountTemplate;
+import ca.foodinventory.service.InventoryApiClient;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -29,6 +31,7 @@ public class InventoryCountsView {
     private final InventoryCountTemplateDao templateDao = new InventoryCountTemplateDao();
     private final InventoryCountLineDao lineDao = new InventoryCountLineDao();
     private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
+    private final InventoryApiClient apiClient = new InventoryApiClient();
 
     private final TableView<InventoryCount> table = new TableView<>();
 
@@ -117,6 +120,13 @@ public class InventoryCountsView {
     }
 
     private void refreshTable() {
+        if (isMigratedDepartmentApiMode()) {
+            table.setItems(FXCollections.observableArrayList(
+                    apiClient.findCounts(department)
+            ));
+            return;
+        }
+
         List<InventoryCount> counts = countDao.findAll();
 
         if (department != null) {
@@ -205,6 +215,19 @@ public class InventoryCountsView {
         });
 
         dialog.showAndWait().ifPresent(template -> {
+            if (isMigratedDepartmentApiMode()) {
+                apiClient.createCount(
+                        department,
+                        template.getId(),
+                        datePicker.getValue().toString(),
+                        periodStartPicker.getValue().toString(),
+                        periodEndPicker.getValue().toString(),
+                        notesArea.getText()
+                );
+                refreshTable();
+                return;
+            }
+
             int countId = countDao.createCount(
                     template.getId(),
                     datePicker.getValue().toString(),
@@ -221,6 +244,10 @@ public class InventoryCountsView {
     }
 
     private List<InventoryCountTemplate> getFilteredTemplates() {
+        if (isMigratedDepartmentApiMode()) {
+            return apiClient.findActiveTemplates(department);
+        }
+
         List<InventoryCountTemplate> templates = templateDao.findAllActive();
 
         if (department != null) {
@@ -313,7 +340,11 @@ public class InventoryCountsView {
                 return;
             }
 
-            countDao.deleteCount(selected.getId());
+            if (isMigratedDepartmentApiMode()) {
+                apiClient.deleteCount(selected.getId());
+            } else {
+                countDao.deleteCount(selected.getId());
+            }
             refreshTable();
 
             showAlert(
@@ -332,7 +363,9 @@ public class InventoryCountsView {
             return;
         }
 
-        List<InventoryCountLine> lines = lineDao.findByCount(selected.getId());
+        List<InventoryCountLine> lines = isMigratedDepartmentApiMode()
+                ? apiClient.findCountLines(selected.getId())
+                : lineDao.findByCount(selected.getId());
 
         if (lines.isEmpty()) {
             showAlert(Alert.AlertType.INFORMATION, "Empty Count", "This count has no active products to print.");
@@ -618,6 +651,13 @@ public class InventoryCountsView {
 
         String templateName = count.getTemplateName() == null ? "" : count.getTemplateName().toUpperCase();
         return templateName.contains("ALCOHOL");
+    }
+
+    private boolean isMigratedDepartmentApiMode() {
+        return DatabaseManager.isApiDatabase()
+                && ("FOOD".equals(department)
+                || "ALCOHOL".equals(department)
+                || "SUPPLIES".equals(department));
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {

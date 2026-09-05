@@ -15,6 +15,13 @@ Releases/*.exe
 # Logs
 *.log
 
+# AWS/SAM local deployment state can contain parameter values or credentials
+samconfig.toml
+.aws-sam/
+
+# Generated at release build time from local/GitHub secret values
+src/main/resources/database-release.properties
+
 # Windows
 Thumbs.db
 Desktop.ini

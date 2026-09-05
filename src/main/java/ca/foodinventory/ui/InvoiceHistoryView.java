@@ -1,10 +1,11 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.Invoice;
-import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
 import ca.foodinventory.model.InvoiceLine;
+import ca.foodinventory.service.ReportingApiClient;
 import javafx.collections.FXCollections;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -22,6 +23,7 @@ import java.util.Optional;
 public class InvoiceHistoryView {
 
     private final InvoiceDao invoiceDao = new InvoiceDao();
+    private final ReportingApiClient reportingApiClient = new ReportingApiClient();
 
     private final TableView<Invoice> invoiceTable = new TableView<>();
     private final TableView<InvoiceLine> lineTable = new TableView<>();
@@ -52,11 +54,11 @@ public class InvoiceHistoryView {
                 .addListener((obs, oldInvoice, selectedInvoice) -> {
                     if (selectedInvoice != null) {
                         lineTable.setItems(FXCollections.observableArrayList(
-                                invoiceDao.findInvoiceLines(selectedInvoice.getId())
+                                findInvoiceLines(selectedInvoice.getId())
                         ));
 
                         breakdownTable.setItems(FXCollections.observableArrayList(
-                                buildBreakdownRows(selectedInvoice.getId())
+                                findBreakdownRows(selectedInvoice.getId())
                         ));
                     } else {
                         lineTable.setItems(FXCollections.observableArrayList());
@@ -94,24 +96,35 @@ public class InvoiceHistoryView {
     }
 
     private void loadInvoices() {
-        invoiceTable.setItems(FXCollections.observableArrayList(invoiceDao.findAllInvoices()));
+        invoiceTable.setItems(FXCollections.observableArrayList(findInvoices()));
         lineTable.setItems(FXCollections.observableArrayList());
         breakdownTable.setItems(FXCollections.observableArrayList());
     }
 
-    private List<InvoiceCategoryBreakdownLine> buildBreakdownRows(int invoiceId) {
-        List<InvoiceCategoryBreakdownLine> rows = new ArrayList<>(
-                invoiceDao.getCategoryBreakdown(invoiceId)
-        );
+    private List<Invoice> findInvoices() {
+        return DatabaseManager.isApiDatabase()
+                ? reportingApiClient.findInvoices()
+                : invoiceDao.findAllInvoices();
+    }
 
-        List<InvoiceAdjustment> adjustments = invoiceDao.findInvoiceAdjustments(invoiceId);
-        for (InvoiceAdjustment adjustment : adjustments) {
-            rows.add(new InvoiceCategoryBreakdownLine(
-                    adjustment.getDescription(),
-                    adjustment.getAmount()
-            ));
+    private List<InvoiceLine> findInvoiceLines(int invoiceId) {
+        return DatabaseManager.isApiDatabase()
+                ? reportingApiClient.findInvoiceLines(invoiceId)
+                : invoiceDao.findInvoiceLines(invoiceId);
+    }
+
+    private List<InvoiceCategoryBreakdownLine> findBreakdownRows(int invoiceId) {
+        if (DatabaseManager.isApiDatabase()) {
+            return reportingApiClient.findInvoiceBreakdown(invoiceId);
         }
 
+        List<InvoiceCategoryBreakdownLine> rows = new ArrayList<>(invoiceDao.getCategoryBreakdown(invoiceId));
+        invoiceDao.findInvoiceAdjustments(invoiceId).forEach(adjustment ->
+                rows.add(new InvoiceCategoryBreakdownLine(
+                        adjustment.getDescription(),
+                        adjustment.getAmount()
+                ))
+        );
         return rows;
     }
 
@@ -147,7 +160,11 @@ public class InvoiceHistoryView {
         }
 
         try {
-            invoiceDao.deleteInvoice(selectedInvoice.getId());
+            if (DatabaseManager.isApiDatabase()) {
+                reportingApiClient.deleteInvoice(selectedInvoice.getId());
+            } else {
+                invoiceDao.deleteInvoice(selectedInvoice.getId());
+            }
 
             loadInvoices();
 

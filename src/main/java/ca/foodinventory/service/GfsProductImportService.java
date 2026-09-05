@@ -1,6 +1,7 @@
 package ca.foodinventory.service;
 
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.Product;
 
 import java.io.BufferedReader;
@@ -13,9 +14,10 @@ import java.util.List;
 public class GfsProductImportService {
 
     private final ProductDao productDao = new ProductDao();
+    private final ProductApiClient productApiClient = new ProductApiClient();
 
     public int importProducts(File file) {
-        int importedCount = 0;
+        List<Product> parsedProducts = new ArrayList<>();
 
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             String line;
@@ -60,15 +62,21 @@ public class GfsProductImportService {
                         true
                 );
 
-                productDao.upsertFromImport(product);
-                importedCount++;
+                parsedProducts.add(product);
             }
+
+            if (DatabaseManager.isApiDatabase()) {
+                return productApiClient.upsertImportedProducts(parsedProducts);
+            }
+
+            for (Product product : parsedProducts) {
+                productDao.upsertFromImport(product);
+            }
+            return parsedProducts.size();
 
         } catch (Exception ex) {
             throw new RuntimeException("Failed to import GFS product guide", ex);
         }
-
-        return importedCount;
     }
 
     private List<String> parseCsvLine(String line) {

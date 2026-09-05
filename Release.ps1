@@ -8,6 +8,8 @@ $MainClass = "ca.foodinventory.Launcher"
 $Icon = "FoodInventory.ico"
 $PomPath = "$ProjectDir\pom.xml"
 $WindowsUpgradeUuid = "8F7E5D76-9E8B-4C25-8B8E-55A94D4E0B0A"
+$ReleaseDatabaseConfigPath = "$ProjectDir\src\main\resources\database-release.properties"
+$DefaultApiUrl = "https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod"
 
 function Invoke-Step {
     param([string]$Name, [scriptblock]$Command)
@@ -94,6 +96,60 @@ function Test-GitHubReleaseExists {
         if ($null -ne $nativePreferenceVariableExists) {
             $PSNativeCommandUseErrorActionPreference = $previousNativePreference
         }
+    }
+}
+
+function Get-ReleaseApiKey {
+    $envKey = [Environment]::GetEnvironmentVariable("FOOD_INVENTORY_RELEASE_API_KEY")
+    if (![string]::IsNullOrWhiteSpace($envKey)) {
+        return $envKey.Trim()
+    }
+
+    $tempKeyPath = Join-Path $env:TEMP "esm-api-key.txt"
+    if (Test-Path $tempKeyPath) {
+        $fileKey = Get-Content $tempKeyPath -Raw
+        if (![string]::IsNullOrWhiteSpace($fileKey)) {
+            return $fileKey.Trim()
+        }
+    }
+
+    return ""
+}
+
+function Get-ReleaseApiUrl {
+    $envUrl = [Environment]::GetEnvironmentVariable("FOOD_INVENTORY_RELEASE_API_URL")
+    if (![string]::IsNullOrWhiteSpace($envUrl)) {
+        return $envUrl.Trim()
+    }
+
+    return $DefaultApiUrl
+}
+
+function Write-ReleaseDatabaseConfig {
+    param(
+        [string]$ApiUrl,
+        [string]$ApiKey,
+        [string]$ConfigId
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ApiUrl) -or
+            [string]::IsNullOrWhiteSpace($ApiKey)) {
+        throw "Release API configuration is missing. Set FOOD_INVENTORY_RELEASE_API_KEY before publishing."
+    }
+
+    @(
+        "# Generated during release packaging. Do not commit."
+        "auto.configure.api=true"
+        "release.config.id=$ConfigId"
+        "mode=api"
+        "api.url=$ApiUrl"
+        "api.key=$ApiKey"
+    ) | Set-Content -Path $ReleaseDatabaseConfigPath -Encoding UTF8
+}
+
+function Remove-ReleaseDatabaseConfig {
+    if (Test-Path $ReleaseDatabaseConfigPath) {
+        Remove-Item -Path $ReleaseDatabaseConfigPath -Force
     }
 }
 
@@ -199,9 +255,20 @@ try {
         mvn clean
     }
 
+    $ReleaseApiUrl = Get-ReleaseApiUrl
+    $ReleaseApiKey = Get-ReleaseApiKey
+
+    Write-Host ""
+    Write-Host "Generating release API configuration..." -ForegroundColor Yellow
+    Write-Host "API URL: $ReleaseApiUrl"
+    Write-Host "API key: configured"
+    Write-ReleaseDatabaseConfig -ApiUrl $ReleaseApiUrl -ApiKey $ReleaseApiKey -ConfigId "v$NewVersion"
+
     Invoke-Step "Maven package" {
         mvn package
     }
+
+    Remove-ReleaseDatabaseConfig
 
     Invoke-Step "Create Windows installer" {
         jpackage `
@@ -295,6 +362,7 @@ catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
 }
 finally {
+    Remove-ReleaseDatabaseConfig
     Write-Host ""
     Read-Host "Press ENTER to close"
 }

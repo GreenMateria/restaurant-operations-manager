@@ -1,6 +1,9 @@
 package ca.foodinventory.ui;
 
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.service.AppVersionService;
+import ca.foodinventory.service.ProductApiClient;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -14,12 +17,16 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Circle;
 import ca.foodinventory.dao.SettingsDao;
 import javafx.scene.control.*;
 
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
@@ -27,8 +34,11 @@ public class MainView {
 
     private final BorderPane root = new BorderPane();
     private final SettingsDao settingsDao = new SettingsDao();
+    private final ProductApiClient productApiClient = new ProductApiClient();
 
     private final Deque<Node> navigationHistory = new ArrayDeque<>();
+    private final Circle databaseStatusDot = new Circle(6);
+    private final Label databaseStatusLabel = new Label("Database: Checking...");
     private Button backButton;
 
     public BorderPane getView() {
@@ -37,6 +47,7 @@ public class MainView {
         root.setLeft(buildSidebar());
         root.setBottom(buildStatusBar());
         showHomeScreen();
+        refreshDatabaseConnectionStatus();
 
         return root;
     }
@@ -52,6 +63,11 @@ public class MainView {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        databaseStatusDot.getStyleClass().add("database-status-checking");
+        databaseStatusLabel.getStyleClass().add("database-status-label");
+        HBox databaseStatus = new HBox(7, databaseStatusDot, databaseStatusLabel);
+        databaseStatus.setAlignment(Pos.CENTER_LEFT);
+
         Label versionLabel = new Label(
                 AppVersionService.getDisplayVersion()
         );
@@ -59,10 +75,68 @@ public class MainView {
         statusBar.getChildren().addAll(
                 statusLabel,
                 spacer,
+                databaseStatus,
                 versionLabel
         );
 
         return statusBar;
+    }
+
+    private void refreshDatabaseConnectionStatus() {
+        setDatabaseStatus("database-status-checking", "Database: Checking...");
+
+        Task<DatabaseStatus> task = new Task<>() {
+            @Override
+            protected DatabaseStatus call() throws Exception {
+                return checkDatabaseConnection();
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            DatabaseStatus status = task.getValue();
+            setDatabaseStatus(
+                    status.connected()
+                            ? "database-status-connected"
+                            : "database-status-disconnected",
+                    status.message()
+            );
+        });
+
+        task.setOnFailed(event -> setDatabaseStatus(
+                "database-status-disconnected",
+                "Database: Not connected"
+        ));
+
+        Thread thread = new Thread(task, "database-status-check");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private DatabaseStatus checkDatabaseConnection() throws Exception {
+        if (DatabaseManager.isApiDatabase()) {
+            productApiClient.findAllActiveProducts();
+            return new DatabaseStatus(true, "Database: Cloud API connected");
+        }
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT 1");
+             ResultSet ignored = statement.executeQuery()) {
+
+            return new DatabaseStatus(
+                    true,
+                    "Database: " + DatabaseManager.getActiveDatabaseModeLabel() + " connected"
+            );
+        }
+    }
+
+    private void setDatabaseStatus(String styleClass, String message) {
+        databaseStatusDot.getStyleClass().removeAll(
+                "database-status-checking",
+                "database-status-connected",
+                "database-status-disconnected"
+        );
+        databaseStatusDot.getStyleClass().add(styleClass);
+        databaseStatusLabel.setText(message);
     }
 
     private VBox buildSidebar() {
@@ -565,5 +639,8 @@ public class MainView {
         if (backButton != null) {
             backButton.setDisable(navigationHistory.isEmpty());
         }
+    }
+
+    private record DatabaseStatus(boolean connected, String message) {
     }
 }

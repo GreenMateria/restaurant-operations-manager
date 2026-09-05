@@ -1,7 +1,9 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ProductionItem;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
@@ -14,6 +16,7 @@ import java.util.Optional;
 public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
 
     private final ProductionItemDao dao = new ProductionItemDao();
+    private final ProductionApiClient apiClient = new ProductionApiClient();
     private FilteredList<ProductionItem> filteredItems;
 
     public ProductionItemsView() {
@@ -106,7 +109,9 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
 
     private void loadItems() {
         filteredItems = new FilteredList<>(
-                FXCollections.observableArrayList(dao.findAll()),
+                FXCollections.observableArrayList(DatabaseManager.isApiDatabase()
+                        ? apiClient.findProductionItems()
+                        : dao.findAll()),
                 item -> true
         );
 
@@ -142,7 +147,7 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
 
         result.ifPresent(item -> {
             try {
-                dao.save(item);
+                saveItem(item);
                 loadItems();
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Save Failed", "Could not save production item: " + e.getMessage());
@@ -167,7 +172,7 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
 
         result.ifPresent(updated -> {
             try {
-                dao.save(updated);
+                saveItem(updated);
                 loadItems();
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Save Failed", "Could not save production item: " + e.getMessage());
@@ -190,9 +195,21 @@ public class ProductionItemsView extends ProductionModuleView<ProductionItem> {
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {
-                dao.deactivate(selected.getId());
+                if (DatabaseManager.isApiDatabase()) {
+                    apiClient.deactivateProductionItem(selected.getId());
+                } else {
+                    dao.deactivate(selected.getId());
+                }
                 loadItems();
             }
         });
+    }
+
+    private void saveItem(ProductionItem item) {
+        if (DatabaseManager.isApiDatabase()) {
+            apiClient.saveProductionItem(item);
+        } else {
+            dao.save(item);
+        }
     }
 }

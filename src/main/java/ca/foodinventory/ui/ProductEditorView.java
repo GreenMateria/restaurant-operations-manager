@@ -1,8 +1,10 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.Product;
+import ca.foodinventory.service.ProductApiClient;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -28,6 +30,7 @@ public class ProductEditorView {
     };
 
     private final ProductDao productDao = new ProductDao();
+    private final ProductApiClient productApiClient = new ProductApiClient();
     private final Product product;
     private final Runnable onSave;
 
@@ -359,7 +362,11 @@ public class ProductEditorView {
                 savedProduct.setAlcoholProfile(buildAlcoholProfile(savedProduct));
             }
 
-            productDao.save(savedProduct);
+            if (DatabaseManager.isApiDatabase()) {
+                productApiClient.save(savedProduct);
+            } else {
+                productDao.save(savedProduct);
+            }
 
             if (onSave != null) {
                 onSave.run();

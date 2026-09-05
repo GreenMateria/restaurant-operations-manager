@@ -1,8 +1,10 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InventoryCountDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryValuationLine;
+import ca.foodinventory.service.InventoryApiClient;
 import ca.foodinventory.service.InventoryValuationService;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
@@ -18,11 +20,14 @@ import java.util.Map;
 import ca.foodinventory.model.CategoryCostReportRow;
 import ca.foodinventory.model.WeeklyCostReport;
 import ca.foodinventory.service.InventoryCostService;
+import ca.foodinventory.service.ReportingApiClient;
 
 public class InventoryValuationView {
 
     private final InventoryCountDao countDao = new InventoryCountDao();
     private final InventoryValuationService valuationService = new InventoryValuationService();
+    private final InventoryApiClient inventoryApiClient = new InventoryApiClient();
+    private final ReportingApiClient reportingApiClient = new ReportingApiClient();
 
     private final ComboBox<InventoryCount> countComboBox = new ComboBox<>();
 
@@ -209,10 +214,7 @@ public class InventoryValuationView {
 
     private void loadCompletedCounts() {
         countComboBox.setItems(FXCollections.observableArrayList(
-                countDao.findAll()
-                        .stream()
-                        .filter(InventoryCount::isCompleted)
-                        .toList()
+                loadCompletedCountsForMode()
         ));
 
         countComboBox.setCellFactory(listView -> new ListCell<>() {
@@ -266,6 +268,22 @@ public class InventoryValuationView {
         });
     }
 
+    private List<InventoryCount> loadCompletedCountsForMode() {
+        if (DatabaseManager.isApiDatabase()) {
+            java.util.ArrayList<InventoryCount> counts = new java.util.ArrayList<>();
+            counts.addAll(inventoryApiClient.findCompletedCounts("FOOD"));
+            counts.addAll(inventoryApiClient.findCompletedCounts("ALCOHOL"));
+            counts.addAll(inventoryApiClient.findCompletedCounts("SUPPLIES"));
+            counts.sort((a, b) -> b.getCountDate().compareTo(a.getCountDate()));
+            return counts;
+        }
+
+        return countDao.findAll()
+                .stream()
+                .filter(InventoryCount::isCompleted)
+                .toList();
+    }
+
     private void loadValuation() {
         InventoryCount selected = countComboBox.getSelectionModel().getSelectedItem();
 
@@ -286,7 +304,9 @@ public class InventoryValuationView {
         Task<List<InventoryValuationLine>> task = new Task<>() {
             @Override
             protected List<InventoryValuationLine> call() {
-                return valuationService.calculateValuation(selected.getId());
+                return DatabaseManager.isApiDatabase()
+                        ? reportingApiClient.calculateValuation(selected.getId())
+                        : valuationService.calculateValuation(selected.getId());
             }
         };
 
@@ -544,12 +564,18 @@ public class InventoryValuationView {
         }
 
         try {
-            WeeklyCostReport report = costService.generateReport(
-                    openingCount.getId(),
-                    closingCount.getId()
-            );
-
-            weeklyCostReportArea.setText(buildWeeklyCostReportText(report));
+            if (DatabaseManager.isApiDatabase()) {
+                weeklyCostReportArea.setText(reportingApiClient.generateWeeklyCostReportText(
+                        openingCount.getId(),
+                        closingCount.getId()
+                ));
+            } else {
+                WeeklyCostReport report = costService.generateReport(
+                        openingCount.getId(),
+                        closingCount.getId()
+                );
+                weeklyCostReportArea.setText(buildWeeklyCostReportText(report));
+            }
 
         } catch (Exception ex) {
             ex.printStackTrace();

@@ -2,6 +2,7 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.database.DatabaseSyncService;
+import ca.foodinventory.service.ApiHealthClient;
 import ca.foodinventory.service.DatabaseBackupService;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -21,18 +22,23 @@ public class SystemView {
             new DatabaseBackupService();
     private final DatabaseSyncService syncService =
             new DatabaseSyncService();
+    private final ApiHealthClient apiHealthClient =
+            new ApiHealthClient();
     private final Label databaseModeLabel = new Label();
     private final Label preferredModeLabel = new Label();
     private final Label sqlitePathLabel = new Label();
     private final Label cloudStatusLabel = new Label("Cloud Connection: Not checked");
+    private final Label apiStatusLabel = new Label("API Connection: Not checked");
     private final Label syncStatusLabel = new Label();
     private Button backupButton;
     private Button restoreButton;
     private Button uploadButton;
     private Button downloadButton;
     private Button testCloudButton;
+    private Button testApiButton;
     private Button switchToSqliteButton;
     private Button switchToCloudButton;
+    private Button switchToApiButton;
 
     public VBox getView() {
 
@@ -47,6 +53,7 @@ public class SystemView {
         preferredModeLabel.getStyleClass().add("section-title");
         sqlitePathLabel.getStyleClass().add("section-title");
         cloudStatusLabel.getStyleClass().add("section-title");
+        apiStatusLabel.getStyleClass().add("section-title");
         syncStatusLabel.getStyleClass().add("section-title");
 
         backupButton = new Button("Database Backup");
@@ -61,6 +68,9 @@ public class SystemView {
         testCloudButton = new Button("Test Cloud Connection");
         testCloudButton.getStyleClass().add("dashboard-button");
 
+        testApiButton = new Button("Test API Connection");
+        testApiButton.getStyleClass().add("dashboard-button");
+
         uploadButton = new Button("Upload This PC to Cloud");
         uploadButton.getStyleClass().add("dashboard-button");
 
@@ -73,11 +83,16 @@ public class SystemView {
         switchToCloudButton = new Button("Use Cloud Mode");
         switchToCloudButton.getStyleClass().add("dashboard-button");
 
+        switchToApiButton = new Button("Use API Mode");
+        switchToApiButton.getStyleClass().add("dashboard-button");
+
         backupButton.setOnAction(e -> backupDatabase());
 
         restoreButton.setOnAction(e -> restoreDatabase());
 
         testCloudButton.setOnAction(e -> testCloudConnection());
+
+        testApiButton.setOnAction(e -> testApiConnection());
 
         uploadButton.setOnAction(e -> uploadToCloud());
 
@@ -87,12 +102,17 @@ public class SystemView {
 
         switchToCloudButton.setOnAction(e -> switchDatabaseMode("postgres"));
 
+        switchToApiButton.setOnAction(e -> switchDatabaseMode("api"));
+
         changePasswordButton.setDisable(true);
 
         HBox cloudButtons = new HBox(15, testCloudButton, uploadButton, downloadButton);
         cloudButtons.setAlignment(Pos.CENTER);
 
-        HBox modeButtons = new HBox(15, switchToSqliteButton, switchToCloudButton);
+        HBox apiButtons = new HBox(15, testApiButton);
+        apiButtons.setAlignment(Pos.CENTER);
+
+        HBox modeButtons = new HBox(15, switchToSqliteButton, switchToCloudButton, switchToApiButton);
         modeButtons.setAlignment(Pos.CENTER);
 
         refreshDatabaseInfo();
@@ -103,10 +123,12 @@ public class SystemView {
                 preferredModeLabel,
                 sqlitePathLabel,
                 cloudStatusLabel,
+                apiStatusLabel,
                 modeButtons,
                 backupButton,
                 restoreButton,
                 cloudButtons,
+                apiButtons,
                 syncStatusLabel,
                 changePasswordButton
         );
@@ -246,6 +268,18 @@ public class SystemView {
         );
     }
 
+    private void testApiConnection() {
+        runBackgroundAction(
+                "Testing API connection...",
+                "API connection successful.",
+                "API connection failed. Please contact the administrator.",
+                () -> {
+                    apiHealthClient.testConnection();
+                    return null;
+                }
+        );
+    }
+
     private void uploadToCloud() {
         if (!confirmTypedAction(
                 "Upload This PC to Cloud",
@@ -282,6 +316,7 @@ public class SystemView {
 
     private void switchDatabaseMode(String mode) {
         boolean switchingToCloud = "postgres".equals(mode);
+        boolean switchingToApi = "api".equals(mode);
 
         if (switchingToCloud && !DatabaseManager.hasConfiguredPostgresConnection()) {
             showAlert(
@@ -292,7 +327,18 @@ public class SystemView {
             return;
         }
 
-        String targetLabel = switchingToCloud ? "Cloud PostgreSQL" : "Local SQLite";
+        if (switchingToApi && !DatabaseManager.hasConfiguredApiConnection()) {
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "API Not Configured",
+                    "API settings are not configured."
+            );
+            return;
+        }
+
+        String targetLabel = switchingToCloud
+                ? "Cloud PostgreSQL"
+                : switchingToApi ? "Cloud API" : "Local SQLite";
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Switch Database Mode");
         confirm.setHeaderText("Use " + targetLabel + " after restart?");
@@ -409,8 +455,10 @@ public class SystemView {
         uploadButton.setDisable(disabled);
         downloadButton.setDisable(disabled);
         testCloudButton.setDisable(disabled);
+        testApiButton.setDisable(disabled);
         switchToSqliteButton.setDisable(disabled);
         switchToCloudButton.setDisable(disabled);
+        switchToApiButton.setDisable(disabled);
     }
 
     private void refreshDatabaseInfo() {
@@ -427,6 +475,11 @@ public class SystemView {
                 DatabaseManager.hasConfiguredPostgresConnection()
                         ? "Cloud Connection: Configured"
                         : "Cloud Connection: Not configured"
+        );
+        apiStatusLabel.setText(
+                DatabaseManager.hasConfiguredApiConnection()
+                        ? "API Connection: Configured"
+                        : "API Connection: Not configured"
         );
     }
 

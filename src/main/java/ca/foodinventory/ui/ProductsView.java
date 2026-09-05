@@ -2,10 +2,14 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.Product;
 import ca.foodinventory.model.PurchaseHistory;
 import ca.foodinventory.service.GfsProductImportService;
+import ca.foodinventory.service.ProductApiClient;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
@@ -20,9 +24,14 @@ public class ProductsView {
     private final ProductDao productDao = new ProductDao();
     private final InvoiceDao invoiceDao = new InvoiceDao();
     private final GfsProductImportService importService = new GfsProductImportService();
+    private final ProductApiClient productApiClient = new ProductApiClient();
 
     private final TableView<Product> table = new TableView<>();
     private final TableView<PurchaseHistory> historyTable = new TableView<>();
+    private Button addButton;
+    private Button editButton;
+    private Button importButton;
+    private Button deactivateButton;
 
     public BorderPane getView() {
         BorderPane root = new BorderPane();
@@ -38,19 +47,19 @@ public class ProductsView {
         Label title = new Label(titleText);
         title.getStyleClass().add("page-title");
 
-        Button addButton = new Button("Add Product");
+        addButton = new Button("Add Product");
         addButton.getStyleClass().add("primary-button");
         addButton.setOnAction(e -> openAddProductDialog());
 
-        Button editButton = new Button("Edit Product");
+        editButton = new Button("Edit Product");
         editButton.getStyleClass().add("primary-button");
         editButton.setOnAction(e -> editSelectedProduct());
 
-        Button importButton = new Button("Import GFS Order Guide");
+        importButton = new Button("Import GFS Order Guide");
         importButton.getStyleClass().add("primary-button");
         importButton.setOnAction(e -> importGfsOrderGuide());
 
-        Button deactivateButton = new Button("Deactivate");
+        deactivateButton = new Button("Deactivate");
         deactivateButton.getStyleClass().add("primary-button");
         deactivateButton.setOnAction(e -> deactivateSelectedProduct());
 
@@ -63,6 +72,17 @@ public class ProductsView {
         table.getSelectionModel()
                 .selectedItemProperty()
                 .addListener((obs, oldProduct, selectedProduct) -> {
+                    if (DatabaseManager.isApiDatabase()) {
+                        if (selectedProduct == null) {
+                            historyTable.getItems().clear();
+                        } else {
+                            historyTable.setItems(FXCollections.observableArrayList(
+                                    productApiClient.findPurchaseHistory(selectedProduct.getId())
+                            ));
+                        }
+                        return;
+                    }
+
                     if (selectedProduct != null) {
                         historyTable.setItems(FXCollections.observableArrayList(
                                 invoiceDao.findPurchaseHistory(selectedProduct.getId())
@@ -78,6 +98,7 @@ public class ProductsView {
 
         root.setTop(topBar);
         root.setCenter(centerContent);
+        configureApiModeControls();
 
         return root;
     }
@@ -168,7 +189,9 @@ public class ProductsView {
             TableRow<Product> row = new TableRow<>();
 
             row.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2 && !row.isEmpty()) {
+                if ((!DatabaseManager.isApiDatabase() || isProductMaintenanceApiMode())
+                        && event.getClickCount() == 2
+                        && !row.isEmpty()) {
                     new ProductEditorView(row.getItem(), this::loadProducts).show();
                 }
             });
@@ -219,51 +242,104 @@ public class ProductsView {
     }
 
     private void loadProducts() {
+        if (DatabaseManager.isApiDatabase()) {
+            loadProductsFromApi();
+            return;
+        }
 
         var products = productDao.findAll();
 
-        if (department != null) {
-
-            products.removeIf(product -> {
-
-                String category =
-                        product.getReportingCategory() == null
-                                ? ""
-                                : product.getReportingCategory().trim().toUpperCase();
-
-                return switch (department) {
-
-                    case "FOOD" ->
-                            !category.equals("FOOD");
-
-                    case "ALCOHOL" ->
-                            !(category.equals("BEER")
-                                    || category.equals("WINE")
-                                    || category.equals("DRAUGHT")
-                                    || category.equals("IMPORT DRAUGHT")
-                                    || category.equals("LIQUOR"));
-
-                    case "SUPPLIES" ->
-                            !(category.equals("PAPER")
-                                    || category.equals("TAKE OUT")
-                                    || category.equals("CLEANING")
-                                    || category.equals("DISHWASHING")
-                                    || category.equals("GUEST SUPPLIES")
-                                    || category.equals("OTHER"));
-
-                    default -> false;
-                };
-            });
-        }
+        filterForDepartment(products);
 
         table.setItems(FXCollections.observableArrayList(products));
     }
 
+    private void loadProductsFromApi() {
+        table.setPlaceholder(new Label("Loading products..."));
+
+        Task<java.util.List<Product>> task = new Task<>() {
+            @Override
+            protected java.util.List<Product> call() {
+                var products = productApiClient.findAllActiveProducts();
+                filterForDepartment(products);
+                return products;
+            }
+        };
+
+        task.setOnSucceeded(event ->
+                table.setItems(FXCollections.observableArrayList(task.getValue()))
+        );
+
+        task.setOnFailed(event -> {
+            Throwable exception = task.getException();
+            if (exception != null) {
+                exception.printStackTrace();
+            }
+
+            table.setItems(FXCollections.observableArrayList());
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Product API Failed",
+                    "Products could not be loaded from the API."
+                            + formatFailureDetails(exception)
+            );
+        });
+
+        Thread thread = new Thread(task, "product-api-load");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void filterForDepartment(java.util.List<Product> products) {
+        if (department == null) {
+            return;
+        }
+
+        products.removeIf(product -> {
+
+            String category =
+                    product.getReportingCategory() == null
+                            ? ""
+                            : product.getReportingCategory().trim().toUpperCase();
+
+            return switch (department) {
+
+                case "FOOD" ->
+                        !category.equals("FOOD");
+
+                case "ALCOHOL" ->
+                        !(category.equals("BEER")
+                                || category.equals("WINE")
+                                || category.equals("DRAUGHT")
+                                || category.equals("IMPORT DRAUGHT")
+                                || category.equals("LIQUOR"));
+
+                case "SUPPLIES" ->
+                        !(category.equals("PAPER")
+                                || category.equals("TAKE OUT")
+                                || category.equals("CLEANING")
+                                || category.equals("DISHWASHING")
+                                || category.equals("GUEST SUPPLIES")
+                                || category.equals("OTHER"));
+
+                default -> false;
+            };
+        });
+    }
+
     private void openAddProductDialog() {
+        if (blockApiWriteAction("Product changes are not available in API mode yet.")) {
+            return;
+        }
+
         new ProductEditorView(null, this::loadProducts).show();
     }
 
     private void editSelectedProduct() {
+        if (blockApiWriteAction("Product changes are not available in API mode yet.")) {
+            return;
+        }
+
         Product selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
@@ -398,6 +474,10 @@ public class ProductsView {
     }
 
     private void deactivateSelectedProduct() {
+        if (blockApiWriteAction("Product changes are not available in API mode yet.")) {
+            return;
+        }
+
         Product selected = table.getSelectionModel().getSelectedItem();
 
         if (selected == null) {
@@ -421,7 +501,11 @@ public class ProductsView {
             return;
         }
 
-        productDao.deactivate(selected);
+        if (isProductMaintenanceApiMode()) {
+            productApiClient.deactivate(selected.getId());
+        } else {
+            productDao.deactivate(selected);
+        }
         loadProducts();
         historyTable.getItems().clear();
     }
@@ -434,11 +518,70 @@ public class ProductsView {
         return "$" + value.setScale(2, RoundingMode.HALF_UP);
     }
 
+    private void configureApiModeControls() {
+        if (!DatabaseManager.isApiDatabase()) {
+            return;
+        }
+
+        addButton.setDisable(!isProductMaintenanceApiMode());
+        editButton.setDisable(!isProductMaintenanceApiMode());
+        importButton.setDisable(false);
+        deactivateButton.setDisable(!isProductMaintenanceApiMode());
+    }
+
+    private boolean blockApiWriteAction(String message) {
+        if (!DatabaseManager.isApiDatabase() || isProductMaintenanceApiMode()) {
+            return false;
+        }
+
+        showAlert(
+                Alert.AlertType.INFORMATION,
+                "API Mode",
+                message
+        );
+        return true;
+    }
+
+    private boolean isProductMaintenanceApiMode() {
+        return DatabaseManager.isApiDatabase()
+                && ("FOOD".equals(department)
+                || "ALCOHOL".equals(department)
+                || "SUPPLIES".equals(department));
+    }
+
+    private String formatFailureDetails(Throwable exception) {
+        if (exception == null) {
+            return "";
+        }
+
+        Throwable rootCause = exception;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+
+        String message = rootCause.getMessage();
+        if (message == null || message.isBlank()) {
+            message = exception.getMessage();
+        }
+
+        return message == null || message.isBlank()
+                ? ""
+                : "\n\nDetails: " + message;
+    }
+
     private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        Runnable show = () -> {
+            Alert alert = new Alert(type);
+            alert.setTitle(title);
+            alert.setHeaderText(null);
+            alert.setContentText(message);
+            alert.showAndWait();
+        };
+
+        if (Platform.isFxApplicationThread()) {
+            show.run();
+        } else {
+            Platform.runLater(show);
+        }
     }
 }

@@ -2,9 +2,12 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.InvoiceDao;
 import ca.foodinventory.dao.ProductDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.model.Product;
+import ca.foodinventory.service.InvoiceApiClient;
+import ca.foodinventory.service.ProductApiClient;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.scene.control.*;
@@ -28,6 +31,8 @@ public class AlcoholManualInvoiceView {
 
     private final InvoiceDao invoiceDao = new InvoiceDao();
     private final ProductDao productDao = new ProductDao();
+    private final InvoiceApiClient invoiceApiClient = new InvoiceApiClient();
+    private final ProductApiClient productApiClient = new ProductApiClient();
 
     private final List<AlcoholInvoiceEntryLine> lines = new ArrayList<>();
     private final TableView<AlcoholInvoiceEntryLine> table = new TableView<>();
@@ -235,7 +240,9 @@ public class AlcoholManualInvoiceView {
     }
 
     private List<Product> loadAlcoholProducts() {
-        List<Product> products = productDao.findAll();
+        List<Product> products = DatabaseManager.isApiDatabase()
+                ? productApiClient.findAllActiveProducts()
+                : productDao.findAll();
         products.removeIf(product -> !isAlcoholManualInvoiceCategory(product.getReportingCategory()));
         return products;
     }
@@ -419,17 +426,17 @@ public class AlcoholManualInvoiceView {
             return;
         }
 
-        if (invoiceDao.invoiceExists(invoiceNumber)) {
+        if (invoiceExists(invoiceNumber)) {
             boolean overwrite = showDuplicateInvoiceDialog(invoiceNumber);
 
             if (!overwrite) {
                 return;
             }
 
-            invoiceDao.deleteInvoice(invoiceNumber);
+            deleteInvoice(invoiceNumber);
         }
 
-        invoiceDao.saveInvoice(
+        saveInvoice(
                 supplier,
                 invoiceNumber,
                 invoiceDate,
@@ -451,6 +458,55 @@ public class AlcoholManualInvoiceView {
         invoiceDatePicker.setValue(LocalDate.now());
         clearLineEntryFields();
         clearAdjustmentFields();
+    }
+
+    private boolean invoiceExists(String invoiceNumber) {
+        return DatabaseManager.isApiDatabase()
+                ? invoiceApiClient.invoiceExists(invoiceNumber)
+                : invoiceDao.invoiceExists(invoiceNumber);
+    }
+
+    private void deleteInvoice(String invoiceNumber) {
+        if (DatabaseManager.isApiDatabase()) {
+            invoiceApiClient.deleteInvoice(invoiceNumber);
+        } else {
+            invoiceDao.deleteInvoice(invoiceNumber);
+        }
+    }
+
+    private void saveInvoice(
+            String supplier,
+            String invoiceNumber,
+            String invoiceDate,
+            BigDecimal importedTotal,
+            BigDecimal merchandiseSubtotal,
+            BigDecimal invoiceTotal,
+            List<InvoiceAdjustment> adjustments,
+            List<InvoiceLine> invoiceLines
+    ) {
+        if (DatabaseManager.isApiDatabase()) {
+            invoiceApiClient.saveAlcoholInvoice(
+                    supplier,
+                    invoiceNumber,
+                    invoiceDate,
+                    importedTotal,
+                    merchandiseSubtotal,
+                    invoiceTotal,
+                    adjustments,
+                    invoiceLines
+            );
+        } else {
+            invoiceDao.saveInvoice(
+                    supplier,
+                    invoiceNumber,
+                    invoiceDate,
+                    importedTotal,
+                    merchandiseSubtotal,
+                    invoiceTotal,
+                    adjustments,
+                    invoiceLines
+            );
+        }
     }
 
     private void updateTotal() {

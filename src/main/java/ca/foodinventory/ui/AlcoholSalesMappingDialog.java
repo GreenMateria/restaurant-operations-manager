@@ -2,9 +2,12 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductDao;
 import ca.foodinventory.dao.PosMenuItemDao;
+import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholSalesMapping;
 import ca.foodinventory.model.PosMenuItem;
 import ca.foodinventory.model.Product;
+import ca.foodinventory.service.PosMenuItemApiClient;
+import ca.foodinventory.service.ProductApiClient;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -33,6 +36,8 @@ public class AlcoholSalesMappingDialog extends Dialog<AlcoholSalesMapping> {
 
     private final PosMenuItemDao posMenuItemDao = new PosMenuItemDao();
     private final ProductDao productDao = new ProductDao();
+    private final PosMenuItemApiClient posMenuItemApiClient = new PosMenuItemApiClient();
+    private final ProductApiClient productApiClient = new ProductApiClient();
     private final AlcoholSalesMapping existingMapping;
 
     private final ComboBox<PosMenuItem> posMenuItemComboBox = new ComboBox<>();
@@ -110,7 +115,11 @@ public class AlcoholSalesMappingDialog extends Dialog<AlcoholSalesMapping> {
     }
 
     private void loadPosMenuItems() {
-        List<PosMenuItem> activeItems = posMenuItemDao.findActive();
+        List<PosMenuItem> activeItems = DatabaseManager.isApiDatabase()
+                ? posMenuItemApiClient.findAll().stream()
+                .filter(PosMenuItem::isActive)
+                .toList()
+                : posMenuItemDao.findActive();
 
         SearchableComboBoxSupport.makeSearchable(posMenuItemComboBox, activeItems, new StringConverter<>() {
             @Override
@@ -142,7 +151,10 @@ public class AlcoholSalesMappingDialog extends Dialog<AlcoholSalesMapping> {
     }
 
     private void loadProducts() {
-        List<Product> alcoholProducts = productDao.getAllActiveProducts().stream()
+        List<Product> sourceProducts = DatabaseManager.isApiDatabase()
+                ? productApiClient.findAllActiveProducts()
+                : productDao.getAllActiveProducts();
+        List<Product> alcoholProducts = sourceProducts.stream()
                 .filter(Product::isAlcoholProduct)
                 .toList();
 

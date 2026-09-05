@@ -5,8 +5,8 @@
 ### Status
 
 -   Cloud database setup is complete for the current work PCs.
--   v3.0.5 development working tree includes the completed controlled hybrid database release path, cloud-mode save/import responsiveness fixes, POS sales import fix, alcohol manual invoice FOOD-item fix, alcohol Sales Mappings, and initial Alcohol Variance entry points.
--   Current v3.0.5 development work has not been packaged, tagged, published, or promoted to stable release yet.
+-   v3.0.6 is the current project version.
+-   v3.0.6 includes the completed controlled hybrid database release path, AWS RDS cutover, cloud-mode save/import responsiveness fixes, POS sales import fix, alcohol manual invoice FOOD-item fix, alcohol Sales Mappings, initial Alcohol Variance entry points, and shared combo box support fixes.
 -   SQLite remains the default startup mode for fresh installs and fallback use.
 -   Configured work PCs should run in AWS RDS PostgreSQL cloud mode for daily shared-data operation.
 -   AWS RDS PostgreSQL cloud mode is available through the password-protected System module and takes effect after restart.
@@ -22,13 +22,45 @@
 
 ### Planned
 
--   Validate alcohol Sales Mappings setup from the POS Menu Items catalog before packaging a stable installer.
--   Package and publish the next installer only after the current v3.0.5 development tree is approved for stable.
--   Validate the v3.0.5 installer upgrade on the work PCs after packaging.
+-   Validate the v3.0.6 installer upgrade on the work PCs.
+-   Validate alcohol Sales Mappings setup from the POS Menu Items catalog during live bar item review.
 -   Continue monitoring cloud-mode daily use for workflow or record-edit conflicts.
 -   Consider a backend/API layer later if the app expands beyond controlled internal use.
 
 ## Future Web / API Architecture
+
+### Status
+
+-   API layer planning has started in `API_LAYER_PLAN.md`.
+-   The main goal is to remove PostgreSQL credentials from client PCs by moving direct database access behind an authenticated HTTPS API.
+-   Recommended first AWS direction is Amazon API Gateway HTTP API plus AWS Lambda in front of the current AWS RDS PostgreSQL database.
+-   AWS proof stack `esm-operations-api` is deployed in `ca-central-1`.
+-   Proof API URL is `https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod`.
+-   `GET /health` is public and returns version `3.0.6`.
+-   `GET /products` requires `x-api-key` and has been verified against AWS RDS with `359` active products returned.
+-   The desktop app now supports `mode=api`, `api.url`, and `api.key` configuration.
+-   The System screen can test the API health endpoint and set API mode for next startup.
+-   The Products screen can load active products from `GET /products` in API mode.
+-   Food, Alcohol, and Supplies Products add/edit/deactivate are implemented for API mode; GFS product guide CSV files are still parsed client-side, then normalized product records are sent to `POST /products/import`.
+-   `GET /pos-menu-items` requires `x-api-key` and has been verified against AWS RDS with `642` POS menu items returned.
+-   The POS Menu Items screen can load POS menu items from `GET /pos-menu-items` in API mode.
+-   Product purchase history is available in API mode through `GET /products/{id}/purchase-history`.
+-   POS Menu Item writes/imports, KDS cleanup, and usage-report import are implemented for API mode through the Production API.
+-   Alcohol Sales Mappings API endpoints for list, add, edit, and deactivate are deployed.
+-   The Alcohol Sales Mappings screen can load, save, and deactivate mappings through the API in API mode.
+-   Variance reporting is not currently in active use, so it remains deferred until the live workflow setup is ready.
+-   API migration strategy is department-first. Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, product support, and administrative upload/download sync are now API-backed.
+-   Supplies Department API routes were deployed on Saturday, September 5, 2026, and read-only smoke checks passed.
+-   Food Department API migration is implemented and deployed for products, import/manual invoice saves, count templates, inventory counts, and order guide generation/case-size save.
+-   Read-only smoke checks passed for Food templates, counts, completed counts, count lines, order guide generation, and missing-key `401` behavior.
+-   Alcohol Department API migration is implemented and deployed for product/profile maintenance, manual invoice saves, count templates, inventory counts, order guide generation/case-size save, and alcohol product profile reads for weighted inventory counts.
+-   Read-only smoke checks passed for Alcohol templates, counts, completed counts, count lines, order guide generation, alcohol product profiles, and missing-key `401` behavior.
+-   Product API smoke check passed for Alcohol profile loading: 85 Alcohol products returned and all 85 include active profile data.
+-   Production API backing is implemented in the development build for production setup, POS menu item maintenance/import/KDS cleanup, Weekly Production generation/loading/refresh/override saves, product mappings, and Freezer Pull manual quantities.
+-   Production API backing was deployed to `esm-operations-api` in `ca-central-1`; read-only smoke checks passed for the production setup, POS, weekly production, product mapping, and Freezer Pull endpoints.
+-   Live desktop validation confirmed Production CSV/report import and Weekly Production generation complete in API mode, and the Apache POI Log4j provider warning has been resolved.
+-   Reporting/Sales and product support routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026; smoke checks passed for Invoice History, invoice line/breakdown loading, Sales Periods, Inventory Valuation, Weekly Cost Report, product purchase history, and missing-key `401` behavior.
+-   Administrative upload/download sync routes were deployed on Saturday, September 5, 2026; smoke checks passed for missing-key `401` behavior and authenticated read-only cloud snapshot download.
 
 ### Future
 
@@ -42,6 +74,14 @@ Browser frontend
 -> PostgreSQL database
 ```
 
+-   Near-term desktop architecture:
+
+```text
+Desktop app
+-> HTTPS API
+-> PostgreSQL database
+```
+
 -   React is a reasonable candidate for the browser frontend, replacing the current JavaFX UI layer.
 -   Java can remain the backend language through an API service, preserving more of the current project knowledge and business logic than a full JavaScript rewrite.
 -   A backend/API layer would keep database credentials off client machines, centralize business rules, support stronger authentication, and make auditing/permissions easier.
@@ -52,6 +92,12 @@ Browser frontend
     -   Build browser screens module by module, starting with lower-risk reporting/admin views before replacing core workflows.
     -   Retire the desktop app only after the browser version fully covers daily manager workflows.
 -   Re-evaluate this direction after Cloud PostgreSQL daily use, alcohol variance, reporting, order guide, and production workflows are stable enough that requirements are no longer changing quickly.
+
+### Planned
+
+-   Validate migrated Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase-history, and admin sync API workflows from the IntelliJ desktop app using normal live workflows.
+-   Keep CSV/Excel parsing in the desktop client, with only normalized records sent through the API for persistence.
+-   Keep direct Cloud PostgreSQL mode as fallback until API mode proves daily workflows.
 
 ## Update System
 
@@ -95,19 +141,19 @@ Browser frontend
 
 ### Status
 
--   Implemented features through v3.0.5 are working as intended.
+-   Implemented features through v3.0.6 are working as intended.
 -   Alcohol manual invoice entry includes `FOOD` reporting-category products for non-alcohol beverages purchased from alcohol suppliers; this fix has been implemented and is working as intended.
 -   Alcohol Department navigation includes alcohol-specific Sales Mappings and Variance Report entry points.
 -   Alcohol Sales Mappings is unlocked for POS SKU/PLU to alcohol inventory product setup.
 -   Alcohol Sales Mapping add/edit reuses the existing Production POS Menu Items catalog so managers select imported POS items instead of retyping SKU/name details.
--   Alcohol Variance Report currently has the navigation and setup shell; calculation/report output remains the next build step.
+-   Alcohol Variance Report currently has the navigation and setup shell; calculation/report output is deferred until inventory, invoicing, and production API migration work is further along.
 -   Alcohol workflow changes should be driven by specific live-data issues when they appear.
 -   Freezer Pull is working as intended and is not an active roadmap item.
 
 ### Future
 
 -   Populate alcohol sales mappings from POS Menu Items and live bar item review
--   Alcohol variance reporting calculation and output
+-   Alcohol variance reporting calculation and output after live setup is ready
 -   Food production variance later, after alcohol variance is working
 -   Recipe Costing
 -   Advanced Reporting

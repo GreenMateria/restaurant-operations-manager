@@ -1,5 +1,8 @@
 package ca.foodinventory.database;
 
+import ca.foodinventory.service.ApiJsonParser;
+import ca.foodinventory.service.DatabaseSyncApiClient;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,6 +24,9 @@ import java.util.Map;
 import java.util.StringJoiner;
 
 public class DatabaseSyncService {
+
+    private final DatabaseSyncApiClient apiClient = new DatabaseSyncApiClient();
+    private final ApiJsonParser jsonParser = new ApiJsonParser();
 
     public static final List<String> TABLES_IN_INSERT_ORDER = List.of(
             "products",
@@ -52,7 +58,10 @@ public class DatabaseSyncService {
     public MigrationResult uploadSqliteToCloud() {
         File sqliteFile = DatabaseManager.getSqliteDatabaseFile();
         requireSqliteFile(sqliteFile);
-        requirePostgresConfigured();
+
+        if (DatabaseManager.hasConfiguredApiConnection()) {
+            return uploadSqliteToCloudViaApi(sqliteFile);
+        }
 
         try (Connection sqliteConnection = DriverManager.getConnection(
                 "jdbc:sqlite:" + sqliteFile.getAbsolutePath());
@@ -93,6 +102,11 @@ public class DatabaseSyncService {
 
     public MigrationResult downloadCloudToSqlite() {
         File sqliteFile = DatabaseManager.getSqliteDatabaseFile();
+
+        if (DatabaseManager.hasConfiguredApiConnection()) {
+            return downloadCloudToSqliteViaApi(sqliteFile);
+        }
+
         requirePostgresConfigured();
 
         try {
@@ -132,6 +146,41 @@ public class DatabaseSyncService {
             }
         } catch (Exception e) {
             throw new RuntimeException("Failed to download cloud data to SQLite.", e);
+        }
+    }
+
+    private MigrationResult uploadSqliteToCloudViaApi(File sqliteFile) {
+        try (Connection sqliteConnection = DriverManager.getConnection(
+                "jdbc:sqlite:" + sqliteFile.getAbsolutePath())) {
+
+            return apiClient.uploadSnapshotJson(snapshotJson(sqliteConnection));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload SQLite data to cloud through the API.", e);
+        }
+    }
+
+    private MigrationResult downloadCloudToSqliteViaApi(File sqliteFile) {
+        try {
+            File backupFile = backupSqliteBeforeDownload(sqliteFile);
+            String snapshotJson = apiClient.downloadSnapshotJson();
+
+            try (Connection sqliteConnection = DriverManager.getConnection(
+                    "jdbc:sqlite:" + sqliteFile.getAbsolutePath())) {
+
+                sqliteConnection.setAutoCommit(false);
+                try {
+                    clearSqliteTables(sqliteConnection);
+                    MigrationResult result = importSnapshotJsonToSqlite(snapshotJson, sqliteConnection, backupFile);
+                    resetSqliteSequences(sqliteConnection);
+                    sqliteConnection.commit();
+                    return result;
+                } catch (Exception exception) {
+                    sqliteConnection.rollback();
+                    throw exception;
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to download cloud data to SQLite through the API.", e);
         }
     }
 
@@ -271,6 +320,150 @@ public class DatabaseSyncService {
         }
     }
 
+    private String snapshotJson(Connection sqliteConnection) throws SQLException {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"tables\":{");
+        boolean firstTable = true;
+        int totalRows = 0;
+
+        for (String tableName : TABLES_IN_INSERT_ORDER) {
+            if (!sqliteTableExists(sqliteConnection, tableName)) {
+                continue;
+            }
+
+            if (!firstTable) {
+                json.append(',');
+            }
+            firstTable = false;
+
+            json.append('"').append(jsonEscape(tableName)).append("\":");
+            totalRows += appendTableRowsJson(sqliteConnection, tableName, json);
+        }
+
+        json.append("},\"totalRows\":").append(totalRows).append('}');
+        return json.toString();
+    }
+
+    private int appendTableRowsJson(
+            Connection connection,
+            String tableName,
+            StringBuilder json
+    ) throws SQLException {
+        try (Statement selectStatement = connection.createStatement();
+             ResultSet resultSet = selectStatement.executeQuery(
+                     "SELECT * FROM " + quoteIdentifier(tableName)
+             )) {
+
+            ResultSetMetaData metaData = resultSet.getMetaData();
+            int columnCount = metaData.getColumnCount();
+            int rowCount = 0;
+
+            json.append('[');
+            while (resultSet.next()) {
+                if (rowCount > 0) {
+                    json.append(',');
+                }
+                json.append('{');
+
+                for (int i = 1; i <= columnCount; i++) {
+                    if (i > 1) {
+                        json.append(',');
+                    }
+
+                    json.append('"')
+                            .append(jsonEscape(metaData.getColumnName(i)))
+                            .append("\":");
+                    appendJsonValue(json, resultSet.getObject(i));
+                }
+
+                json.append('}');
+                rowCount++;
+            }
+
+            json.append(']');
+            return rowCount;
+        }
+    }
+
+    private MigrationResult importSnapshotJsonToSqlite(
+            String snapshotJson,
+            Connection sqliteConnection,
+            File backupFile
+    ) throws SQLException {
+        Map<String, Object> snapshot = jsonParser.parseObject(snapshotJson);
+        Object tablesValue = snapshot.get("tables");
+        if (!(tablesValue instanceof Map<?, ?> tables)) {
+            throw new IllegalArgumentException("API sync snapshot did not include tables.");
+        }
+
+        Map<String, Integer> rowCounts = new LinkedHashMap<>();
+        int totalRows = 0;
+
+        for (String tableName : TABLES_IN_INSERT_ORDER) {
+            if (!sqliteTableExists(sqliteConnection, tableName)) {
+                continue;
+            }
+
+            Object rowsValue = tables.get(tableName);
+            if (!(rowsValue instanceof List<?> rows)) {
+                continue;
+            }
+
+            int rowCount = insertRows(sqliteConnection, tableName, rows);
+            rowCounts.put(tableName, rowCount);
+            totalRows += rowCount;
+        }
+
+        return new MigrationResult(totalRows, rowCounts, backupFile);
+    }
+
+    private int insertRows(
+            Connection connection,
+            String tableName,
+            List<?> rows
+    ) throws SQLException {
+        if (rows.isEmpty()) {
+            return 0;
+        }
+
+        Object firstRow = rows.getFirst();
+        if (!(firstRow instanceof Map<?, ?> firstMap) || firstMap.isEmpty()) {
+            return 0;
+        }
+
+        List<String> columns = new ArrayList<>();
+        for (Object key : firstMap.keySet()) {
+            if (key != null) {
+                columns.add(key.toString());
+            }
+        }
+
+        try (PreparedStatement insertStatement =
+                     connection.prepareStatement(buildInsertSql(tableName, columns))) {
+            int rowCount = 0;
+
+            for (Object rowValue : rows) {
+                if (!(rowValue instanceof Map<?, ?> row)) {
+                    continue;
+                }
+
+                for (int i = 0; i < columns.size(); i++) {
+                    insertStatement.setObject(i + 1, row.get(columns.get(i)));
+                }
+
+                insertStatement.addBatch();
+                rowCount++;
+
+                if (rowCount % 250 == 0) {
+                    insertStatement.executeBatch();
+                }
+            }
+
+            insertStatement.executeBatch();
+            return rowCount;
+        }
+    }
+
     private String buildInsertSql(
             String tableName,
             ResultSetMetaData metaData
@@ -285,6 +478,19 @@ public class DatabaseSyncService {
 
         return "INSERT INTO " + quoteIdentifier(tableName)
                 + " (" + columns + ") VALUES (" + parameters + ")";
+    }
+
+    private String buildInsertSql(String tableName, List<String> columns) {
+        StringJoiner columnList = new StringJoiner(", ");
+        StringJoiner parameters = new StringJoiner(", ");
+
+        for (String column : columns) {
+            columnList.add(quoteIdentifier(column));
+            parameters.add("?");
+        }
+
+        return "INSERT INTO " + quoteIdentifier(tableName)
+                + " (" + columnList + ") VALUES (" + parameters + ")";
     }
 
     private boolean sqliteTableExists(
@@ -376,6 +582,45 @@ public class DatabaseSyncService {
 
     private String quoteIdentifier(String identifier) {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
+    private void appendJsonValue(StringBuilder json, Object value) {
+        if (value == null) {
+            json.append("null");
+        } else if (value instanceof Number || value instanceof Boolean) {
+            json.append(value);
+        } else {
+            json.append('"').append(jsonEscape(value.toString())).append('"');
+        }
+    }
+
+    private String jsonEscape(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        StringBuilder escaped = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '"' -> escaped.append("\\\"");
+                case '\\' -> escaped.append("\\\\");
+                case '\b' -> escaped.append("\\b");
+                case '\f' -> escaped.append("\\f");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (ch < 0x20) {
+                        escaped.append("\\u%04x".formatted((int) ch));
+                    } else {
+                        escaped.append(ch);
+                    }
+                }
+            }
+        }
+
+        return escaped.toString();
     }
 
     public record MigrationResult(
