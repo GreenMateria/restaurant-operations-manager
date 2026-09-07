@@ -1,7 +1,7 @@
 # CLOUD DATABASE PLAN
 
 _Created: Saturday, August 1, 2026_
-_Last Updated: Friday, September 4, 2026_
+_Last Updated: Sunday, September 6, 2026_
 
 This document records the completed cloud database transition for ESM Operations Manager.
 
@@ -13,7 +13,7 @@ The target workflow is:
 
 ```text
 PC 1 app \
-PC 2 app  -> AWS RDS PostgreSQL database
+PC 2 app  -> Cloud API -> AWS RDS PostgreSQL database
 PC 3 app /
 ```
 
@@ -24,7 +24,7 @@ Each PC connects outbound to the cloud database. The office PC does not need to 
 As of Sunday, August 30, 2026, the active cloud database target for configured work PCs is AWS RDS PostgreSQL:
 
 ```text
-Normal work PCs -> AWS RDS PostgreSQL postgres database
+Normal work PCs -> Cloud API mode -> AWS RDS PostgreSQL postgres database
 Fresh installs  -> local SQLite until cloud mode is configured
 ```
 
@@ -38,7 +38,7 @@ An API layer proof now exists for the next credential-protection step:
 Desktop app -> API Gateway HTTP API -> AWS Lambda -> AWS RDS PostgreSQL
 ```
 
-The API stack is deployed as `esm-operations-api` in `ca-central-1`. The desktop app can use API mode for migrated Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, GFS product guide import persistence, product purchase history, and administrative upload/download sync workflows. Current work PCs can continue using direct Cloud PostgreSQL mode as a fallback while API mode is validated through normal daily workflows.
+The API stack is deployed as `esm-operations-api` in `ca-central-1`. As of the current development build after v3.1.1, the desktop app can use API mode for normal Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Weekly Labour, GFS product guide import persistence, product purchase history, and administrative upload/download sync workflows. Current work PCs should use Cloud API mode for daily operation, while direct Cloud PostgreSQL mode remains available as an administrator fallback.
 
 The safe default for a fresh install remains local SQLite:
 
@@ -58,11 +58,11 @@ Current normal operating process:
 
 ```text
 PC 1 app \
-PC 2 app  -> AWS RDS PostgreSQL
+PC 2 app  -> Cloud API -> AWS RDS PostgreSQL
 PC 3 app /
 ```
 
-When the app is running in Cloud PostgreSQL mode, normal reads and saves go directly to the shared cloud database. Multiple PCs can be connected at the same time. The application does not currently provide live screen refresh or edit-conflict warnings, so users should reopen or refresh a screen to see another user's recent changes and should avoid editing the same record at the same time.
+When the app is running in Cloud API mode, normal reads and saves go through the API to the shared cloud database. Direct Cloud PostgreSQL mode is still available as an administrator fallback. Multiple PCs can be connected at the same time. The application does not currently provide live screen refresh or edit-conflict warnings, so users should reopen or refresh a screen to see another user's recent changes and should avoid editing the same record at the same time.
 
 Cloud connectivity status:
 
@@ -71,6 +71,8 @@ Cloud connectivity status:
 - AWS RDS schema/table restoration was verified, including 24 public tables and key application table counts.
 - The development app and installed app loaded data successfully from AWS RDS PostgreSQL.
 - Normal app access now uses a lower-access AWS RDS `operations_app` database user.
+- Labour Management schema version 17 was applied to AWS RDS on Sunday, September 6, 2026 after deploying the Weekly Labour API routes.
+- `scripts/Apply-LabourSchemaMigration.ps1` is available for the Labour schema setup path and prompts securely for the RDS admin password.
 - Java connection test succeeded on Sunday, August 2, 2026.
 - Connected to Aiven PostgreSQL `defaultdb` using SSL.
 - Initial test used the Aiven admin user only for connection proof and schema/grant setup.
@@ -156,12 +158,12 @@ SQLite remains the default startup mode for fresh installs and fallback use.
 The v3.0.1 release includes completed cloud support for the current internal rollout:
 
 ```text
-Normal work PCs -> Cloud PostgreSQL mode
+Normal work PCs -> Cloud API mode
 Fresh installs  -> local SQLite default until configured
 Administrator   -> System-menu mode switch and upload/download tools
 ```
 
-Cloud PostgreSQL is the normal operating mode on the current work PCs. Do not use Upload This PC to Cloud during normal daily operation; it is an administrative replacement/migration tool that overwrites the cloud database with one PC's local SQLite data.
+Cloud API mode is the normal operating mode on the current work PCs. Do not use Upload This PC to Cloud during normal daily operation; it is an administrative replacement/migration tool that overwrites the cloud database with one PC's local SQLite data.
 
 ## Current Cloud Database
 
@@ -199,7 +201,9 @@ Use a dedicated AWS RDS database user for the app:
 operations_app
 ```
 
-Do not use the main AWS RDS admin user inside the desktop application.
+Do not use the main AWS RDS admin user inside the desktop application or Lambda runtime.
+
+Use a schema-capable admin connection only for controlled migrations/grants, then keep normal runtime on the restricted app user.
 
 The app user should be used with:
 
@@ -433,7 +437,7 @@ UPLOAD_TO_POSTGRES
 - Release installer starts in SQLite mode by default.
 - Database details are hidden from normal workflows.
 - Cloud controls live behind the existing password-protected System module.
-- Current work PCs should run in AWS RDS Cloud PostgreSQL mode for daily shared-data use.
+- Current work PCs should run in Cloud API mode for daily shared-data use, with AWS RDS PostgreSQL behind the API.
 
 ### Phase 7: AWS RDS Cutover
 

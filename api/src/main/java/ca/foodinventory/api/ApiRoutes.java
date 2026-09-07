@@ -15,6 +15,7 @@ class ApiRoutes {
     private final ProductionRepository productionRepository;
     private final ReportingRepository reportingRepository;
     private final AdminSyncRepository adminSyncRepository;
+    private final LabourRepository labourRepository;
 
     ApiRoutes() {
         this(
@@ -26,7 +27,8 @@ class ApiRoutes {
                 new AlcoholProductProfileRepository(),
                 new ProductionRepository(),
                 new ReportingRepository(),
-                new AdminSyncRepository()
+                new AdminSyncRepository(),
+                new LabourRepository()
         );
     }
 
@@ -39,7 +41,8 @@ class ApiRoutes {
             AlcoholProductProfileRepository alcoholProductProfileRepository,
             ProductionRepository productionRepository,
             ReportingRepository reportingRepository,
-            AdminSyncRepository adminSyncRepository
+            AdminSyncRepository adminSyncRepository,
+            LabourRepository labourRepository
     ) {
         this.productRepository = productRepository;
         this.posMenuItemRepository = posMenuItemRepository;
@@ -50,6 +53,7 @@ class ApiRoutes {
         this.productionRepository = productionRepository;
         this.reportingRepository = reportingRepository;
         this.adminSyncRepository = adminSyncRepository;
+        this.labourRepository = labourRepository;
     }
 
     ApiResult handle(
@@ -370,6 +374,11 @@ class ApiRoutes {
         ApiResult productionResult = handleProductionRoute(method, normalizedPath, headers, body);
         if (productionResult != null) {
             return productionResult;
+        }
+
+        ApiResult labourResult = handleLabourRoute(method, normalizedPath, headers, body);
+        if (labourResult != null) {
+            return labourResult;
         }
 
         DepartmentPath departmentPath = departmentPath(normalizedPath);
@@ -835,6 +844,96 @@ class ApiRoutes {
                     "message", "Failed to process admin sync request."
             ));
         }
+    }
+
+    private ApiResult handleLabourRoute(
+            String method,
+            String path,
+            Map<String, List<String>> headers,
+            String body
+    ) {
+        if (!path.startsWith("/labour/")) {
+            return null;
+        }
+
+        ApiResult unauthorized = requireApiKey(headers);
+        if (unauthorized != null) {
+            return unauthorized;
+        }
+
+        try {
+            String weeklyStart = pathDate(path, "/labour/weekly/");
+            if ("GET".equalsIgnoreCase(method) && weeklyStart != null) {
+                return ApiResult.json(200, labourRepository.weeklyLabourJson(weeklyStart));
+            }
+            if ("PUT".equalsIgnoreCase(method) && "/labour/weekly".equals(path)) {
+                labourRepository.saveWeeklyLabour(parseBody(body));
+                return ApiResult.json(200, Json.object("status", "ok", "message", "Weekly labour saved."));
+            }
+
+            if ("GET".equalsIgnoreCase(method) && "/labour/positions".equals(path)) {
+                return ApiResult.json(200, labourRepository.findPositionsJson(false));
+            }
+            if ("GET".equalsIgnoreCase(method) && "/labour/positions/active".equals(path)) {
+                return ApiResult.json(200, labourRepository.findPositionsJson(true));
+            }
+            if ("POST".equalsIgnoreCase(method) && "/labour/positions".equals(path)) {
+                return ApiResult.json(201, labourRepository.savePositionJson(parseBody(body)));
+            }
+            Integer positionId = pathId(path, "/labour/positions/");
+            if (positionId != null) {
+                if ("PUT".equalsIgnoreCase(method)) {
+                    return ApiResult.json(200, labourRepository.savePositionJson(parseBody(body)));
+                }
+                if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
+                    return okOrNotFound(
+                            labourRepository.deactivatePosition(positionId),
+                            "Labour position deactivated.",
+                            "Labour position not found."
+                    );
+                }
+            }
+
+            if ("GET".equalsIgnoreCase(method) && "/labour/employees".equals(path)) {
+                return ApiResult.json(200, labourRepository.findEmployeesJson());
+            }
+            if ("POST".equalsIgnoreCase(method) && "/labour/employees".equals(path)) {
+                return ApiResult.json(201, labourRepository.saveEmployeeJson(parseBody(body)));
+            }
+            Integer employeeId = pathId(path, "/labour/employees/");
+            if (employeeId != null) {
+                if ("PUT".equalsIgnoreCase(method)) {
+                    return ApiResult.json(200, labourRepository.saveEmployeeJson(parseBody(body)));
+                }
+                if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
+                    return okOrNotFound(
+                            labourRepository.deactivateEmployee(employeeId),
+                            "Labour employee deactivated.",
+                            "Labour employee not found."
+                    );
+                }
+            }
+
+            if ("GET".equalsIgnoreCase(method) && "/labour/settings".equals(path)) {
+                return ApiResult.json(200, labourRepository.settingsJson());
+            }
+            if ("PUT".equalsIgnoreCase(method) && "/labour/settings".equals(path)) {
+                labourRepository.saveSettings(parseBody(body));
+                return ApiResult.json(200, Json.object("status", "ok", "message", "Labour settings saved."));
+            }
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
+        } catch (IllegalStateException e) {
+            return ApiResult.json(503, Json.object(
+                    "error", "database_not_configured",
+                    "message", e.getMessage()
+            ));
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return databaseError("Failed to process labour request.");
+        }
+
+        return null;
     }
 
     private ApiResult handleReportingRoute(
@@ -1310,6 +1409,19 @@ class ApiRoutes {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private String pathDate(String path, String prefix) {
+        if (path == null || !path.startsWith(prefix)) {
+            return null;
+        }
+
+        String remaining = path.substring(prefix.length());
+        if (remaining.isBlank() || remaining.contains("/")) {
+            return null;
+        }
+
+        return remaining;
     }
 
     private int[] twoPathIds(String path, String prefix) {

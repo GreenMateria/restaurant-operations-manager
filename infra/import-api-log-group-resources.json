@@ -1,0 +1,9 @@
+[
+  {
+    "ResourceType": "AWS::Logs::LogGroup",
+    "LogicalResourceId": "FoodInventoryApiFunctionLogGroup",
+    "ResourceIdentifier": {
+      "LogGroupName": "/aws/lambda/esm-operations-api-FoodInventoryApiFunction-HoikXKwCH2C0"
+    }
+  }
+]

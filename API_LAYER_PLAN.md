@@ -1,12 +1,13 @@
 # API Layer Plan
 
 _Created: Tuesday, September 1, 2026_
+_Last Updated: Sunday, September 6, 2026_
 
 This document plans the next architecture step for ESM Operations Manager: moving database credentials off client PCs by putting an authenticated API layer between the desktop application and AWS RDS PostgreSQL.
 
 ## Goal
 
-Current configured work PCs connect directly to AWS RDS PostgreSQL in Cloud PostgreSQL mode. This works for daily operations, but it requires database connection details and an app database password on each client system.
+Before the v3.1.1 API release, configured work PCs connected directly to AWS RDS PostgreSQL in Cloud PostgreSQL mode. That worked for daily operations, but required database connection details and an app database password on each client system.
 
 The target architecture is:
 
@@ -135,7 +136,7 @@ Food Department
 -> Order Guide
 ```
 
-Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, GFS product guide import persistence, product purchase history, and administrative upload/download sync are now API-backed. CSV and Excel parsing remains in the desktop client; the API receives normalized records for persistence and reporting.
+Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Weekly Labour, GFS product guide import persistence, product purchase history, and administrative upload/download sync are now API-backed. CSV and Excel parsing remains in the desktop client; the API receives normalized records for persistence and reporting.
 
 ## First API Slice
 
@@ -279,7 +280,7 @@ Remaining:
 
 ## Current Recommendation
 
-Keep the Java Lambda/API Gateway API against the existing AWS RDS PostgreSQL database. Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, GFS product guide import persistence, product purchase history, and administrative upload/download sync are now API-backed. Next, validate the migrated desktop workflows through normal daily use. Keep direct PostgreSQL mode available until API mode has proven the daily workflows.
+Keep the Java Lambda/API Gateway API against the existing AWS RDS PostgreSQL database. As of the current development build after v3.1.1, Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Weekly Labour, GFS product guide import persistence, product purchase history, and administrative upload/download sync are API-backed for normal desktop use. Direct PostgreSQL mode remains available as an administrator fallback.
 
 ## Implementation Status
 
@@ -305,7 +306,7 @@ Started on Tuesday, September 1, 2026:
 - API URL: `https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod`.
 - First deploy with `ReservedConcurrency=5` failed because the account could not reduce unreserved Lambda concurrency below AWS minimums.
 - Template now supports `ReservedConcurrency=0`, which leaves function-level reserved concurrency unset for small/free-tier accounts.
-- Verified deployed `GET /health` returns `{"status":"ok","version":"3.0.6"}`.
+- Verified deployed `GET /health` returns `{"status":"ok","version":"3.1.1"}` after the v3.1.1 API version update on Sunday, September 6, 2026.
 - Verified deployed `GET /products` returns `401 Unauthorized` without `x-api-key`.
 - Verified deployed `GET /products` returns `359` active products from AWS RDS when called with the configured `x-api-key`.
 - Current API key was generated during deployment and temporarily written to `%TEMP%\esm-api-key.txt` for verification. Do not commit it.
@@ -325,7 +326,7 @@ Started on Tuesday, September 1, 2026:
 - Added a desktop Alcohol Sales Mappings API client and wired the Alcohol Sales Mappings screen to load/save/deactivate through the API in API mode.
 - In API mode, the Alcohol Sales Mapping dialog loads its POS item and alcohol product pickers from the already migrated API clients.
 - Authenticated mapping write testing should be done manually through the desktop UI against intentional real setup changes, not with throwaway command-line records against production data.
-- Current API migration priority has shifted away from variance reporting because it is not in active use yet. Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, and product support gaps are now API-backed.
+- Current API migration priority has shifted away from variance reporting because it is not in active use yet. Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Weekly Labour, and product support gaps are now API-backed.
 
 Current Food implementation status:
 
@@ -366,9 +367,18 @@ Current Supplies implementation status:
 - The SAM template includes the `/supplies-invoices` route, and the live API stack was deployed on Saturday, September 5, 2026.
 - Read-only smoke checks passed for health, missing-key `401` on `/supplies-invoices`, Supplies templates, counts, completed counts, and order guide generation from completed count `31` to `35`.
 
+Current Labour implementation status:
+
+- Labour Setup: positions, employees, default uniform deduction settings, and active/inactive state are implemented through the API.
+- Weekly Labour: Monday-Sunday Shift 1 / Shift 2 employee-hour loading and bulk save are implemented through the API.
+- Weekly Labour stores wage, employee name, position name, and labour group snapshots on daily entries so historical weeks do not recalculate from later setup changes.
+- Labour routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026.
+- The live AWS RDS Labour schema was advanced to schema version 17 using `scripts/Apply-LabourSchemaMigration.ps1`; the restricted `operations_app` runtime user remains unable to create tables by design.
+
 Remaining API migration targets:
 
 - Deferred work: alcohol variance report calculation/output.
+- Future Labour work: Daily Labour, Tip Pool, and Tip Pool Breakdown.
 - Keep CSV/Excel parsing client-side unless a future browser client or file-processing requirement needs server-side parsing.
 
 Deployment status:
@@ -384,11 +394,13 @@ Deployment status:
 - Supplies desktop/API changes are implemented, deployed, and read-only smoke checked.
 - Reporting/Sales and product support routes were deployed on Saturday, September 5, 2026.
 - The SAM template was consolidated to one `ANY /{proxy+}` route so Lambda permissions do not exceed AWS resource-policy size limits as the API grows.
-- Live smoke checks passed for health version `3.0.6`, missing-key `401` on `/reporting/invoices` and `/products/import`, Sales Periods, Invoice History, invoice `106` lines/breakdown, Food valuation count `34`, Weekly Cost Report from count `32` to `34`, product purchase history for product `267`, and active product listing.
+- Live smoke checks passed for health version `3.0.6`, missing-key `401` on `/reporting/invoices` and `/products/import`, Sales Periods, Invoice History, invoice `106` lines/breakdown, Food valuation count `34`, Weekly Cost Report from count `32` to `34`, product purchase history for product `267`, and active product listing. `GET /health` was later updated and verified at version `3.1.1` on Sunday, September 6, 2026.
 - Administrative sync routes were deployed on Saturday, September 5, 2026.
 - Admin sync smoke checks passed for missing-key `401` on `/admin/sync/download` and `/admin/sync/upload`; authenticated read-only download returned 24 tables, 11,417 rows, and a 1.85 MB cloud snapshot. Authenticated upload should only be tested through intentional desktop UI use because it replaces production cloud data.
+- Labour Setup and Weekly Labour routes were deployed on Sunday, September 6, 2026; Weekly Labour initially returned 404 until the Lambda update was deployed, then required the Labour schema to be applied to AWS RDS.
 
 Next implementation step:
 
-- Validate migrated Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase-history, and admin sync API workflows from the IntelliJ desktop app using normal live workflows.
-- Keep direct Cloud PostgreSQL mode available as fallback until API mode proves daily use on work PCs.
+- Validate migrated Food, Alcohol, Supplies, Production, Reporting/Sales, Labour Setup, Weekly Labour, product import, product purchase-history, and admin sync API workflows from the IntelliJ desktop app using normal live workflows.
+- Build Daily Labour next with manual daily net sales and labour percentage reporting.
+- Keep direct Cloud PostgreSQL mode available as an administrator fallback.

@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Friday, September 4, 2026_
+_Last Updated: Sunday, September 6, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -86,14 +86,16 @@ Important:
 - Cloud PostgreSQL mode is selected through `%LOCALAPPDATA%\FoodInventory\database.properties` and can be changed from the password-protected System module.
 - Fresh installs seed `database.properties` from safe bundled defaults when the local config file does not exist; source-controlled defaults must keep credentials blank.
 - Release-built installers can include an ignored generated `database-release.properties` resource that configures API mode once per release from secret values supplied at packaging time.
-- For the current work PCs, AWS RDS PostgreSQL is the normal operating mode and the cloud database is the accurate master data source.
+- For the current work PCs, Cloud API mode is the normal operating mode, AWS RDS PostgreSQL remains the backend data store, and the cloud database is the accurate master data source.
 - Upload/download cloud sync controls are administrator migration/recovery tools, not routine daily sync actions.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
-- Current project version is v3.0.6.
+- Current project version is v3.1.1.
 - API layer stack `esm-operations-api` is deployed in AWS and the desktop app can use API mode for migrated workflows.
-- Current API-mode migrated areas are Food Department workflows, Alcohol Department workflows, Supplies Department workflows, Production workflows, Reporting/Sales workflows, GFS product guide import persistence, product purchase history, and administrative upload/download sync.
+- Current API-mode migrated areas are Food Department workflows, Alcohol Department workflows, Supplies Department workflows, Production workflows, Reporting/Sales workflows, Labour Setup, Weekly Labour Entry, GFS product guide import persistence, product purchase history, and administrative upload/download sync.
 - Current API-mode gaps are deferred variance reporting and local backup/export polish.
+- v3.1.1 completed the desktop API migration so normal users no longer need to configure direct client database connections.
+- v3.1.1 added a database status indicator for clearer runtime mode/connection visibility.
 
 ---
 
@@ -185,9 +187,12 @@ The dashboard is organized around these operational areas:
 - Reports
 - Sales
 - Production
+- Labour Management
 - System
 
-All module views should provide a clear route back to the dashboard.
+The Labour Management module currently includes a functional administrator-protected Labour Setup screen and a functional Weekly Labour Entry screen. Weekly Labour keeps the accepted spreadsheet mental model while using a compact grid so managers can enter hours with less horizontal scrolling. Daily Labour, Tip Pool, and Tip Pool Breakdown have navigation placeholders only and remain future phases.
+
+All module views should remain reachable through the main navigation/back controls. Do not add redundant in-section return buttons where the left navigation already provides the route.
 
 ---
 
@@ -484,6 +489,8 @@ Printing rules:
 - Avoid clipping the right side of the page.
 - Include products in the `OTHER` section.
 - Keep product columns narrow enough to fit all ordering columns.
+- Inventory Count Sheet printing should create the print page layout after the user selects the printer and should scale printable pages to the selected printer's printable area.
+- Alcohol count sheet printing must use API-backed alcohol product profile loading when the desktop is in Cloud API mode.
 
 The restaurant normally places two weekly orders, so both order columns are required.
 
@@ -777,7 +784,38 @@ Freezer Pull:
 
 ---
 
-# 17. Printing Standards
+# 17. Labour Management
+
+Labour Management is a top-level operational module replacing the accepted manager Excel workflow in phases.
+
+Implemented Labour Management work includes:
+
+- Labour Management dashboard navigation.
+- Administrator-protected Labour Setup.
+- Weekly Labour Entry with a compact spreadsheet-style Monday-Sunday grid and separate Shift 1 / Shift 2 employee-hour entry.
+- Configurable labour positions grouped as `FOH` or `BOH`.
+- Configurable labour employees with position, hourly wage, active status, tip-pool eligibility, and uniform-deduction applicability.
+- Configurable default uniform deduction amount stored in settings.
+- API-backed Labour Setup and Weekly Labour reads/writes for Cloud API mode, with SQLite/direct database fallback.
+- Live AWS API deployment includes the Weekly Labour routes, and the live RDS schema has been advanced to Labour schema version 17.
+- Schema foundations for future daily operational sales and daily employee labour entries by actual calendar date.
+- Wage, employee name, position name, and labour group snapshots on saved daily labour entries so historical weeks do not recalculate from later setup changes.
+
+Daily Labour, Tip Pool, and Tip Pool Breakdown are not implemented yet. Their current navigation entries are placeholders only.
+
+Future Labour Management work should preserve the spreadsheet-like manager workflow: employees grouped by labour position, Monday through Sunday across the screen, separate Shift 1 and Shift 2 entry, daily totals, labour dollars/percentages, FOH/BOH/total variable labour groupings, tip-out allocation by eligible hours, and uniform deductions from configuration.
+
+Weekly Labour UI notes:
+
+- Week selection normalizes to Monday as the canonical week start.
+- The visible entry grid uses compact `S1` and `S2` headers to reduce horizontal scrolling while preserving separate shift entry.
+- Tab and Enter should move through editable shift cells in left-to-right, top-to-bottom order.
+- Blank shift cells are treated as zero internally.
+- Full-week saves use one API request in Cloud API mode rather than saving each cell while typing.
+
+---
+
+# 18. Printing Standards
 
 Printed output is a core application feature.
 
@@ -807,7 +845,7 @@ Print preview should match the actual printed content as closely as possible.
 
 ---
 
-# 18. Backup and Restore
+# 19. Backup and Restore
 
 The System module includes database backup and restore.
 
@@ -822,7 +860,7 @@ Important rules:
 
 ---
 
-# 19. Admin Password and Settings
+# 20. Admin Password and Settings
 
 The application uses a settings table for protected system functions.
 
@@ -835,7 +873,7 @@ Passwords must not be stored in plain text.
 
 ---
 
-# 20. GitHub Update System
+# 21. GitHub Update System
 
 The updater is implemented through:
 
@@ -902,7 +940,7 @@ Important bootstrap caveat:
 
 ---
 
-# 21. Versioning and Releases
+# 22. Versioning and Releases
 
 The Maven project version is the application version source.
 
@@ -946,7 +984,7 @@ Important:
 
 ---
 
-# 22. Current Project State
+# 23. Current Project State
 
 The application currently has a stable foundation for:
 
@@ -974,12 +1012,16 @@ The application currently has a stable foundation for:
 - API-backed Supplies Department workflows
 - API-backed Production workflows, including POS Menu Items, Weekly Production, production report import/generation, Product Mappings, and Freezer Pull
 - API-backed Reporting/Sales workflows, including Invoice History, Sales Entry/import persistence, Inventory Valuation, and Weekly Cost Report generation
+- API-backed Labour Setup for labour positions, employees, and default uniform deduction configuration
+- API-backed Weekly Labour Entry for Monday-Sunday Shift 1 / Shift 2 employee hours
+- Fixed Inventory Count Sheet printing for selected printer layout/scaling and API-mode alcohol profile loading
 - API-backed GFS product guide import persistence and product purchase history lookup
 - API-backed administrative upload/download sync for cloud replacement and local recovery workflows
 - Persistent Order Guide case-size overrides
+- Labour Management Phase 1 and Phase 2 foundation: top-level navigation, administrator-protected Labour Setup, compact Weekly Labour Entry, schema/API/model foundation, and placeholders for later Daily Labour, Tip Pool, and Tip Pool Breakdown screens
 - Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
 
-All implemented features through version 3.0.6 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 3.1.1 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 Primary unfinished areas:
 
@@ -989,18 +1031,20 @@ Primary unfinished areas:
 - Yield tracking
 - Advanced reporting
 - Inventory count template synchronization
+- Daily Labour, Tip Pool, and Tip Pool Breakdown screens
 
 ---
 
-# 23. Development Priorities
+# 24. Development Priorities
 
 ## Immediate
 
-1. Continue monitoring daily Cloud PostgreSQL use on the configured work PCs.
-2. Validate the v3.0.6 installer upgrade on the work PCs.
+1. Continue monitoring daily Cloud API use on the configured work PCs.
+2. Validate the v3.1.1 installer upgrade on the work PCs.
 3. Validate Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase-history, and admin sync API mode from the IntelliJ desktop app using normal live workflows.
-4. Build alcohol variance calculation/output inside the Alcohol Department after operational workflows are stable.
-5. Add a manual Check for Updates action.
+4. Build Daily Labour with daily net sales, labour percentages, target variance reporting, and FOH/BOH/total variable labour rollups.
+5. Build alcohol variance calculation/output inside the Alcohol Department after operational workflows are stable.
+6. Add a manual Check for Updates action.
 
 ## Medium Term
 
@@ -1021,7 +1065,7 @@ Primary unfinished areas:
 
 ---
 
-# 24. Important Design Principles
+# 25. Important Design Principles
 
 ## Preserve Historical Data
 
@@ -1069,7 +1113,7 @@ Broad rewrites should only be used when there is a clear reason and the existing
 
 ---
 
-# 25. Build and Verification
+# 26. Build and Verification
 
 After Java changes:
 
@@ -1102,13 +1146,13 @@ For packaging:
 
 ---
 
-# 26. New Session Instructions
+# 27. New Session Instructions
 
 When starting a new AI or Codex session, provide this instruction:
 
 ```text
 Read PROJECT_REFERENCE.md, PROJECT_STATUS.md, DATABASE_SCHEMA.md,
-CODING_STANDARDS.md, ROADMAP.md, and RELEASE_HISTORY.md.
+CODING_STANDARDS.md, INFRASTRUCTURE.md, ROADMAP.md, and RELEASE_HISTORY.md.
 
 Treat PROJECT_REFERENCE.md as the master functional overview.
 Inspect the exact Java files involved before changing code.
@@ -1128,7 +1172,7 @@ For a focused task, also include:
 
 ---
 
-# 27. Document Set
+# 28. Document Set
 
 This project documentation set should include:
 
@@ -1137,6 +1181,7 @@ PROJECT_REFERENCE.md
 PROJECT_STATUS.md
 DATABASE_SCHEMA.md
 CODING_STANDARDS.md
+INFRASTRUCTURE.md
 ROADMAP.md
 RELEASE_HISTORY.md
 ```
@@ -1158,6 +1203,10 @@ Current database tables, fields, migrations, and reporting relationships.
 ## CODING_STANDARDS.md
 
 Implementation conventions and project-specific development rules.
+
+## INFRASTRUCTURE.md
+
+Current AWS infrastructure baseline, what is managed by IaC, what is still manual, budget guardrails, and recovery-oriented deployment notes.
 
 ## ROADMAP.md
 

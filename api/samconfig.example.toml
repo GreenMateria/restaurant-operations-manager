@@ -19,5 +19,6 @@ parameter_overrides = [
   "ApiKey=<shared-api-key>",
   "LambdaSubnetIds=<subnet-id-1>,<subnet-id-2>",
   "LambdaSecurityGroupIds=<lambda-security-group-id>",
-  "ReservedConcurrency=0"
+  "ReservedConcurrency=0",
+  "LambdaLogRetentionDays=30"
 ]

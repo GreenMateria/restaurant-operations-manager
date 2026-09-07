@@ -149,6 +149,44 @@
     -fx-background-color: #3a3a3a;
     -fx-border-color: #2d89ef;
 }
+
+.weekly-labour-grid {
+    -fx-background-color: #3a3a3a;
+}
+
+.weekly-labour-header {
+    -fx-background-color: #303030;
+    -fx-text-fill: white;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 3;
+}
+
+.weekly-labour-cell {
+    -fx-background-color: #242424;
+    -fx-text-fill: white;
+    -fx-font-size: 12px;
+    -fx-padding: 3 5 3 5;
+}
+
+.weekly-labour-group {
+    -fx-background-color: #17466d;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-padding: 4 6 4 6;
+}
+
+.weekly-labour-summary-label {
+    -fx-text-fill: #b8c7d9;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.weekly-labour-hours-field {
+    -fx-font-size: 12px;
+    -fx-padding: 3 4 3 4;
+}
 .radio-button {
     -fx-text-fill: white;
 }

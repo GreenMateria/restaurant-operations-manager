@@ -34,6 +34,18 @@ Parameters:
     MinValue: 0
     MaxValue: 20
     Description: Set to 0 to leave function reserved concurrency unset.
+  LambdaLogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues:
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 180
+      - 365
+    Description: CloudWatch Logs retention period for the API Lambda log group.
 
 Conditions:
   UseReservedConcurrency: !Not [!Equals [!Ref ReservedConcurrency, 0]]
@@ -78,6 +90,14 @@ Resources:
             ApiId: !Ref FoodInventoryHttpApi
             Path: /{proxy+}
             Method: ANY
+
+  FoodInventoryApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${FoodInventoryApiFunction}'
+      RetentionInDays: !Ref LambdaLogRetentionDays
 
 Outputs:
   ApiUrl:

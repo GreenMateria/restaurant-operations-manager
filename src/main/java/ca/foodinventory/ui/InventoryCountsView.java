@@ -9,16 +9,20 @@ import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
 import ca.foodinventory.model.InventoryCountTemplate;
+import ca.foodinventory.service.AlcoholProductProfileApiClient;
 import ca.foodinventory.service.InventoryApiClient;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.print.*;
+import javafx.scene.Group;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
+import javafx.scene.transform.Scale;
 import javafx.stage.Stage;
 
 import java.time.LocalDate;
@@ -32,6 +36,8 @@ public class InventoryCountsView {
     private final InventoryCountLineDao lineDao = new InventoryCountLineDao();
     private final AlcoholProductProfileDao alcoholProfileDao = new AlcoholProductProfileDao();
     private final InventoryApiClient apiClient = new InventoryApiClient();
+    private final AlcoholProductProfileApiClient alcoholProfileApiClient =
+            new AlcoholProductProfileApiClient();
 
     private final TableView<InventoryCount> table = new TableView<>();
 
@@ -377,26 +383,17 @@ public class InventoryCountsView {
             return;
         }
 
-        PageLayout pageLayout = job.getPrinter().createPageLayout(
-                Paper.NA_LETTER,
-                PageOrientation.PORTRAIT,
-                Printer.MarginType.HARDWARE_MINIMUM
-        );
-        job.getJobSettings().setPageLayout(pageLayout);
-
         if (!job.showPrintDialog(table.getScene().getWindow())) {
             return;
         }
 
+        PageLayout pageLayout = createPrintPageLayout(job);
         List<List<CountPrintRow>> pages = paginateCountLines(lines, 27);
         boolean success = true;
 
         for (int i = 0; i < pages.size(); i++) {
             Node page = buildCountSheetPage(selected, pages.get(i), i + 1, pages.size());
-            page.applyCss();
-            page.autosize();
-
-            if (!job.printPage(pageLayout, page)) {
+            if (!job.printPage(pageLayout, fitPageToPrintableArea(page, pageLayout))) {
                 success = false;
                 break;
             }
@@ -404,7 +401,55 @@ public class InventoryCountsView {
 
         if (success) {
             job.endJob();
+        } else {
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Print Failed",
+                    "The selected inventory count sheet could not be printed."
+            );
         }
+    }
+
+    private PageLayout createPrintPageLayout(PrinterJob job) {
+        Printer printer = job.getPrinter();
+        PageLayout pageLayout = printer.createPageLayout(
+                Paper.NA_LETTER,
+                PageOrientation.PORTRAIT,
+                Printer.MarginType.HARDWARE_MINIMUM
+        );
+        job.getJobSettings().setPageLayout(pageLayout);
+        return pageLayout;
+    }
+
+    private Node fitPageToPrintableArea(Node page, PageLayout pageLayout) {
+        page.applyCss();
+        page.autosize();
+
+        if (page instanceof Parent parent) {
+            parent.layout();
+        }
+
+        double contentWidth = page.getLayoutBounds().getWidth();
+        double contentHeight = page.getLayoutBounds().getHeight();
+
+        if (contentWidth <= 0 || contentHeight <= 0) {
+            return page;
+        }
+
+        double widthScale = pageLayout.getPrintableWidth() / contentWidth;
+        double heightScale = pageLayout.getPrintableHeight() / contentHeight;
+        double scaleFactor = Math.min(1.0, Math.min(widthScale, heightScale));
+
+        Group scaledPage = new Group(page);
+        if (scaleFactor < 1.0) {
+            scaledPage.getTransforms().add(new Scale(scaleFactor, scaleFactor));
+        }
+
+        Pane wrapper = new Pane(scaledPage);
+        wrapper.setPrefSize(pageLayout.getPrintableWidth(), pageLayout.getPrintableHeight());
+        wrapper.setMinSize(pageLayout.getPrintableWidth(), pageLayout.getPrintableHeight());
+        wrapper.setMaxSize(pageLayout.getPrintableWidth(), pageLayout.getPrintableHeight());
+        return wrapper;
     }
 
     private List<List<CountPrintRow>> paginateCountLines(
@@ -499,7 +544,7 @@ public class InventoryCountsView {
 
         VBox body = new VBox(0);
         Map<Integer, AlcoholProductProfile> profilesByProductId = alcoholLayout
-                ? alcoholProfileDao.findAllActiveByProductId()
+                ? loadAlcoholProfilesForPrint()
                 : Map.of();
 
         for (CountPrintRow printRow : rows) {
@@ -651,6 +696,12 @@ public class InventoryCountsView {
 
         String templateName = count.getTemplateName() == null ? "" : count.getTemplateName().toUpperCase();
         return templateName.contains("ALCOHOL");
+    }
+
+    private Map<Integer, AlcoholProductProfile> loadAlcoholProfilesForPrint() {
+        return isMigratedDepartmentApiMode()
+                ? alcoholProfileApiClient.findAllActiveByProductId()
+                : alcoholProfileDao.findAllActiveByProductId();
     }
 
     private boolean isMigratedDepartmentApiMode() {

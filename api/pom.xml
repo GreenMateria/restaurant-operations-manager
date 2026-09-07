@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>ca.foodinventory</groupId>
   <artifactId>foodinventory-api</artifactId>
-  <version>3.0.6</version>
+  <version>3.1.1</version>
 
   <properties>
     <maven.compiler.source>25</maven.compiler.source>

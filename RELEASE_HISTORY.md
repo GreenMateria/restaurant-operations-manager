@@ -1,5 +1,38 @@
 # Release History
 
+## Unreleased Development After v3.1.1
+
+Date: 2026-09-06
+
+### Labour Management
+
+- Added Labour Management Phase 1 and Phase 2 in the development build.
+- Added administrator-protected Labour Setup for configurable positions, employees, hourly wages, tip-pool eligibility, uniform-deduction applicability, active/inactive state, target labour percentages, and default uniform deduction settings.
+- Added Weekly Labour Entry with a compact spreadsheet-style Monday-Sunday grid and separate Shift 1 / Shift 2 employee-hour fields.
+- Added employee, position, labour group, and hourly wage snapshots to daily labour entries so historical Weekly Labour does not recalculate from later setup changes.
+- Added schema migrations 16 and 17 for Labour Management tables and daily labour snapshot columns.
+- Added and deployed Labour API routes for setup and Weekly Labour bulk load/save.
+- Added `scripts/Apply-LabourSchemaMigration.ps1` to apply the Labour schema to AWS RDS through a schema-capable admin user without storing the admin password.
+- Tightened Weekly Labour grid spacing after live testing to reduce horizontal scrolling while preserving the Excel-style workflow.
+
+### Printing
+
+- Fixed Inventory Count Sheet printing after the v3.1.1 stable release so count sheets dispatch after printer selection.
+- Inventory Count Sheet printing now creates the page layout after printer selection, scales pages to the selected printer's printable area, and shows a clear print-failure alert.
+- Alcohol count sheet printing now uses the API-backed alcohol profile client in Cloud API mode.
+
+## v3.1.1
+
+Date: 2026-09-05
+
+### API Migration
+
+- Completed API migration across the normal desktop workflows.
+- Normal users no longer need to configure direct client database connections.
+- Added a database status indicator for clearer runtime mode and connection visibility.
+- Updated the deployed API health version to `3.1.1`.
+- Added SAM-managed API Lambda log retention and imported the existing CloudWatch log group into the stack.
+
 ## v3.0.6
 
 Date: 2026-08-31

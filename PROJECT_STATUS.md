@@ -2,15 +2,15 @@
 
 ## Current Version
 
-**Current Project Version:** v3.0.6
+**Current Project Version:** v3.1.1
 
-Current database schema version: **15**
+Current database schema version: **17**
 
 Application compiles successfully.
 
-The latest documented release is v3.0.6, dated Monday, August 31, 2026.
+The latest documented release is v3.1.1, dated Saturday, September 5, 2026.
 
-All implemented features through v3.0.6 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through v3.1.1 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 # Completed This Session
 
@@ -18,6 +18,22 @@ All implemented features through v3.0.6 are considered working as intended unles
 
 Completed:
 
+-   Labour Management Phase 1 foundation added on Sunday, September 6, 2026.
+-   Labour Management is now a top-level dashboard module with submenu entries for Weekly Labour, Daily Labour, Tip Pool, Tip Pool Breakdown, and Labour Setup.
+-   Labour Management Phase 2 Weekly Labour Entry added on Sunday, September 6, 2026.
+-   Weekly Labour is implemented as a compact spreadsheet-style JavaFX grid with Monday-Sunday columns, separate Shift 1 / Shift 2 entry fields, position grouping, employee totals, position totals, and FOH/BOH/total variable labour rollups.
+-   Weekly Labour grid spacing was tightened after live testing: narrower shift/rate/total columns, shorter `S1`/`S2` headers, reduced row/header height, and denser cell padding reduce horizontal scrolling while preserving the Excel-style workflow.
+-   Weekly Labour supports bulk save/load in Cloud API mode through `/labour/weekly` routes and local/direct fallback through `LabourDailyEntryDao`.
+-   Weekly Labour stores wage, employee name, position name, and labour group snapshots on daily entries so saved historical weeks do not recalculate from later wage/position setup changes.
+-   The live AWS API stack was redeployed on Sunday, September 6, 2026 so the deployed `/labour/weekly` routes are available to API-mode desktops.
+-   The live AWS RDS database was advanced to schema version 17 for Labour Management after the API route deployment exposed missing Labour tables in the production schema.
+-   `scripts/Apply-LabourSchemaMigration.ps1` was added as a secure prompt-based helper for applying the Labour schema through the RDS admin user without storing the admin password.
+-   Labour Setup is implemented as an administrator-protected JavaFX setup screen for labour positions, employees, and default uniform deduction settings.
+-   Labour Setup supports API mode through `/labour` routes and local/direct database fallback through new Labour DAOs.
+-   Migration 16 added `labour_positions`, `labour_employees`, `labour_daily_sales`, and `labour_daily_entries`, plus the `labour.default_uniform_deduction` setting.
+-   Migration 17 added daily labour snapshot columns for historical Weekly Labour reporting.
+-   Daily Labour, Tip Pool, and Tip Pool Breakdown are placeholders only and remain future Labour Management phases.
+-   Inventory Count Sheet printing was fixed after the v3.1.1 stable release: print layout is now created after printer selection, pages are scaled to the selected printer's printable area, failures show a clear error alert, and alcohol count sheet printing uses the API-backed alcohol profile client in API mode.
 -   August 10, 2026 cloud-mode performance pass: inventory count Save Quantities / Complete Count now batch-updates count lines in one transaction and runs the save work in a background JavaFX task instead of blocking the UI thread
 -   August 10, 2026 cloud-mode performance pass: Sales report import, Sales Period save, and Weekly Production usage report import/generation now run in background tasks so long Excel/database work does not freeze the app window
 -   August 10, 2026 cloud-mode performance pass: Weekly Production report generation now batch-loads active production profile lines instead of querying profile lines one profile at a time
@@ -51,7 +67,7 @@ Completed:
 -   The development app and installed app successfully loaded data from AWS RDS PostgreSQL.
 -   A restricted AWS RDS `operations_app` database user was created and verified for normal application access.
 -   Configured work PCs should now use AWS RDS PostgreSQL through `%LOCALAPPDATA%\FoodInventory\database.properties`.
--   Work PCs should run in Cloud PostgreSQL mode so all normal app saves go directly to the shared cloud database
+-   Work PCs should run in Cloud API mode so normal app saves go through the API to the shared cloud database
 -   SQLite mode remains available for fallback, local testing, and fresh installs before cloud configuration
 -   Migration 14 added net-sales fields to `sales_periods` and aligned SQLite/PostgreSQL schema versioning at 14
 -   Migration 15 added alcohol-only POS sales mappings for future alcohol variance reporting
@@ -93,7 +109,7 @@ Completed:
 -   Added AWS Lambda/API Gateway deployment support through `api/template.yaml`.
 -   Deployed AWS proof stack `esm-operations-api` in `ca-central-1`.
 -   Live proof API URL is `https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod`.
--   Verified deployed `GET /health` returns version `3.0.6`.
+-   Verified deployed `GET /health` returns version `3.1.1` after the API version update.
 -   Verified deployed `GET /products` reaches AWS RDS and returns `359` active products when called with the configured `x-api-key`.
 -   Verified deployed `GET /products` returns `401 Unauthorized` without the API key.
 -   Added desktop API mode configuration support for `mode=api`, `api.url`, and `api.key`.
@@ -130,21 +146,28 @@ Completed:
 -   Reporting/Sales API migration is implemented and deployed for Invoice History, invoice line/breakdown loading, invoice delete, sales period list/save, POS sales Excel import save, Inventory Valuation, and Weekly Cost Report generation.
 -   Product support gaps are implemented and deployed: GFS product guide CSV files are parsed client-side, normalized product records are upserted through `POST /products/import`, and product purchase history loads through `GET /products/{id}/purchase-history`.
 -   The SAM template now uses one `ANY /{proxy+}` API Gateway trigger for the Lambda router to avoid Lambda resource-policy size limits as the API route surface grows.
--   Reporting/Sales and product support live smoke checks passed on Saturday, September 5, 2026: health version `3.0.6`, missing-key `401` for `/reporting/invoices` and `/products/import`, 50 invoices, 11 sales periods, invoice `106` lines/breakdown, Food valuation for count `34`, Weekly Cost Report from count `32` to `34`, 362 active products, and product `267` purchase history.
+-   Reporting/Sales and product support live smoke checks passed on Saturday, September 5, 2026: missing-key `401` for `/reporting/invoices` and `/products/import`, 50 invoices, 11 sales periods, invoice `106` lines/breakdown, Food valuation for count `34`, Weekly Cost Report from count `32` to `34`, 362 active products, and product `267` purchase history. API health was later updated and verified at version `3.1.1`.
 -   Administrative upload/download sync migration is implemented and deployed through `GET /admin/sync/download` and `POST /admin/sync/upload`; API mode no longer needs desktop PostgreSQL credentials for those cloud replacement tools.
 -   Admin sync live smoke checks passed on Saturday, September 5, 2026: missing-key `401` for download/upload and authenticated read-only download returned 24 tables, 11,417 rows, and a 1.85 MB cloud snapshot. Authenticated upload was not command-line smoke tested because it replaces production cloud data.
 -   Release packaging can now generate an ignored `src/main/resources/database-release.properties` file from `FOOD_INVENTORY_RELEASE_API_KEY`, embedding API mode defaults in the installer without committing the key to Git.
 -   On startup, the desktop app applies a bundled release API config once per release version, updating `%LOCALAPPDATA%\FoodInventory\database.properties` to API mode automatically for users who install the update.
 -   API infrastructure is managed by the SAM template in `api/template.yaml`; `api/samconfig.example.toml` documents safe local deploy parameters while real `samconfig.toml` and secrets remain untracked.
+-   v3.1.1 was released on Saturday, September 5, 2026.
+-   v3.1.1 completed the desktop API migration so normal users no longer need to configure direct client database connections.
+-   v3.1.1 added a database status indicator for clearer runtime mode/connection visibility.
+-   The deployed API version was updated on Sunday, September 6, 2026 so `GET /health` returns version `3.1.1`.
+-   The existing API Lambda CloudWatch log group was imported into the SAM/CloudFormation stack on Sunday, September 6, 2026.
+-   API Lambda log retention is now managed by IaC through `LambdaLogRetentionDays` and verified at 30 days.
 
 Current behaviour:
 
 -   Fresh installs still start with the local SQLite runtime database until configured.
--   Current work PCs can use Cloud API mode for migrated Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, product support, and administrative upload/download sync workflows.
--   Direct Cloud PostgreSQL mode remains available as the fallback while API mode is validated against normal live workflows.
--   The desktop app supports API mode for Food Products, Food Import Invoice, Food Manual Invoice, Food Count Templates, Food Inventory Counts, Food Order Guide, Alcohol Products/Profile Maintenance, Alcohol Manual Invoice, Alcohol Count Templates, Alcohol Inventory Counts, Alcohol Order Guide, Alcohol Sales Mappings, Supplies Products, Supplies Manual Invoice, Supplies Count Templates, Supplies Inventory Counts, Supplies Order Guide, Production workflows, Invoice History, Sales Entry/import, Inventory Valuation, Weekly Cost Report, GFS product guide import, and product purchase history.
+-   Current work PCs should use Cloud API mode for Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Weekly Labour, product support, and administrative upload/download sync workflows.
+-   Direct Cloud PostgreSQL mode remains available as an administrator fallback.
+-   The desktop app supports API mode for Food Products, Food Import Invoice, Food Manual Invoice, Food Count Templates, Food Inventory Counts, Food Order Guide, Alcohol Products/Profile Maintenance, Alcohol Manual Invoice, Alcohol Count Templates, Alcohol Inventory Counts, Alcohol Order Guide, Alcohol Sales Mappings, Supplies Products, Supplies Manual Invoice, Supplies Count Templates, Supplies Inventory Counts, Supplies Order Guide, Production workflows, Labour Setup, Weekly Labour, Invoice History, Sales Entry/import, Inventory Valuation, Weekly Cost Report, GFS product guide import, and product purchase history.
 -   POS Menu Items support API-mode load, add, edit, deactivate, setup import, usage-report import, and KDS cleanup in the development build.
 -   Inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports are expected to remain responsive in cloud mode because long writes/imports are now moved off the JavaFX thread.
+-   Inventory Count Sheet printing is expected to dispatch correctly after printer selection in Food, Alcohol, and Supplies count screens.
 -   PostgreSQL mode has passed broad DAO/service smoke tests and manual JavaFX UI testing, including the previously slow Weekly Production, Freezer Pull, and Inventory Valuation screens.
 -   When running in Cloud PostgreSQL mode, normal reads and saves use the shared AWS RDS database directly.
 -   Upload This PC to Cloud and Download Cloud to This PC are administrator migration/recovery tools, not routine daily sync actions; when API settings are configured, these tools use the API instead of direct PostgreSQL.
@@ -171,12 +194,13 @@ Current behaviour:
 
 # Next Development Priorities
 
-1.  Continue daily operations from Cloud PostgreSQL mode on all configured work PCs.
-2.  Validate the v3.0.6 installer upgrade on the work PCs and confirm existing local data/config are preserved.
+1.  Continue daily operations from Cloud API mode on all configured work PCs.
+2.  Validate the v3.1.1 installer upgrade on the work PCs and confirm existing local data/config are preserved.
 3.  Validate migrated Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase-history API workflows from the IntelliJ desktop app using normal live workflows.
-4.  Add intentional desktop UI write-path smoke checks against real data where appropriate.
-5.  Add installer verification / checksum handling.
-6.  Add a manual Check for Updates action.
-7.  Confirm future installer upgrades replace the existing installed app entry and do not create duplicate installs.
-8.  Continue advanced reporting and workflow polish.
-9.  Return to variance reporting only after the required mappings and live workflow setup are ready.
+4.  Build Daily Labour with manual daily net sales, labour percentages, target variance reporting, and FOH/BOH/total variable labour rollups.
+5.  Manually smoke test Weekly Labour in API mode against live manager workflow data.
+6.  Add installer verification / checksum handling.
+7.  Add a manual Check for Updates action.
+8.  Confirm future installer upgrades replace the existing installed app entry and do not create duplicate installs.
+9.  Continue advanced reporting and workflow polish.
+10. Return to variance reporting only after the required mappings and live workflow setup are ready.

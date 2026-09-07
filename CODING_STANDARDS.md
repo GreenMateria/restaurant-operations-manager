@@ -1,6 +1,6 @@
 # CODING_STANDARDS.md
 
-_Last Updated: Monday, August 10, 2026_
+_Last Updated: Sunday, September 6, 2026_
 
 This file documents coding conventions and project-specific implementation rules for the Food Inventory / ESM Operations Manager application.
 
@@ -11,7 +11,7 @@ Read this before making broad code changes.
 # General Development Rules
 
 - Preserve the current JavaFX + SQLite + PostgreSQL + Maven architecture.
-- Treat AWS RDS PostgreSQL as the normal shared database for configured work PCs.
+- Treat Cloud API mode as the normal client path for configured work PCs, with AWS RDS PostgreSQL as the backend shared database.
 - Keep SQLite as the fresh-install default and local fallback path.
 - Prefer targeted changes over large rewrites.
 - Do not rename packages, models, DAOs, or major screens unless explicitly requested.
@@ -85,6 +85,8 @@ button.getStyleClass().add("primary-button");
 ```
 
 - Prefer hand-built JavaFX layouts over FXML unless the project is explicitly migrated.
+- For Labour Management entry screens, preserve the familiar spreadsheet-like workflow where managers already work that way. Use compact grids, predictable keyboard traversal, and horizontal scrolling when needed rather than redesigning labour entry into generic dashboards or per-cell dialogs.
+- Keep Labour Management calculations in service classes, not JavaFX listener blocks, so Daily Labour and Tip Pool can reuse weekly hours and labour-dollar logic.
 
 ---
 

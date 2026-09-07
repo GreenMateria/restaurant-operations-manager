@@ -139,6 +139,16 @@ Date: 2026-08-09
 - Documented that Upload This PC to Cloud and Download Cloud to This PC are administrator migration/recovery tools, not routine daily sync actions.
 - Updated project documentation snapshot for the v3.0.1 release.
 
+## Unreleased Development After v3.1.1
+
+- Added Labour Management Phase 1 and Phase 2 in the development build.
+- Added administrator-protected Labour Setup for configurable positions, employees, hourly wages, tip-pool eligibility, uniform-deduction applicability, active/inactive state, target labour percentages, and default uniform deduction settings.
+- Added Weekly Labour Entry with a compact spreadsheet-style Monday-Sunday grid and separate Shift 1 / Shift 2 employee-hour fields.
+- Added schema migrations 16 and 17 for Labour Management tables and daily labour snapshot columns.
+- Added and deployed Labour API routes for setup and Weekly Labour bulk load/save.
+- Added `scripts/Apply-LabourSchemaMigration.ps1` for applying the Labour schema to AWS RDS through a schema-capable admin user.
+- Fixed Inventory Count Sheet printing after the v3.1.1 stable release by creating layout after printer selection, scaling pages to the printable area, and using the API-backed alcohol profile client in API mode.
+
 ## v3.0.1
 Date: 2026-08-09 14:41
 
@@ -197,3 +207,10 @@ Date: 2026-08-31 11:04
 Date: 2026-09-05 15:31
 
 - Completed API migration, Users no longer need to configure client connections. Database status indicator added. 
+- Updated the deployed API health version to 3.1.1.
+- Added SAM-managed API Lambda log retention and imported the existing CloudWatch log group into the stack.
+
+## v3.1.2
+Date: 2026-09-07 10:46
+
+- Fixed Printing bug, added labour module work in progress

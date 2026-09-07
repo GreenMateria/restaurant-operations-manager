@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 15;
+    public static final int CURRENT_SCHEMA_VERSION = 17;
 
     public void initialize(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
@@ -43,7 +43,14 @@ public class PostgresSchemaInitializer {
         requireTable(connection, "production_weeks");
         requireTable(connection, "production_week_days");
         requireTable(connection, "production_week_lines");
+        requireTable(connection, "labour_positions");
+        requireTable(connection, "labour_employees");
+        requireTable(connection, "labour_daily_sales");
+        requireTable(connection, "labour_daily_entries");
         requireTable(connection, "schema_version");
+        requireColumn(connection, "labour_daily_entries", "employee_name_snapshot");
+        requireColumn(connection, "labour_daily_entries", "position_name_snapshot");
+        requireColumn(connection, "labour_daily_entries", "labour_group_snapshot");
         requireColumn(connection, "inventory_count_template_lines", "order_guide_case_size");
         requireColumn(connection, "production_items", "yield_factor");
         requireColumn(connection, "production_profile_lines", "yield_factor");
@@ -234,6 +241,56 @@ public class PostgresSchemaInitializer {
                 """);
 
         statement.execute("""
+                CREATE TABLE IF NOT EXISTS labour_positions (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    labour_group TEXT NOT NULL,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    target_labour_percentage NUMERIC,
+                    active INTEGER NOT NULL DEFAULT 1
+                )
+                """);
+
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS labour_employees (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    position_id INTEGER NOT NULL REFERENCES labour_positions(id),
+                    hourly_wage NUMERIC NOT NULL DEFAULT 0,
+                    tip_pool_eligible INTEGER NOT NULL DEFAULT 0,
+                    uniform_deduction_applicable INTEGER NOT NULL DEFAULT 0,
+                    active INTEGER NOT NULL DEFAULT 1
+                )
+                """);
+
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS labour_daily_sales (
+                    id SERIAL PRIMARY KEY,
+                    sales_date TEXT NOT NULL UNIQUE,
+                    net_sales NUMERIC NOT NULL DEFAULT 0,
+                    tip_out_pool NUMERIC NOT NULL DEFAULT 0,
+                    finalized INTEGER NOT NULL DEFAULT 0
+                )
+                """);
+
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS labour_daily_entries (
+                    id SERIAL PRIMARY KEY,
+                    work_date TEXT NOT NULL,
+                    employee_id INTEGER NOT NULL REFERENCES labour_employees(id),
+                    position_id INTEGER NOT NULL REFERENCES labour_positions(id),
+                    hourly_wage NUMERIC NOT NULL DEFAULT 0,
+                    shift_1_hours NUMERIC NOT NULL DEFAULT 0,
+                    shift_2_hours NUMERIC NOT NULL DEFAULT 0,
+                    employee_name_snapshot TEXT,
+                    position_name_snapshot TEXT,
+                    labour_group_snapshot TEXT,
+                    finalized INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(work_date, employee_id)
+                )
+                """);
+
+        statement.execute("""
                 CREATE TABLE IF NOT EXISTS schema_version (
                     version INTEGER NOT NULL
                 )
@@ -394,6 +451,18 @@ public class PostgresSchemaInitializer {
                 CREATE INDEX IF NOT EXISTS idx_alcohol_sales_mappings_category_active
                 ON alcohol_sales_mappings(reporting_category, active)
                 """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_labour_positions_group_active
+                ON labour_positions(labour_group, active)
+                """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_labour_employees_position_active
+                ON labour_employees(position_id, active)
+                """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_labour_daily_entries_date
+                ON labour_daily_entries(work_date)
+                """);
     }
 
     private void repairSchemaCompatibility(
@@ -420,6 +489,9 @@ public class PostgresSchemaInitializer {
         addColumnIfMissing(connection, statement, "sales_periods", "draught_net_sales", "TEXT DEFAULT '0.00'");
         addColumnIfMissing(connection, statement, "sales_periods", "import_draught_net_sales", "TEXT DEFAULT '0.00'");
         addColumnIfMissing(connection, statement, "sales_periods", "liquor_net_sales", "TEXT DEFAULT '0.00'");
+        addColumnIfMissing(connection, statement, "labour_daily_entries", "employee_name_snapshot", "TEXT");
+        addColumnIfMissing(connection, statement, "labour_daily_entries", "position_name_snapshot", "TEXT");
+        addColumnIfMissing(connection, statement, "labour_daily_entries", "labour_group_snapshot", "TEXT");
 
         statement.executeUpdate("""
                 UPDATE sales_periods
@@ -551,6 +623,12 @@ public class PostgresSchemaInitializer {
                 VALUES
                 ('admin_password', ''),
                 ('password_initialized', 'false')
+                ON CONFLICT(setting_key) DO NOTHING
+                """);
+
+        statement.execute("""
+                INSERT INTO settings (setting_key, setting_value)
+                VALUES ('labour.default_uniform_deduction', '0.00')
                 ON CONFLICT(setting_key) DO NOTHING
                 """);
     }

@@ -29,6 +29,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.function.Supplier;
 
 public class MainView {
 
@@ -210,6 +211,9 @@ public class MainView {
         Button productionButton =
                 createDashboardButton("Production", this::showProductionMenu);
 
+        Button labourButton =
+                createDashboardButton("Labour Management", this::showLabourMenu);
+
         Button reportingButton =
                 createDashboardButton("Reporting", this::showReportingMenu);
 
@@ -220,8 +224,9 @@ public class MainView {
         dashboard.add(alcoholButton, 1, 0);
         dashboard.add(suppliesButton, 0, 1);
         dashboard.add(productionButton, 1, 1);
-        dashboard.add(reportingButton, 0, 2);
-        dashboard.add(systemButton, 1, 2);
+        dashboard.add(labourButton, 0, 2);
+        dashboard.add(reportingButton, 1, 2);
+        dashboard.add(systemButton, 0, 3);
 
         page.getChildren().addAll(title, dashboard);
 
@@ -381,6 +386,50 @@ public class MainView {
         );
     }
 
+    private void showLabourMenu() {
+
+        showSectionMenu(
+                "Labour Management",
+
+                createDashboardButton(
+                        "Weekly Labour",
+                        () -> showView(new WeeklyLabourView())
+                ),
+
+                createDashboardButton(
+                        "Daily Labour",
+                        () -> showView(buildPlaceholderView(
+                                "Daily Labour",
+                                "Coming in next Labour Management phase."
+                        ))
+                ),
+
+                createDashboardButton(
+                        "Tip Pool",
+                        () -> showView(buildPlaceholderView(
+                                "Tip Pool",
+                                "Coming in next Labour Management phase."
+                        ))
+                ),
+
+                createDashboardButton(
+                        "Tip Pool Breakdown",
+                        () -> showView(buildPlaceholderView(
+                                "Tip Pool Breakdown",
+                                "Coming in next Labour Management phase."
+                        ))
+                ),
+
+                createDashboardButton(
+                        "Labour Setup",
+                        () -> showAdminProtectedView(
+                                "Labour Setup",
+                                () -> new LabourSetupView()
+                        )
+                )
+        );
+    }
+
     private void showReportingMenu() {
 
         showSectionMenu(
@@ -526,6 +575,10 @@ public class MainView {
     }
 
     private void showSystemMenu() {
+        showAdminProtectedView("System", () -> new SystemView().getView());
+    }
+
+    private void showAdminProtectedView(String viewName, Supplier<Node> protectedViewSupplier) {
 
         if (!settingsDao.isPasswordInitialized()) {
 
@@ -551,7 +604,7 @@ public class MainView {
                 alert.setHeaderText("Password Created");
                 alert.showAndWait();
 
-                showView(new SystemView().getView());
+                showView(protectedViewSupplier.get());
             });
 
             return;
@@ -593,7 +646,7 @@ public class MainView {
 
             if (password.equals(settingsDao.getPassword())) {
 
-                showView(new SystemView().getView());
+                showView(protectedViewSupplier.get());
 
             } else {
 
@@ -602,6 +655,21 @@ public class MainView {
                 alert.showAndWait();
             }
         });
+    }
+
+    private VBox buildPlaceholderView(String titleText, String messageText) {
+        VBox page = new VBox(18);
+        page.setPadding(new Insets(40));
+        page.setAlignment(Pos.TOP_CENTER);
+
+        Label title = new Label(titleText);
+        title.getStyleClass().add("page-title");
+
+        Label message = new Label(messageText);
+        message.getStyleClass().add("section-title");
+
+        page.getChildren().addAll(title, message);
+        return page;
     }
 
     private void goHome() {
