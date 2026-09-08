@@ -22,6 +22,12 @@
 
 .content-area {
     -fx-padding: 15;
+    -fx-background: #1e1e1e;
+    -fx-background-color: #1e1e1e;
+}
+
+.content-area > .viewport {
+    -fx-background-color: #1e1e1e;
 }
 
 .status-bar {
@@ -151,7 +157,7 @@
 }
 
 .weekly-labour-grid {
-    -fx-background-color: #3a3a3a;
+    -fx-background-color: #1e1e1e;
 }
 
 .weekly-labour-header {
@@ -177,6 +183,39 @@
     -fx-padding: 4 6 4 6;
 }
 
+.weekly-labour-group.weekly-labour-position-group {
+    -fx-background-color: #f0c14b;
+    -fx-text-fill: #111111;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-padding: 9 11 9 11;
+    -fx-border-color: #fff0b8 transparent #8d6b13 transparent;
+    -fx-border-width: 2 0 2 0;
+}
+
+.weekly-labour-group.weekly-labour-position-group .text {
+    -fx-fill: #111111;
+}
+
+.labour-sheet-title {
+    -fx-background-color: #123957;
+    -fx-font-size: 15px;
+    -fx-padding: 7 8 7 8;
+}
+
+.labour-sheet-subtitle {
+    -fx-background-color: #235b33;
+    -fx-font-size: 12px;
+}
+
+.weekly-labour-total {
+    -fx-background-color: #263647;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-padding: 4 6 4 6;
+}
+
 .weekly-labour-summary-label {
     -fx-text-fill: #b8c7d9;
     -fx-font-size: 11px;
@@ -186,6 +225,18 @@
 .weekly-labour-hours-field {
     -fx-font-size: 12px;
     -fx-padding: 3 4 3 4;
+}
+
+.labour-cost-net-sales-field {
+    -fx-background-color: #242424;
+    -fx-text-fill: white;
+    -fx-border-color: #404040;
+    -fx-border-width: 1;
+    -fx-padding: 3 5 3 5;
+}
+
+.labour-cost-net-sales-field:focused {
+    -fx-border-color: #2d89ef;
 }
 .radio-button {
     -fx-text-fill: white;

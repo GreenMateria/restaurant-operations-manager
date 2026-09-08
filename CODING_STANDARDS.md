@@ -1,6 +1,6 @@
 # CODING_STANDARDS.md
 
-_Last Updated: Sunday, September 6, 2026_
+_Last Updated: Monday, September 7, 2026_
 
 This file documents coding conventions and project-specific implementation rules for the Food Inventory / ESM Operations Manager application.
 
@@ -10,9 +10,10 @@ Read this before making broad code changes.
 
 # General Development Rules
 
-- Preserve the current JavaFX + SQLite + PostgreSQL + Maven architecture.
-- Treat Cloud API mode as the normal client path for configured work PCs, with AWS RDS PostgreSQL as the backend shared database.
-- Keep SQLite as the fresh-install default and local fallback path.
+- Preserve the current JavaFX + Cloud API + AWS RDS PostgreSQL backend + local SQLite snapshot + Maven architecture.
+- Treat Cloud API mode as the normal client path, with AWS RDS PostgreSQL behind the API as the backend shared database.
+- Do not add new direct desktop PostgreSQL workflows. PostgreSQL credentials should stay off client PCs.
+- Keep SQLite only as the local cloud-snapshot/backup target and development fallback path.
 - Prefer targeted changes over large rewrites.
 - Do not rename packages, models, DAOs, or major screens unless explicitly requested.
 - Do not delete user data or reset the database unless explicitly asked.
@@ -86,7 +87,7 @@ button.getStyleClass().add("primary-button");
 
 - Prefer hand-built JavaFX layouts over FXML unless the project is explicitly migrated.
 - For Labour Management entry screens, preserve the familiar spreadsheet-like workflow where managers already work that way. Use compact grids, predictable keyboard traversal, and horizontal scrolling when needed rather than redesigning labour entry into generic dashboards or per-cell dialogs.
-- Keep Labour Management calculations in service classes, not JavaFX listener blocks, so Daily Labour and Tip Pool can reuse weekly hours and labour-dollar logic.
+- Keep Labour Management calculations in service classes, not JavaFX listener blocks, so Daily Labour Cost, Tip Pool, and Tip Pool Breakdown can reuse weekly hours, labour-dollar, tip-allocation, and uniform-deduction logic.
 
 ---
 
@@ -169,6 +170,8 @@ When database structure changes:
 6. Verify app startup against an existing runtime database.
 
 Never assume the project-root database is the active database.
+
+System administrator passwords are local machine settings stored in `%LOCALAPPDATA%\FoodInventory\database.properties` as salted PBKDF2 hashes. Do not store or reintroduce plain-text admin passwords.
 
 Runtime DB path is under:
 

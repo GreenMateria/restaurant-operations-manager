@@ -31,7 +31,7 @@ The most common manager workflows are:
 - **Purchasing** - supplier invoices and purchase history.
 - **Reports** - weekly cost reports and inventory valuation.
 - **Production** - weekly production and prep sheets.
-- **System** - backup, restore, cloud mode, and administrator tools.
+- **System** - backup, restore, API connection checks, and administrator tools.
 
 ## Important Safety Rules
 
@@ -760,47 +760,102 @@ Do not combine Freezer Pull with normal weekly production prep sheets.
 
 ---
 
-# Backup And Cloud Mode
+# Labour Management
+
+## Labour Setup
+
+Use Labour Setup to maintain the employee and position information used by the labour screens.
+
+1. From the dashboard, click **Labour Management**.
+2. Click **Labour Setup**.
+3. Enter the system password if asked.
+4. Set up positions, hourly wages, labour groups, tip-pool eligibility, uniform-deduction applicability, and active employees.
+5. Save changes.
+
+## Labour Hours
+
+Use Labour Hours for manual employee hour entry.
+
+1. From **Labour Management**, click **Labour Hours**.
+2. Select an existing saved week or click **New Week**.
+3. Enter Shift 1 and Shift 2 hours for each employee from Monday through Sunday.
+4. Save the week.
+
+## Daily Labour Cost
+
+Use Daily Labour Cost to enter daily net sales and review labour cost percentages.
+
+1. From **Labour Management**, click **Daily Labour Cost**.
+2. Select the start and end date for the week.
+3. Enter net sales for each day.
+4. Review BOH labour dollars, FOH labour dollars, BOH labour percent, FOH labour percent, total labour percent, and the weekly total row.
+
+## Tip Pool
+
+Use Tip Pool to enter the daily tip-out pool and review employee tip allocations.
+
+1. From **Labour Management**, click **Tip Pool**.
+2. Select the start and end date for the week.
+3. Enter each day's tip-out pool amount in the Tip entry field.
+4. Review eligible employee hours, calculated tips, and weekly totals.
+5. Save the week.
+
+## Tip Pool Breakdown
+
+Use Tip Pool Breakdown to review payout totals for a date range.
+
+1. From **Labour Management**, click **Tip Pool Breakdown**.
+2. Select the start and end date.
+3. Review employee hours, gross tip amount, per-worked-day uniform deduction, and net payout.
+4. Net payout is rounded to the nearest nickel for Canadian cash payout handling.
+5. Click **Print** to print the payout report.
+
+---
+
+# Backup And API Mode
 
 Most managers will not use this often, but they should understand the basics.
 
-For normal daily use on the configured work PCs, the program should run in **Cloud Mode**. In Cloud Mode, normal saves go directly to the shared AWS RDS PostgreSQL database, so separate PCs use the same current data.
+For normal daily use on the configured work PCs, the program should run in **Cloud API mode**. Normal saves go through the API to the shared AWS RDS PostgreSQL database, so separate PCs use the same current data without storing PostgreSQL credentials on the workstations.
 
 ## Local Backup
 
 1. Open **System**.
 2. Enter the system password if asked.
-3. Click **Backup**.
+3. Click **Create Backup File**.
 4. Choose where to save the backup.
 5. Confirm the backup completed.
 
-## Cloud Mode Reminder
+When the app is in API mode, Backup first downloads a fresh cloud snapshot into the local SQLite backup file, then copies that file to the selected backup location.
 
-Use **Cloud Mode** on every configured work PC when the cloud database has the correct current records.
+## API Connection Check
 
 1. Open **System**.
-2. Click **Test Cloud Connection**.
-3. Click **Use Cloud Mode**.
-4. Restart the program.
-5. Reopen **System** and confirm the current mode is Cloud PostgreSQL.
+2. Click **Test API Connection**.
+3. Confirm the connection succeeds before continuing cloud-backed work.
 
 Users may need to reopen a screen to see changes saved from another PC. Avoid editing the same record on two PCs at the same time.
 
-## Cloud Upload Reminder
+## Check For Updates
 
-Use this order only when intentionally moving local SQLite data to cloud:
+1. Open **System**.
+2. Click **Check for Updates**.
+3. If a newer version is available, choose whether to download and install it.
 
-1. Start in SQLite mode on the PC with the correct current data.
-2. Open **System**.
-3. Click **Test Cloud Connection**.
-4. Click **Upload This PC to Cloud**.
-5. Switch to **Cloud Mode**.
-6. Restart the program.
-7. Confirm the data is correct in cloud mode.
+When a release includes a checksum file, the app verifies the downloaded installer before offering to launch it.
+
+## Cloud Snapshot Download
+
+Use this only when an administrator needs to refresh the local SQLite backup snapshot from the cloud database.
+
+1. Open **System**.
+2. Enter the system password if asked.
+3. Click **Download Cloud Snapshot**.
+4. Restart the program only if prompted.
 
 ![System database sync](docs/images/system-database-sync.png)
 
-Uploading replaces the cloud database with this PC's local SQLite data. Do not upload during normal daily cloud operation unless this PC is known to have the correct master data.
+Restoring a local backup only affects the local SQLite snapshot. It does not replace the cloud database.
 
 ---
 
@@ -830,11 +885,11 @@ Uploading replaces the cloud database with this PC's local SQLite data. Do not u
 6. Check duplicate invoices.
 7. Check product reporting categories.
 
-## The Wrong Database Mode Is Active
+## The API Connection Is Not Working
 
 1. Open **System**.
-2. Check database mode.
-3. Choose SQLite or Cloud mode.
-4. Restart the program.
+2. Click **Test API Connection**.
+3. Confirm the workstation has internet access.
+4. Reopen the screen you were using after the connection returns.
 
-Mode changes do not take effect until restart.
+If the API remains unavailable, use the most recent local backup snapshot for emergency review only and avoid entering new cloud data until the connection is restored.

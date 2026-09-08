@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Sunday, September 6, 2026_
+_Last Updated: Tuesday, September 8, 2026_
 
 This document is the primary reference for the **ESM Operations Manager** project.
 
@@ -39,7 +39,7 @@ Printed count sheets, prep sheets, and order guides are core parts of the workfl
 - JavaFX 25
 - Maven
 - SQLite
-- PostgreSQL on AWS RDS for optional cloud database mode
+- PostgreSQL on AWS RDS behind the Cloud API
 - Apache POI for Excel imports
 - Git and GitHub
 - GitHub Releases
@@ -82,17 +82,18 @@ Important:
 
 - A `food_inventory.db` file in the project directory may not be the active database.
 - The packaged application uses the database under `%LOCALAPPDATA%`.
-- SQLite is the default startup mode.
-- Cloud PostgreSQL mode is selected through `%LOCALAPPDATA%\FoodInventory\database.properties` and can be changed from the password-protected System module.
+- Cloud API mode is the normal desktop startup mode.
+- SQLite is retained as a local cloud-snapshot and backup/recovery file, not as a daily operating mode.
 - Fresh installs seed `database.properties` from safe bundled defaults when the local config file does not exist; source-controlled defaults must keep credentials blank.
 - Release-built installers can include an ignored generated `database-release.properties` resource that configures API mode once per release from secret values supplied at packaging time.
 - For the current work PCs, Cloud API mode is the normal operating mode, AWS RDS PostgreSQL remains the backend data store, and the cloud database is the accurate master data source.
-- Upload/download cloud sync controls are administrator migration/recovery tools, not routine daily sync actions.
+- Direct desktop Cloud PostgreSQL mode has been retired from normal desktop use. PostgreSQL credentials should not be needed on client PCs.
+- Cloud snapshot download is an administrator backup/recovery tool, not routine daily sync.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
-- Current project version is v3.1.1.
-- API layer stack `esm-operations-api` is deployed in AWS and the desktop app can use API mode for migrated workflows.
-- Current API-mode migrated areas are Food Department workflows, Alcohol Department workflows, Supplies Department workflows, Production workflows, Reporting/Sales workflows, Labour Setup, Weekly Labour Entry, GFS product guide import persistence, product purchase history, and administrative upload/download sync.
+- Current development version is v3.1.3; latest stable release is v3.1.2.
+- API layer stack `esm-operations-api` is deployed in AWS and the desktop app uses API mode for normal workflows.
+- Current API-mode migrated areas are Food Department workflows, Alcohol Department workflows, Supplies Department workflows, Production workflows, Reporting/Sales workflows, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot download.
 - Current API-mode gaps are deferred variance reporting and local backup/export polish.
 - v3.1.1 completed the desktop API migration so normal users no longer need to configure direct client database connections.
 - v3.1.1 added a database status indicator for clearer runtime mode/connection visibility.
@@ -101,16 +102,18 @@ Important:
 
 # 4. Application Architecture
 
-The application follows this practical layered structure:
+The desktop application follows this practical layered structure:
 
 ```text
 UI View
    ↓
 Service / Business Logic
    ↓
-DAO
+API Client
    ↓
-SQLite Database or AWS RDS PostgreSQL
+HTTPS API
+   ↓
+AWS RDS PostgreSQL
 ```
 
 Main packages:
@@ -165,8 +168,8 @@ ca.foodinventory.Launcher
 At startup, the application:
 
 1. Loads or creates the local database configuration.
-2. Initializes the selected startup database mode.
-3. Runs pending SQLite migrations or validates/initializes PostgreSQL schema.
+2. Applies release API configuration when bundled.
+3. Starts in Cloud API mode for normal operation.
 4. Loads the main dashboard.
 5. Displays the installed application version.
 6. Starts a background GitHub update check.
@@ -190,7 +193,7 @@ The dashboard is organized around these operational areas:
 - Labour Management
 - System
 
-The Labour Management module currently includes a functional administrator-protected Labour Setup screen and a functional Weekly Labour Entry screen. Weekly Labour keeps the accepted spreadsheet mental model while using a compact grid so managers can enter hours with less horizontal scrolling. Daily Labour, Tip Pool, and Tip Pool Breakdown have navigation placeholders only and remain future phases.
+The Labour Management module is complete and accepted as working as intended in the v3.1.3 development build. It includes an administrator-protected Labour Setup screen, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown. Labour Hours uses an inventory-count-style list of saved weeks and opens a separate spreadsheet-style pop-out window for manual Shift 1 / Shift 2 hour entry. Daily Labour Cost uses a weekly start/end date range with Monday-Sunday rows, editable daily net sales, BOH labour dollars, FOH labour dollars, labour percentages, and a total row. Tip Pool uses editable daily tip-out pool amounts, tip-pool eligible employee hours from Labour Hours, calculated employee tip allocation by day, and weekly totals. Tip Pool Breakdown allocates saved tip pool amounts over a selected date range, subtracts configured uniform deductions per worked day for applicable employees only, rounds net payouts to the nearest nickel, and supports compact black-and-white printing.
 
 All module views should remain reachable through the main navigation/back controls. Do not add redundant in-section return buttons where the left navigation already provides the route.
 
@@ -786,26 +789,55 @@ Freezer Pull:
 
 # 17. Labour Management
 
-Labour Management is a top-level operational module replacing the accepted manager Excel workflow in phases.
+Labour Management is a top-level operational module replacing the accepted manager Excel workflow.
 
 Implemented Labour Management work includes:
 
 - Labour Management dashboard navigation.
 - Administrator-protected Labour Setup.
-- Weekly Labour Entry with a compact spreadsheet-style Monday-Sunday grid and separate Shift 1 / Shift 2 employee-hour entry.
+- Labour Hours with an inventory-count-style saved-week list and a pop-out spreadsheet-style Monday-Sunday grid for separate Shift 1 / Shift 2 employee-hour entry.
+- Labour Hours department headers are styled as distinct bands in the pop-out entry window.
 - Configurable labour positions grouped as `FOH` or `BOH`.
 - Configurable labour employees with position, hourly wage, active status, tip-pool eligibility, and uniform-deduction applicability.
 - Configurable default uniform deduction amount stored in settings.
-- API-backed Labour Setup and Weekly Labour reads/writes for Cloud API mode, with SQLite/direct database fallback.
-- Live AWS API deployment includes the Weekly Labour routes, and the live RDS schema has been advanced to Labour schema version 17.
+- API-backed Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown reads/writes for Cloud API mode.
+- Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes, and the live RDS schema has been advanced to Labour schema version 17.
 - Schema foundations for future daily operational sales and daily employee labour entries by actual calendar date.
 - Wage, employee name, position name, and labour group snapshots on saved daily labour entries so historical weeks do not recalculate from later setup changes.
 
-Daily Labour, Tip Pool, and Tip Pool Breakdown are not implemented yet. Their current navigation entries are placeholders only.
+Daily Labour Cost, Tip Pool, and Tip Pool Breakdown are implemented and accepted as working as intended.
+
+Daily Labour Cost UI notes:
+
+- Date selection loads one actual calendar day.
+- Manual `net_sales` and `tip_out_pool` values are stored in `labour_daily_sales`.
+- Employee Shift 1 / Shift 2 hours are stored in the same `labour_daily_entries` rows used by Labour Hours.
+- FOH, BOH, and total variable labour percentages use editable Daily Labour Cost net sales, not imported weekly POS sales periods.
+- Daily Labour Cost is a weekly start/end range screen with Monday-Sunday rows, editable net sales, BOH labour dollars/percentages, FOH labour dollars/percentages, total labour percentage, and a total row.
+- Target percentages come from Labour Setup positions and are summed once per configured position in each labour group.
 
 Future Labour Management work should preserve the spreadsheet-like manager workflow: employees grouped by labour position, Monday through Sunday across the screen, separate Shift 1 and Shift 2 entry, daily totals, labour dollars/percentages, FOH/BOH/total variable labour groupings, tip-out allocation by eligible hours, and uniform deductions from configuration.
 
-Weekly Labour UI notes:
+Labour Hours UI notes:
+
+- The main Labour Hours screen lists saved weeks and opens a separate pop-out editor, following the Inventory Counts workflow pattern.
+- The pop-out editor keeps the spreadsheet mental model while limiting columns to employee name, Monday-Sunday Shift 1 / Shift 2 hour entry, and employee total hours.
+- Employee number, hourly rate, total pay, restaurant header, position total rows, and bottom labour total rows are intentionally hidden from the Labour Hours entry grid.
+
+Tip Pool UI notes:
+
+- Tip Pool uses editable daily tip-out pool amounts stored in `labour_daily_sales.tip_out_pool`.
+- Employee rows include only Labour Setup employees marked tip-pool eligible.
+- Daily tips are allocated by each eligible employee's hours divided by the total eligible hours for that day.
+- The tip-out amount entry boxes sit under each day's Tip column so users do not confuse them with hour entry.
+
+Tip Pool Breakdown UI notes:
+
+- Tip Pool Breakdown uses a simple start/end date range.
+- Gross tips are calculated from saved Tip Pool amounts and tip-eligible Labour Hours.
+- Uniform deduction is subtracted per worked day for employees marked uniform-deduction applicable, using the default deduction configured in Labour Setup. Employees with no hours in the selected range are not charged.
+- Net payout amounts are rounded to the nearest nickel for Canadian cash payout handling.
+- Tip Pool Breakdown prints a compact black-and-white report with employee rows and totals.
 
 - Week selection normalizes to Monday as the canonical week start.
 - The visible entry grid uses compact `S1` and `S2` headers to reduce horizontal scrolling while preserving separate shift entry.
@@ -849,25 +881,30 @@ Print preview should match the actual printed content as closely as possible.
 
 The System module includes database backup and restore.
 
-Backup and restore operate on the active runtime database.
+Backup and restore operate against the local SQLite snapshot file.
 
 Important rules:
 
 - Confirm the active database path before troubleshooting.
 - Do not treat the project-root database as the packaged database.
+- In API mode, creating a backup first downloads a fresh cloud snapshot into the local SQLite file, then copies that file to the selected backup location.
 - Restore actions should be protected and clearly confirmed.
+- Restore is local snapshot restore only; replacing production cloud data from a local file should remain outside the normal UI.
 - Avoid restoring a database over a newer schema without migration support.
 
 ---
 
 # 20. Admin Password and Settings
 
-The application uses a settings table for protected system functions.
+The application uses a local administrator password for protected system functions.
 
-Known settings include:
+Current behavior:
 
-- Admin password hash
-- Password initialized flag
+- The administrator password is stored locally in `%LOCALAPPDATA%\FoodInventory\database.properties`.
+- Passwords are stored as salted PBKDF2 hashes, not plain text.
+- Legacy plain-text local or SQLite passwords are migrated to hashed local storage after a successful login.
+- `scripts/Reset-AdminPassword.ps1` can reset the local administrator password when the System screen cannot be accessed.
+- This password protects local app administration. It is not the AWS API key, database password, or a per-user cloud identity.
 
 Passwords must not be stored in plain text.
 
@@ -896,8 +933,10 @@ The updater:
 - Shows current version.
 - Shows new version.
 - Shows download size.
+- Shows whether a published checksum is available for the installer.
 - Downloads the installer inside the application.
 - Displays download progress.
+- Verifies the downloaded installer against the published SHA-256 checksum before launch when a matching checksum asset is available.
 - Stores the installer under the local Updates folder.
 - Prompts for download and install actions.
 - Launches the Windows installer.
@@ -922,7 +961,7 @@ updateService.checkForUpdate(true);
 
 This bypasses the cooldown.
 
-Planned UI enhancement:
+Manual update checking is available from:
 
 ```text
 System → Check for Updates
@@ -964,6 +1003,7 @@ Typical release process:
 10. Create Git tag.
 11. Push tag and publish installer to GitHub Releases.
 12. Copy installer to the local Releases folder.
+13. Generate and upload the installer `.sha256` checksum asset.
 
 Installer format:
 
@@ -1004,7 +1044,8 @@ The application currently has a stable foundation for:
 - Backup and restore
 - Release automation
 - Automatic updating
-- Controlled SQLite/PostgreSQL mode switching
+- Installer checksum generation, GitHub Release checksum upload, and in-app checksum verification before installer launch
+- Cloud API operating mode with local SQLite backup snapshot support
 - Password-protected cloud upload/download tools
 - Deployed API Gateway/Lambda stack for API mode
 - API-backed Food Department workflows
@@ -1013,15 +1054,17 @@ The application currently has a stable foundation for:
 - API-backed Production workflows, including POS Menu Items, Weekly Production, production report import/generation, Product Mappings, and Freezer Pull
 - API-backed Reporting/Sales workflows, including Invoice History, Sales Entry/import persistence, Inventory Valuation, and Weekly Cost Report generation
 - API-backed Labour Setup for labour positions, employees, and default uniform deduction configuration
-- API-backed Weekly Labour Entry for Monday-Sunday Shift 1 / Shift 2 employee hours
+- API-backed Labour Hours for Monday-Sunday Shift 1 / Shift 2 employee hours
+- API-backed Daily Labour Cost, Tip Pool, and Tip Pool Breakdown for weekly net sales, daily tip-out pools, labour percentages, tip allocation, uniform deductions, nickel-rounded net payouts, and payout-report printing
 - Fixed Inventory Count Sheet printing for selected printer layout/scaling and API-mode alcohol profile loading
 - API-backed GFS product guide import persistence and product purchase history lookup
 - API-backed administrative upload/download sync for cloud replacement and local recovery workflows
 - Persistent Order Guide case-size overrides
-- Labour Management Phase 1 and Phase 2 foundation: top-level navigation, administrator-protected Labour Setup, compact Weekly Labour Entry, schema/API/model foundation, and placeholders for later Daily Labour, Tip Pool, and Tip Pool Breakdown screens
+- Complete Labour Management module: top-level navigation, administrator-protected Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, schema/API/model foundation, and shared labour daily records
 - Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
+- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working on the latest stable version
 
-All implemented features through version 3.1.1 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through version 3.1.2 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case. Labour Management is accepted as complete in the v3.1.3 development build; remaining v3.1.3 work is focused on post-release fixes and future enhancements.
 
 Primary unfinished areas:
 
@@ -1031,7 +1074,6 @@ Primary unfinished areas:
 - Yield tracking
 - Advanced reporting
 - Inventory count template synchronization
-- Daily Labour, Tip Pool, and Tip Pool Breakdown screens
 
 ---
 
@@ -1040,11 +1082,8 @@ Primary unfinished areas:
 ## Immediate
 
 1. Continue monitoring daily Cloud API use on the configured work PCs.
-2. Validate the v3.1.1 installer upgrade on the work PCs.
-3. Validate Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase-history, and admin sync API mode from the IntelliJ desktop app using normal live workflows.
-4. Build Daily Labour with daily net sales, labour percentages, target variance reporting, and FOH/BOH/total variable labour rollups.
-5. Build alcohol variance calculation/output inside the Alcohol Department after operational workflows are stable.
-6. Add a manual Check for Updates action.
+2. Build alcohol variance calculation/output inside the Alcohol Department after operational workflows are stable.
+3. Continue advanced reporting and workflow polish.
 
 ## Medium Term
 
@@ -1156,8 +1195,9 @@ CODING_STANDARDS.md, INFRASTRUCTURE.md, ROADMAP.md, and RELEASE_HISTORY.md.
 
 Treat PROJECT_REFERENCE.md as the master functional overview.
 Inspect the exact Java files involved before changing code.
-Preserve the existing JavaFX, SQLite, Maven, migration, printing,
-packaging, and GitHub update architecture.
+Preserve the existing JavaFX, Cloud API, AWS RDS PostgreSQL backend,
+local SQLite snapshot, Maven, migration, printing, packaging, and
+GitHub update architecture.
 Make targeted changes and run mvn clean test after Java edits.
 ```
 

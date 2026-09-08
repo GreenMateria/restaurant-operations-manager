@@ -10,6 +10,7 @@ $PomPath = "$ProjectDir\pom.xml"
 $WindowsUpgradeUuid = "8F7E5D76-9E8B-4C25-8B8E-55A94D4E0B0A"
 $ReleaseDatabaseConfigPath = "$ProjectDir\src\main\resources\database-release.properties"
 $DefaultApiUrl = "https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod"
+$ExpectedWindowsUpgradeUuid = "8F7E5D76-9E8B-4C25-8B8E-55A94D4E0B0A"
 
 function Invoke-Step {
     param([string]$Name, [scriptblock]$Command)
@@ -153,6 +154,25 @@ function Remove-ReleaseDatabaseConfig {
     }
 }
 
+function Assert-WindowsUpgradeUuid {
+    if ($WindowsUpgradeUuid -ne $ExpectedWindowsUpgradeUuid) {
+        throw "Windows upgrade UUID changed. Keep $ExpectedWindowsUpgradeUuid so installers upgrade the existing app instead of creating a separate install."
+    }
+}
+
+function Write-InstallerChecksum {
+    param(
+        [string]$InstallerPath,
+        [string]$ChecksumPath
+    )
+
+    $hash = Get-FileHash -Path $InstallerPath -Algorithm SHA256
+    "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Path $InstallerPath -Leaf)" |
+            Set-Content -Path $ChecksumPath -Encoding ASCII
+
+    return $hash.Hash.ToLowerInvariant()
+}
+
 try {
     Set-Location $ProjectDir
     Clear-Host
@@ -163,6 +183,7 @@ try {
     Write-Host ""
 
     Assert-GitHubCli
+    Assert-WindowsUpgradeUuid
 
     $CurrentVersion = Get-PomVersion
 
@@ -177,6 +198,7 @@ try {
     $ReleaseDir = "$ProjectDir\Releases"
     $ReleaseHistoryPath = "$ReleaseDir\ReleaseHistory.md"
     $FinalInstallerPath = "$ReleaseDir\$AppName-$NewVersion.exe"
+    $FinalChecksumPath = "$FinalInstallerPath.sha256"
 
     Write-Host ""
     Write-Host "Release Summary" -ForegroundColor Yellow
@@ -299,6 +321,11 @@ try {
 
     Copy-Item $InstallerFile.FullName $FinalInstallerPath -Force
 
+    Write-Host ""
+    Write-Host "Generating installer checksum..." -ForegroundColor Yellow
+    $InstallerSha256 = Write-InstallerChecksum -InstallerPath $FinalInstallerPath -ChecksumPath $FinalChecksumPath
+    Write-Host "SHA-256: $InstallerSha256"
+
     Invoke-Step "Git tag" {
         git tag "v$NewVersion"
     }
@@ -314,7 +341,7 @@ try {
 
     if (Test-GitHubReleaseExists $Tag) {
         Invoke-Step "Upload installer to existing GitHub Release" {
-            gh release upload $Tag "$FinalInstallerPath" --clobber
+            gh release upload $Tag "$FinalInstallerPath" "$FinalChecksumPath" --clobber
         }
 
         Invoke-Step "Update GitHub Release details" {
@@ -327,6 +354,7 @@ try {
         Invoke-Step "Create GitHub Release and upload installer" {
             gh release create $Tag `
                 "$FinalInstallerPath" `
+                "$FinalChecksumPath" `
                 --title "$AppName $Tag" `
                 --notes "$ReleaseNotes" `
                 --verify-tag

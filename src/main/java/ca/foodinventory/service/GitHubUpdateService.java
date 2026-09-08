@@ -7,6 +7,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -43,10 +45,17 @@ public final class GitHubUpdateService {
     );
 
     private static final Pattern EXE_ASSET_PATTERN = Pattern.compile(
-            "\\\"name\\\"\\s*:\\s*\\\"[^\\\"]+\\.exe\\\""
+            "\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+\\.exe)\\\""
                     + ".*?\\\"size\\\"\\s*:\\s*(\\d+)"
                     + ".*?\\\"browser_download_url\\\"\\s*:\\s*"
                     + "\\\"([^\\\"]+\\.exe(?:\\?[^\\\"]*)?)\\\"",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+
+    private static final Pattern SHA256_ASSET_PATTERN = Pattern.compile(
+            "\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+\\.sha256(?:\\.txt)?)\\\""
+                    + ".*?\\\"browser_download_url\\\"\\s*:\\s*"
+                    + "\\\"([^\\\"]+\\.sha256(?:\\.txt)?(?:\\?[^\\\"]*)?)\\\"",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
 
@@ -185,6 +194,11 @@ public final class GitHubUpdateService {
                     throw new IOException("The downloaded installer is empty.");
                 }
 
+                String expectedSha256 = loadExpectedSha256(updateInfo);
+                if (expectedSha256 != null && !expectedSha256.isBlank()) {
+                    verifySha256(partialPath, expectedSha256);
+                }
+
                 Files.move(
                         partialPath,
                         finalPath,
@@ -251,11 +265,14 @@ public final class GitHubUpdateService {
 
         String downloadUrl = null;
         long downloadSizeBytes = -1;
+        String expectedSha256 = null;
 
         Matcher assetMatcher = EXE_ASSET_PATTERN.matcher(responseBody);
         if (assetMatcher.find()) {
-            downloadSizeBytes = parseLong(assetMatcher.group(1));
-            downloadUrl = unescapeJsonString(assetMatcher.group(2));
+            String installerAssetName = unescapeJsonString(assetMatcher.group(1));
+            downloadSizeBytes = parseLong(assetMatcher.group(2));
+            downloadUrl = unescapeJsonString(assetMatcher.group(3));
+            expectedSha256 = findChecksumUrl(installerAssetName, responseBody);
         }
 
         if (latestVersion == null || releasePageUrl == null) {
@@ -288,9 +305,104 @@ public final class GitHubUpdateService {
                         releaseNotes == null || releaseNotes.isBlank()
                                 ? "No release notes were provided."
                                 : releaseNotes.trim(),
-                        downloadSizeBytes
+                        downloadSizeBytes,
+                        expectedSha256
                 )
         );
+    }
+
+    private String findChecksumUrl(String installerAssetName, String responseBody) {
+        if (installerAssetName == null || installerAssetName.isBlank()) {
+            return null;
+        }
+
+        String expectedName = installerAssetName + ".sha256";
+        String expectedTextName = expectedName + ".txt";
+        Matcher matcher = SHA256_ASSET_PATTERN.matcher(responseBody);
+        while (matcher.find()) {
+            String name = unescapeJsonString(matcher.group(1));
+            if (expectedName.equalsIgnoreCase(name)
+                    || expectedTextName.equalsIgnoreCase(name)) {
+                return unescapeJsonString(matcher.group(2));
+            }
+        }
+
+        return null;
+    }
+
+    private String loadExpectedSha256(UpdateInfo updateInfo) throws IOException, InterruptedException {
+        if (updateInfo.sha256Url() == null || updateInfo.sha256Url().isBlank()) {
+            return null;
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(updateInfo.sha256Url()))
+                .timeout(Duration.ofSeconds(30))
+                .header("Accept", "text/plain")
+                .header("User-Agent", "ESM-Operations-Manager")
+                .GET()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException(
+                    "Installer checksum download returned HTTP "
+                            + response.statusCode()
+            );
+        }
+
+        String checksum = parseSha256(response.body());
+        if (checksum.isBlank()) {
+            throw new IOException("Installer checksum file did not contain a SHA-256 value.");
+        }
+        return checksum;
+    }
+
+    private void verifySha256(Path file, String expectedSha256) throws IOException {
+        String actualSha256 = sha256(file);
+        if (!actualSha256.equalsIgnoreCase(expectedSha256)) {
+            throw new IOException(
+                    "Installer checksum verification failed. Expected "
+                            + expectedSha256 + " but downloaded "
+                            + actualSha256 + "."
+            );
+        }
+    }
+
+    private String sha256(Path file) throws IOException {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available.", exception);
+        }
+
+        try (InputStream inputStream = Files.newInputStream(file)) {
+            byte[] buffer = new byte[64 * 1024];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                digest.update(buffer, 0, bytesRead);
+            }
+        }
+
+        StringBuilder result = new StringBuilder();
+        for (byte value : digest.digest()) {
+            result.append(String.format("%02x", value));
+        }
+        return result.toString();
+    }
+
+    private String parseSha256(String checksumText) {
+        if (checksumText == null) {
+            return "";
+        }
+
+        Matcher matcher = Pattern.compile("(?i)\\b([a-f0-9]{64})\\b").matcher(checksumText);
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     private boolean wasCheckedRecently() {
@@ -524,7 +636,8 @@ public final class GitHubUpdateService {
             String releasePageUrl,
             String downloadUrl,
             String releaseNotes,
-            long downloadSizeBytes
+            long downloadSizeBytes,
+            String sha256Url
     ) {
     }
 }

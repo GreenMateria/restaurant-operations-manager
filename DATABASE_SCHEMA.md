@@ -1,6 +1,6 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: Sunday, September 6, 2026_
+_Last Updated: Monday, September 7, 2026_
 
 This file documents the current database structure for the Food Inventory / ESM Operations Manager application.
 
@@ -10,10 +10,9 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 
 # General Rules
 
-- Default fresh-install database engine: SQLite.
 - Normal shared data path for configured work PCs: Cloud API mode backed by PostgreSQL on AWS RDS.
-- SQLite remains available for fresh installs, fallback, and local testing.
-- PostgreSQL mode is selected through the password-protected System module or local runtime configuration and takes effect after restart.
+- SQLite remains available as a local cloud-snapshot/backup target, emergency local restore file, and development fallback.
+- Direct desktop PostgreSQL mode is retired from normal client use. PostgreSQL credentials should stay off client PCs.
 - Runtime database path is controlled by `DatabaseManager`.
 - Runtime database is under:
 
@@ -69,7 +68,7 @@ PostgreSQL support:
 - `DatabaseSyncService`
   - Uploads local SQLite data to cloud PostgreSQL.
   - Downloads cloud PostgreSQL data to local SQLite, backing up the local database first.
-  - These actions are administrator migration/recovery tools. Normal daily cloud use happens directly through PostgreSQL mode and does not require manual upload/download.
+  - These actions are administrator migration/recovery tools. Local-to-cloud upload has been removed from normal desktop use; normal daily cloud use happens through Cloud API mode and backup/cloud snapshot download flows.
 - `scripts/Apply-LabourSchemaMigration.ps1`
   - Applies the Labour Management schema foundation and Migration 17 snapshot columns to AWS RDS through a schema-capable admin user.
   - Prompts for the RDS admin password securely and does not store it.
@@ -112,7 +111,7 @@ Migration responsibilities:
 - `Migration17`
   - Added `labour_daily_entries` snapshot columns:
     `employee_name_snapshot`, `position_name_snapshot`, and `labour_group_snapshot`.
-  - These snapshots preserve historical Weekly Labour context when employee wages or positions later change.
+  - These snapshots preserve historical Labour Hours context when employee wages or positions later change.
 
 ---
 
@@ -363,13 +362,16 @@ Notes:
 
 ## settings
 
-Stores application settings such as admin password state.
+Stores shared application settings.
 
 Known setting use cases:
 
-- Admin/system password hash.
-- Password initialization flag.
 - Labour default uniform deduction amount: `labour.default_uniform_deduction`.
+
+Admin password note:
+
+- The System administrator password is now a local machine setting in `%LOCALAPPDATA%\FoodInventory\database.properties`, stored as a salted PBKDF2 hash.
+- Legacy `admin_password` / `password_initialized` database settings may exist for old databases, but new desktop code should not use the shared database as the administrator password authority.
 
 ---
 
@@ -431,7 +433,8 @@ Important fields:
 Notes:
 
 - These records are separate from official weekly imported `sales_periods`.
-- Future Daily Labour calculations should use these manual daily operational sales values.
+- Daily Labour Cost uses `net_sales` for weekly cost percentages.
+- Tip Pool uses `tip_out_pool` as the daily amount to allocate across tip-pool eligible employee hours.
 
 ## labour_daily_entries
 
@@ -453,7 +456,7 @@ Important fields:
 
 Notes:
 
-- `shift_1_hours` and `shift_2_hours` are stored separately for the spreadsheet-style Weekly Labour workflow.
+- `shift_1_hours` and `shift_2_hours` are stored separately for the spreadsheet-style Labour Hours workflow.
 - `hourly_wage`, `position_id`, `employee_name_snapshot`, `position_name_snapshot`, and `labour_group_snapshot` are stored on each entry so historical labour reports do not silently change after employee setup changes.
 - Daily hours are calculated as `shift_1_hours + shift_2_hours`.
 - Daily labour dollars are calculated as daily hours multiplied by the stored `hourly_wage` snapshot.
@@ -477,17 +480,26 @@ Setup routes:
 - `GET /labour/settings`
 - `PUT /labour/settings`
 
-Weekly Labour routes:
+Labour Hours routes:
 
+- `GET /labour/weeks`
 - `GET /labour/weekly/{weekStartDate}`
 - `PUT /labour/weekly`
+
+Daily Labour Cost / Tip Pool routes:
+
+- `GET /labour/daily/{workDate}`
+- `PUT /labour/daily`
 
 Notes:
 
 - `weekStartDate` is the Monday canonical week start in `YYYY-MM-DD` format.
+- `GET /labour/weeks` returns distinct saved Labour Hours week starts for the list-style Labour Hours screen.
 - `PUT /labour/weekly` saves a full week payload in bulk rather than issuing one request per edited cell.
-- Weekly Labour data is stored by actual calendar date, not by relative "this week" columns.
-- The live API route and live AWS RDS Labour schema were applied on Sunday, September 6, 2026.
+- Labour Hours data is stored by actual calendar date, not by relative "this week" columns.
+- Daily Labour Cost and Tip Pool use `workDate` / `salesDate` in `YYYY-MM-DD` format and save daily sales plus employee daily entries in one request.
+- `tip_pool_eligible` and `uniform_deduction_applicable` are returned in labour row payloads so Tip Pool and Tip Pool Breakdown can calculate from the same API-loaded labour data.
+- The live AWS RDS Labour schema was applied on Sunday, September 6, 2026. Labour API route updates for Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026.
 
 ---
 

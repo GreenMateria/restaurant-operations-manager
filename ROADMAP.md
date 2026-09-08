@@ -5,12 +5,13 @@
 ### Status
 
 -   Cloud database setup is complete for the current work PCs.
--   v3.1.1 is the current project version.
+-   v3.1.3 is the current stable release target.
 -   v3.0.6 includes the completed controlled hybrid database release path, AWS RDS cutover, cloud-mode save/import responsiveness fixes, POS sales import fix, alcohol manual invoice FOOD-item fix, alcohol Sales Mappings, initial Alcohol Variance entry points, and shared combo box support fixes.
 -   v3.1.1 completed the desktop API migration, removed the need for normal users to configure direct client database connections, and added a database status indicator.
--   SQLite remains the default startup mode for fresh installs and fallback use.
+-   Cloud API mode is now the normal desktop startup mode when API settings are configured.
+-   SQLite remains only as a local cloud-snapshot/backup target and development fallback.
 -   Configured work PCs should run in Cloud API mode for daily shared-data operation, with AWS RDS PostgreSQL as the backend data store.
--   AWS RDS PostgreSQL cloud mode is available through the password-protected System module and takes effect after restart.
+-   Direct desktop AWS RDS PostgreSQL mode has been retired from the System module.
 -   Development connectivity, upload, download, DAO/service smoke tests, and manual UI testing against Aiven PostgreSQL `defaultdb` have been completed.
 -   A lower-access Aiven application database user is configured for normal app access.
 -   All current work PCs have connected to the cloud database without error.
@@ -23,10 +24,9 @@
 
 ### Planned
 
--   Validate the v3.1.1 installer upgrade on the work PCs.
 -   Validate alcohol Sales Mappings setup from the POS Menu Items catalog during live bar item review.
 -   Continue monitoring cloud-mode daily use for workflow or record-edit conflicts.
--   Consider a backend/API layer later if the app expands beyond controlled internal use.
+-   Continue using the backend/API layer as the normal client path and keep direct PostgreSQL credentials out of desktop clients.
 
 ## Future Web / API Architecture
 
@@ -37,7 +37,7 @@
 -   Recommended first AWS direction is Amazon API Gateway HTTP API plus AWS Lambda in front of the current AWS RDS PostgreSQL database.
 -   AWS proof stack `esm-operations-api` is deployed in `ca-central-1`.
 -   Proof API URL is `https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod`.
--   `GET /health` is public and returns version `3.1.1`.
+-   `GET /health` is public and returns version `3.1.2`.
 -   `GET /products` requires `x-api-key` and has been verified against AWS RDS with `359` active products returned.
 -   The desktop app now supports `mode=api`, `api.url`, and `api.key` configuration.
 -   The System screen can test the API health endpoint and set API mode for next startup.
@@ -49,8 +49,8 @@
 -   POS Menu Item writes/imports, KDS cleanup, and usage-report import are implemented for API mode through the Production API.
 -   Alcohol Sales Mappings API endpoints for list, add, edit, and deactivate are deployed.
 -   The Alcohol Sales Mappings screen can load, save, and deactivate mappings through the API in API mode.
--   Variance reporting is not currently in active use, so it remains deferred until the live workflow setup is ready.
--   API migration strategy is department-first. Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Weekly Labour, product support, and administrative upload/download sync are now API-backed.
+-   Alcohol Variance Report is complete in the desktop app by reusing API-backed counts, order guide usage, valuation cost, product profiles, sales mappings, and client-side POS usage import.
+-   API migration strategy is department-first. Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, product support, and administrative cloud snapshot workflows are now API-backed.
 -   Supplies Department API routes were deployed on Saturday, September 5, 2026, and read-only smoke checks passed.
 -   Food Department API migration is implemented and deployed for products, import/manual invoice saves, count templates, inventory counts, and order guide generation/case-size save.
 -   Read-only smoke checks passed for Food templates, counts, completed counts, count lines, order guide generation, and missing-key `401` behavior.
@@ -62,11 +62,14 @@
 -   Live desktop validation confirmed Production CSV/report import and Weekly Production generation complete in API mode, and the Apache POI Log4j provider warning has been resolved.
 -   Reporting/Sales and product support routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026; smoke checks passed for Invoice History, invoice line/breakdown loading, Sales Periods, Inventory Valuation, Weekly Cost Report, product purchase history, and missing-key `401` behavior.
 -   Administrative upload/download sync routes were deployed on Saturday, September 5, 2026; smoke checks passed for missing-key `401` behavior and authenticated read-only cloud snapshot download.
--   Labour Setup and Weekly Labour API routes are implemented in the development build for positions, employees, default uniform deduction settings, and weekly employee hour entry.
+-   Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown API support is implemented in the development build for positions, employees, default uniform deduction settings, weekly employee hour entry, manual daily net sales, daily tip pool amounts, labour cost percentages, tip allocation, and uniform-deduction payout reporting.
+-   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working on the latest stable version.
 
 ### Future
 
--   Consider a browser-based version after the current desktop application is stable, core workflows are proven in daily use, and alcohol variance/reporting work is complete.
+-   Prepare the application for a future multi-location rollout before adding large new operating modules.
+-   Convert the remaining manually managed cloud infrastructure into Infrastructure as Code as part of the multi-location preparation.
+-   Consider a browser-based version after the current desktop application is stable, core workflows are proven in daily use, and multi-location requirements are clearer.
 -   Treat this as a long-term migration path, not an immediate rewrite.
 -   Preferred future architecture:
 
@@ -90,16 +93,17 @@ Desktop app
 -   Plan any migration in phases:
     -   Keep the current JavaFX desktop app stable for internal operations.
     -   Strengthen service boundaries so business logic is not trapped in JavaFX screens.
-    -   Introduce a Java API/backend when there is a clear security, scaling, or browser-access need.
+    -   Reuse the existing Java API/backend and extend it only when browser-access needs are clear.
     -   Build browser screens module by module, starting with lower-risk reporting/admin views before replacing core workflows.
     -   Retire the desktop app only after the browser version fully covers daily manager workflows.
--   Re-evaluate this direction after Cloud PostgreSQL daily use, alcohol variance, reporting, order guide, and production workflows are stable enough that requirements are no longer changing quickly.
+-   Re-evaluate this direction after Cloud API daily use, alcohol variance, reporting, order guide, production, and Labour Management workflows are stable enough that requirements are no longer changing quickly.
 
 ### Planned
 
--   Validate migrated Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase-history, and admin sync API workflows from the IntelliJ desktop app using normal live workflows.
--   Keep CSV/Excel parsing in the desktop client, with only normalized records sent through the API for persistence.
--   Keep direct Cloud PostgreSQL mode as an administrator fallback.
+-   Design the multi-location data model and rollout approach first, including store identity, data partitioning, user/location access, reporting rollups, backups, and migration path from the current single-location database.
+-   Use that design to decide what cloud resources should move into IaC first.
+-   Keep CSV/Excel parsing in the desktop client, with only normalized records sent through the API for persistence unless a browser/file-processing requirement changes that.
+-   Keep direct Cloud PostgreSQL credentials out of normal desktop clients.
 
 ## Update System
 
@@ -113,13 +117,14 @@ Desktop app
 -   Download progress dialog
 -   Update-ready installer launch prompt
 -   Stable Windows installer upgrade UUID in release packaging
+-   Installer SHA-256 checksum generation and GitHub Release upload
+-   In-app installer checksum verification before launch when a checksum asset is published
+-   Manual Check for Updates action from the System screen
+-   Release script guard that prevents accidental Windows upgrade UUID changes
 
 ### Planned
 
--   Installer verification / checksum handling
--   Manual Check for Updates action
 -   Additional failure and retry polish around updater UX
--   Verify first installer upgrade built with the stable upgrade UUID replaces the existing install cleanly
 
 ## Purchasing / Invoice Import
 
@@ -148,34 +153,35 @@ Desktop app
 -   Alcohol Department navigation includes alcohol-specific Sales Mappings and Variance Report entry points.
 -   Alcohol Sales Mappings is unlocked for POS SKU/PLU to alcohol inventory product setup.
 -   Alcohol Sales Mapping add/edit reuses the existing Production POS Menu Items catalog so managers select imported POS items instead of retyping SKU/name details.
--   Alcohol Variance Report currently has the navigation and setup shell; calculation/report output is deferred until inventory, invoicing, and production API migration work is further along.
+-   Alcohol Variance Report now calculates actual-vs-sold usage from opening/closing alcohol counts, period purchases, imported POS usage, and active Sales Mappings, including bottle/keg portion conversion and red/green variance quantity and dollar columns.
+-   Alcohol Variance Report is accepted as complete for the v3.1.3 development build.
 -   Alcohol workflow changes should be driven by specific live-data issues when they appear.
 -   Freezer Pull is working as intended and is not an active roadmap item.
 
 ### Future
 
--   Populate alcohol sales mappings from POS Menu Items and live bar item review
--   Alcohol variance reporting calculation and output after live setup is ready
--   Food production variance later, after alcohol variance is working
--   Recipe Costing
+-   Food production variance later, after multi-location and infrastructure priorities are settled
+-   Recipe Costing later, after multi-location and infrastructure priorities are settled
 -   Advanced Reporting
 
 ## Labour Management
 
 ### Status
 
--   Labour Management Phase 1 and Phase 2 are implemented in the development build.
+-   Labour Management is complete and accepted as working as intended in the v3.1.3 development build.
 -   Labour Management is a top-level dashboard module.
 -   Labour Setup is administrator-protected and supports configurable positions, employees, hourly wages, tip-pool eligibility, uniform-deduction applicability, active/inactive state, target labour percentages, and default uniform deduction settings.
--   Weekly Labour is implemented with a compact spreadsheet-style Monday-Sunday Shift 1 / Shift 2 grid, position grouping, employee totals, position totals, and FOH/BOH/total variable labour rollups.
--   Weekly Labour was tightened after live testing to reduce horizontal scrolling while preserving the Excel-style workflow.
--   Labour Setup and Weekly Labour support Cloud API mode through `/labour` routes and local/direct fallback through Labour DAOs.
--   Weekly Labour API routes are deployed to `esm-operations-api`, and the live AWS RDS schema has been advanced to schema version 17.
+-   Labour Hours replaced the old Weekly Labour screen name. It uses an inventory-count-style saved-week list and opens a separate spreadsheet-style pop-out editor for Monday-Sunday Shift 1 / Shift 2 manual hour entry.
+-   Labour Hours no longer shows employee number, hourly rate, total pay, bottom total rows, or the restaurant header.
+-   Labour Hours department headers use a clearer styled band in the pop-out entry window.
+-   Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support Cloud API mode through `/labour` routes and local DAO fallback for development.
+-   Labour API routes are deployed to `esm-operations-api`, including `/labour/weeks`, `/labour/weekly`, and `/labour/daily`, and the live AWS RDS schema has been advanced to schema version 17.
 -   Migration 16 added Labour Management setup tables and future daily labour/sales foundations.
 -   Migration 17 added daily labour snapshot columns for historical wage/position/group reporting integrity.
--   Daily Labour, Tip Pool, and Tip Pool Breakdown are placeholders only.
+-   Daily Labour Cost is a weekly start/end date range screen with Monday-Sunday rows, editable net sales, BOH labour dollars/percentages, FOH labour dollars/percentages, total labour percentage, and a total row.
+-   Tip Pool is implemented with daily tip-out pool entry under each day's Tip column, tip-pool eligible hours, calculated employee tip allocations, and weekly totals.
+-   Tip Pool Breakdown is implemented as a start/end date range payout report with gross tips, configured per-worked-day uniform deductions for applicable employees, nickel-rounded net payout totals, and compact black-and-white printing.
 
 ### Future
 
--   Build Daily Labour next, using Labour Management daily operational sales rather than imported weekly POS sales periods.
--   Build Tip Pool and Tip Pool Breakdown after the weekly/daily records and finalization flow are established.
+-   Preserve current Labour Management workflows unless a future live issue or specific manager request is reported.

@@ -13,7 +13,6 @@ import javafx.concurrent.Task;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -26,8 +25,6 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
@@ -41,7 +38,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class WeeklyLabourView extends BorderPane {
+public class
+WeeklyLabourView extends BorderPane {
 
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("EEE");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d");
@@ -52,7 +50,7 @@ public class WeeklyLabourView extends BorderPane {
 
     private final DatePicker weekStartPicker = new DatePicker();
     private final Button loadButton = primaryButton("Load Week", this::loadSelectedWeek);
-    private final Button saveButton = primaryButton("Save Week", this::saveWeek);
+    private final Button saveButton = primaryButton("Save Hours", this::saveWeek);
     private final Label statusLabel = new Label("Ready");
     private final GridPane grid = new GridPane();
     private final List<TextField> entryFields = new ArrayList<>();
@@ -73,12 +71,16 @@ public class WeeklyLabourView extends BorderPane {
     private boolean dirty;
 
     public WeeklyLabourView() {
+        this(LocalDate.now());
+    }
+
+    public WeeklyLabourView(LocalDate initialWeekStart) {
         getStyleClass().add("root-dark");
 
-        Label title = new Label("Weekly Labour");
+        Label title = new Label("Labour Hours");
         title.getStyleClass().add("page-title");
 
-        weekStartPicker.setValue(normalizeToMonday(LocalDate.now()));
+        weekStartPicker.setValue(normalizeToMonday(initialWeekStart));
         weekStartPicker.valueProperty().addListener((obs, oldDate, newDate) -> {
             LocalDate normalized = normalizeToMonday(newDate);
             if (newDate != null && !newDate.equals(normalized)) {
@@ -114,19 +116,17 @@ public class WeeklyLabourView extends BorderPane {
         BorderPane.setMargin(scrollPane, new Insets(0, 12, 0, 12));
         setCenter(scrollPane);
 
-        setBottom(buildSummary());
+        setBottom(null);
         loadWeek(weekStartPicker.getValue());
     }
 
     private void configureColumns() {
         grid.getColumnConstraints().clear();
-        grid.getColumnConstraints().add(column(150, HPos.LEFT));
-        grid.getColumnConstraints().add(column(58, HPos.RIGHT));
+        grid.getColumnConstraints().add(column(170, HPos.LEFT));
         for (int i = 0; i < 14; i++) {
-            grid.getColumnConstraints().add(column(54, HPos.CENTER));
+            grid.getColumnConstraints().add(column(56, HPos.CENTER));
         }
         grid.getColumnConstraints().add(column(76, HPos.RIGHT));
-        grid.getColumnConstraints().add(column(88, HPos.RIGHT));
     }
 
     private ColumnConstraints column(double width, HPos alignment) {
@@ -231,20 +231,13 @@ public class WeeklyLabourView extends BorderPane {
         }
 
         int rowIndex = 0;
-        addHeader(rowIndex++);
+        addDateBand(rowIndex++);
+        addHeader(rowIndex);
+        rowIndex += 2;
 
         currentRowsByPosition = rowsByPosition();
         for (Map.Entry<String, List<WeeklyLabourRow>> group : currentRowsByPosition.entrySet()) {
-            int headerRow = rowIndex++;
-            Label positionLabel = groupLabel(group.getKey());
-            grid.add(positionLabel, 0, headerRow, 16, 1);
-
-            Label groupHours = totalLabel();
-            Label groupDollars = totalLabel();
-            grid.add(groupHours, 16, headerRow);
-            grid.add(groupDollars, 17, headerRow);
-            groupHoursLabels.put(group.getKey(), groupHours);
-            groupDollarsLabels.put(group.getKey(), groupDollars);
+            grid.add(positionGroupLabel("DEPARTMENT: " + group.getKey().toUpperCase()), 0, rowIndex++, 16, 1);
 
             for (WeeklyLabourRow labourRow : group.getValue()) {
                 addEmployeeRow(labourRow, rowIndex++);
@@ -255,25 +248,31 @@ public class WeeklyLabourView extends BorderPane {
         updateAllTotals();
     }
 
+    private void addDateBand(int rowIndex) {
+        LocalDate start = currentData.weekStartDate();
+        Label label = groupLabel("WEEK OF " + DATE_FORMAT.format(start).toUpperCase()
+                + " TO " + DATE_FORMAT.format(start.plusDays(6)).toUpperCase());
+        label.getStyleClass().add("labour-sheet-subtitle");
+        grid.add(label, 0, rowIndex, 16, 1);
+    }
+
     private void addHeader(int rowIndex) {
-        addHeaderCell("Employee", 0, rowIndex);
-        addHeaderCell("Rate", 1, rowIndex);
+        addHeaderCell("NAME", 0, rowIndex, 1, 1);
         for (int day = 0; day < 7; day++) {
             LocalDate date = currentData.weekStartDate().plusDays(day);
-            addHeaderCell(DAY_FORMAT.format(date).toUpperCase() + "\n" + DATE_FORMAT.format(date) + "\nS1",
-                    2 + day * 2,
-                    rowIndex);
-            addHeaderCell(DAY_FORMAT.format(date).toUpperCase() + "\n" + DATE_FORMAT.format(date) + "\nS2",
-                    3 + day * 2,
-                    rowIndex);
+            addHeaderCell(DAY_FORMAT.format(date).toUpperCase() + "\n" + DATE_FORMAT.format(date),
+                    1 + day * 2,
+                    rowIndex,
+                    2,
+                    1);
+            addHeaderCell("SHIFT 1", 1 + day * 2, rowIndex + 1, 1, 1);
+            addHeaderCell("SHIFT 2", 2 + day * 2, rowIndex + 1, 1, 1);
         }
-        addHeaderCell("Total\nHours", 16, rowIndex);
-        addHeaderCell("Total\nPay", 17, rowIndex);
+        addHeaderCell("TOTAL\nHOURS", 15, rowIndex, 1, 1);
     }
 
     private void addEmployeeRow(WeeklyLabourRow labourRow, int rowIndex) {
         grid.add(cellLabel(labourRow.getEmployeeName()), 0, rowIndex);
-        grid.add(rightCellLabel(formatMoney(labourRow.getHourlyWage())), 1, rowIndex);
 
         List<TextField> rowFields = new ArrayList<>();
         for (int day = 0; day < 7; day++) {
@@ -285,8 +284,8 @@ public class WeeklyLabourView extends BorderPane {
             rowFields.add(shift2);
             entryFields.add(shift1);
             entryFields.add(shift2);
-            grid.add(shift1, 2 + day * 2, rowIndex);
-            grid.add(shift2, 3 + day * 2, rowIndex);
+            grid.add(shift1, 1 + day * 2, rowIndex);
+            grid.add(shift2, 2 + day * 2, rowIndex);
 
             shift1.textProperty().addListener((obs, oldText, newText) ->
                     handleHoursEdit(shift1, entry, true));
@@ -295,16 +294,12 @@ public class WeeklyLabourView extends BorderPane {
         }
 
         Label totalHours = rightCellLabel("");
-        Label totalPay = rightCellLabel("");
-        grid.add(totalHours, 16, rowIndex);
-        grid.add(totalPay, 17, rowIndex);
+        grid.add(totalHours, 15, rowIndex);
         rowHoursLabels.put(labourRow, totalHours);
-        rowDollarsLabels.put(labourRow, totalPay);
 
         Runnable refreshRow = () -> {
             LabourTotals totals = calculationService.employeeTotals(labourRow);
             totalHours.setText(formatHours(totals.hours()));
-            totalPay.setText(formatMoney(totals.labourDollars()));
         };
         rowFields.forEach(field -> field.textProperty().addListener((obs, oldText, newText) -> refreshRow.run()));
         refreshRow.run();
@@ -372,7 +367,10 @@ public class WeeklyLabourView extends BorderPane {
         for (WeeklyLabourRow row : rowHoursLabels.keySet()) {
             LabourTotals totals = calculationService.employeeTotals(row);
             rowHoursLabels.get(row).setText(formatHours(totals.hours()));
-            rowDollarsLabels.get(row).setText(formatMoney(totals.labourDollars()));
+            Label dollarsLabel = rowDollarsLabels.get(row);
+            if (dollarsLabel != null) {
+                dollarsLabel.setText(formatMoney(totals.labourDollars()));
+            }
         }
 
         for (Map.Entry<String, List<WeeklyLabourRow>> group : currentRowsByPosition.entrySet()) {
@@ -427,7 +425,7 @@ public class WeeklyLabourView extends BorderPane {
         task.setOnSucceeded(event -> {
             dirty = false;
             setReady("Week saved.");
-            showAlert(Alert.AlertType.INFORMATION, "Weekly Labour", "Week saved.");
+            showAlert(Alert.AlertType.INFORMATION, "Labour Hours", "Week saved.");
             loadWeek(currentData.weekStartDate());
         });
         task.setOnFailed(event -> {
@@ -473,9 +471,9 @@ public class WeeklyLabourView extends BorderPane {
             return true;
         }
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Unsaved Weekly Labour");
+        alert.setTitle("Unsaved Labour Hours");
         alert.setHeaderText(null);
-        alert.setContentText("Discard unsaved weekly labour changes?");
+        alert.setContentText("Discard unsaved labour hours changes?");
         return alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
     }
 
@@ -536,8 +534,28 @@ public class WeeklyLabourView extends BorderPane {
         return label;
     }
 
+    private Label positionGroupLabel(String text) {
+        Label label = groupLabel(text);
+        label.getStyleClass().add("weekly-labour-position-group");
+        label.setMinHeight(34);
+        return label;
+    }
+
     private Label totalLabel() {
         Label label = groupLabel("");
+        label.setAlignment(Pos.CENTER_RIGHT);
+        return label;
+    }
+
+    private Label totalRowLabel(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("weekly-labour-total");
+        label.setMaxWidth(Double.MAX_VALUE);
+        return label;
+    }
+
+    private Label totalRowValue() {
+        Label label = totalRowLabel("");
         label.setAlignment(Pos.CENTER_RIGHT);
         return label;
     }
@@ -549,12 +567,16 @@ public class WeeklyLabourView extends BorderPane {
     }
 
     private void addHeaderCell(String text, int column, int row) {
+        addHeaderCell(text, column, row, 1, 1);
+    }
+
+    private void addHeaderCell(String text, int column, int row, int columnSpan, int rowSpan) {
         Label label = new Label(text);
         label.setAlignment(Pos.CENTER);
         label.setMinHeight(44);
         label.setMaxWidth(Double.MAX_VALUE);
         label.getStyleClass().add("weekly-labour-header");
-        grid.add(label, column, row);
+        grid.add(label, column, row, columnSpan, rowSpan);
     }
 
     private Button primaryButton(String text, Runnable action) {
@@ -594,7 +616,7 @@ public class WeeklyLabourView extends BorderPane {
             current = current.getCause();
         }
         if (current == null || current.getMessage() == null || current.getMessage().isBlank()) {
-            return "The Weekly Labour action failed.";
+            return "The Labour Hours action failed.";
         }
         return current.getMessage();
     }

@@ -392,32 +392,23 @@ public class MainView {
                 "Labour Management",
 
                 createDashboardButton(
-                        "Weekly Labour",
-                        () -> showView(new WeeklyLabourView())
+                        "Labour Hours",
+                        () -> showView(new LabourHoursView())
                 ),
 
                 createDashboardButton(
-                        "Daily Labour",
-                        () -> showView(buildPlaceholderView(
-                                "Daily Labour",
-                                "Coming in next Labour Management phase."
-                        ))
+                        "Daily Labour Cost",
+                        () -> showView(new DailyLabourView())
                 ),
 
                 createDashboardButton(
                         "Tip Pool",
-                        () -> showView(buildPlaceholderView(
-                                "Tip Pool",
-                                "Coming in next Labour Management phase."
-                        ))
+                        () -> showView(new TipPoolView())
                 ),
 
                 createDashboardButton(
                         "Tip Pool Breakdown",
-                        () -> showView(buildPlaceholderView(
-                                "Tip Pool Breakdown",
-                                "Coming in next Labour Management phase."
-                        ))
+                        () -> showView(new TipPoolBreakdownView())
                 ),
 
                 createDashboardButton(
@@ -644,7 +635,7 @@ public class MainView {
 
         dialog.showAndWait().ifPresent(password -> {
 
-            if (password.equals(settingsDao.getPassword())) {
+            if (settingsDao.verifyPassword(password)) {
 
                 showView(protectedViewSupplier.get());
 

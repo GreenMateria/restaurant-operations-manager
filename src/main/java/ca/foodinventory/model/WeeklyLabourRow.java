@@ -13,8 +13,11 @@ public class WeeklyLabourRow {
     private String positionName;
     private String labourGroup;
     private int positionSortOrder;
+    private BigDecimal positionTargetLabourPercentage;
     private BigDecimal hourlyWage;
     private boolean activeEmployee;
+    private boolean tipPoolEligible;
+    private boolean uniformDeductionApplicable;
     private final Map<LocalDate, LabourDailyEntry> entriesByDate = new LinkedHashMap<>();
 
     public int getEmployeeId() {
@@ -65,6 +68,14 @@ public class WeeklyLabourRow {
         this.positionSortOrder = positionSortOrder;
     }
 
+    public BigDecimal getPositionTargetLabourPercentage() {
+        return positionTargetLabourPercentage;
+    }
+
+    public void setPositionTargetLabourPercentage(BigDecimal positionTargetLabourPercentage) {
+        this.positionTargetLabourPercentage = positionTargetLabourPercentage;
+    }
+
     public BigDecimal getHourlyWage() {
         return hourlyWage == null ? BigDecimal.ZERO : hourlyWage;
     }
@@ -79,6 +90,30 @@ public class WeeklyLabourRow {
 
     public void setActiveEmployee(boolean activeEmployee) {
         this.activeEmployee = activeEmployee;
+    }
+
+    public boolean isTipPoolEligible() {
+        return tipPoolEligible;
+    }
+
+    public boolean getTipPoolEligible() {
+        return tipPoolEligible;
+    }
+
+    public void setTipPoolEligible(boolean tipPoolEligible) {
+        this.tipPoolEligible = tipPoolEligible;
+    }
+
+    public boolean isUniformDeductionApplicable() {
+        return uniformDeductionApplicable;
+    }
+
+    public boolean getUniformDeductionApplicable() {
+        return uniformDeductionApplicable;
+    }
+
+    public void setUniformDeductionApplicable(boolean uniformDeductionApplicable) {
+        this.uniformDeductionApplicable = uniformDeductionApplicable;
     }
 
     public Map<LocalDate, LabourDailyEntry> getEntriesByDate() {

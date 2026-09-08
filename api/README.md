@@ -8,10 +8,10 @@ Current deployed proof:
 https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod
 ```
 
-Verified on Tuesday, September 1, 2026, with `GET /health` updated to version `3.1.1` on Sunday, September 6, 2026:
+Verified on Tuesday, September 1, 2026, with `GET /health` updated to version `3.1.2` in the development build on Monday, September 7, 2026:
 
 ```text
-GET /health -> 200 OK, version 3.1.1
+GET /health -> 200 OK, version 3.1.2
 GET /products without x-api-key -> 401 Unauthorized
 GET /products with x-api-key -> 359 active products from AWS RDS, including alcohol profile fields
 GET /pos-menu-items without x-api-key -> 401 Unauthorized
@@ -129,6 +129,9 @@ GET /labour/settings
 PUT /labour/settings
 GET /labour/weekly/{weekStartDate}
 PUT /labour/weekly
+GET /labour/weeks
+GET /labour/daily/{workDate}
+PUT /labour/daily
 ```
 
 Current desktop API-mode coverage:
@@ -138,14 +141,15 @@ Current desktop API-mode coverage:
 - Supplies Department: Products, Manual Invoice, Count Templates, Inventory Counts, and Order Guide. The `/supplies-invoices` route was deployed on Saturday, September 5, 2026.
 - Production: Stations, Production Items, Production Profiles and lines, POS Menu Item maintenance/import/KDS cleanup, Product Mappings, Weekly Production generation/loading/refresh/override saves, and Freezer Pull manual quantities.
 - Reporting/Sales: Invoice History, invoice lines and breakdowns, invoice delete, Sales Period list/save, POS sales Excel import persistence, Inventory Valuation, and Weekly Cost Report generation.
-- Labour Management: Labour Setup positions/employees/settings and Weekly Labour Monday-Sunday Shift 1 / Shift 2 employee-hour entry.
+- Labour Management: Labour Setup positions/employees/settings, Labour Hours saved-week listing and pop-out Monday-Sunday Shift 1 / Shift 2 employee-hour entry, Daily Labour Cost weekly net-sales/labour percentage entry, Tip Pool allocation, and Tip Pool Breakdown payout reporting with nickel-rounded net payouts and printing.
 - Product support: GFS product guide CSV parsing stays in the desktop client, normalized products are upserted through `POST /products/import`, and product purchase history loads through `GET /products/{id}/purchase-history`.
 - Admin sync: `GET /admin/sync/download` returns a PostgreSQL table snapshot, and `POST /admin/sync/upload` replaces cloud data from a desktop-generated SQLite table snapshot. These remain administrator migration/recovery tools, not routine daily sync.
 - Production API routes were deployed to `esm-operations-api` in `ca-central-1` on Friday, September 4, 2026, and read-only smoke checks passed.
 - Live desktop validation confirmed Production CSV/report import and Weekly Production generation complete in API mode.
 - Reporting/Sales and product support routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026, and read-only smoke checks passed.
 - Admin sync routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026; missing-key checks passed and authenticated read-only download returned 24 tables and 11,417 rows.
-- Labour Setup and Weekly Labour routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026. The live AWS RDS Labour schema was advanced to version 17 with the secure prompt-based `scripts/Apply-LabourSchemaMigration.ps1` helper.
+- Labour Setup and Labour Hours routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026. Daily Labour Cost, Tip Pool support fields, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Smoke checks confirmed `/labour/weeks` responds and `/labour/daily/{workDate}` returns tip-pool/uniform context. The live AWS RDS Labour schema was advanced to version 17 with the secure prompt-based `scripts/Apply-LabourSchemaMigration.ps1` helper.
+- Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
 
 Intentional remaining gaps:
 

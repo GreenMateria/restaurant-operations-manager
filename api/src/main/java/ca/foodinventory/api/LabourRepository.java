@@ -7,9 +7,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 class LabourRepository {
 
@@ -203,7 +207,9 @@ class LabourRepository {
                     SELECT
                         le.id AS employee_id, le.name AS employee_name,
                         le.position_id, le.hourly_wage, le.active AS employee_active,
-                        lp.name AS position_name, lp.labour_group, lp.sort_order
+                        le.tip_pool_eligible, le.uniform_deduction_applicable,
+                        lp.name AS position_name, lp.labour_group, lp.sort_order,
+                        lp.target_labour_percentage
                     FROM labour_employees le
                     LEFT JOIN labour_positions lp ON le.position_id = lp.id
                     WHERE le.active = 1
@@ -261,6 +267,36 @@ class LabourRepository {
                 + "}";
     }
 
+    String savedLabourWeeksJson() throws SQLException {
+        Set<LocalDate> weeks = new LinkedHashSet<>();
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT DISTINCT work_date
+                     FROM labour_daily_entries
+                     ORDER BY work_date DESC
+                     """);
+             ResultSet resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                weeks.add(LocalDate.parse(resultSet.getString("work_date"))
+                        .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
+            }
+        }
+
+        StringBuilder json = new StringBuilder("[");
+        boolean first = true;
+        for (LocalDate week : weeks) {
+            if (!first) {
+                json.append(',');
+            }
+            json.append(Json.object(
+                    "weekStartDate", week.toString(),
+                    "weekEndDate", week.plusDays(6).toString()
+            ));
+            first = false;
+        }
+        return json.append(']').toString();
+    }
+
     @SuppressWarnings("unchecked")
     void saveWeeklyLabour(Map<String, Object> body) throws SQLException {
         LocalDate weekStartDate = LocalDate.parse(requireString(body, "weekStartDate"));
@@ -306,6 +342,137 @@ class LabourRepository {
                     }
                 }
                 statement.executeBatch();
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        }
+    }
+
+    String dailyLabourJson(String workDateText) throws SQLException {
+        LocalDate workDate = LocalDate.parse(workDateText);
+        StringBuilder rows = new StringBuilder();
+        boolean[] first = {true};
+
+        try (Connection connection = PostgresConnectionProvider.getConnection()) {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT
+                        le.id AS employee_id, le.name AS employee_name,
+                        le.position_id, le.hourly_wage, le.active AS employee_active,
+                        le.tip_pool_eligible, le.uniform_deduction_applicable,
+                        lp.name AS position_name, lp.labour_group, lp.sort_order,
+                        lp.target_labour_percentage
+                    FROM labour_employees le
+                    LEFT JOIN labour_positions lp ON le.position_id = lp.id
+                    WHERE le.active = 1
+                    ORDER BY lp.sort_order, lp.name, le.name
+                    """);
+                 ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    appendRow(
+                            rows,
+                            first,
+                            hasDailyEntry(connection, resultSet.getInt("employee_id"), workDate)
+                                    ? historicalRowJson(connection, resultSet.getInt("employee_id"), workDate, workDate)
+                                    : currentRowJson(connection, resultSet, workDate, workDate)
+                    );
+                }
+            }
+
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT DISTINCT lde.employee_id
+                    FROM labour_daily_entries lde
+                    LEFT JOIN labour_employees le ON lde.employee_id = le.id
+                    WHERE lde.work_date = ?
+                      AND COALESCE(le.active, 0) <> 1
+                    ORDER BY lde.employee_id
+                    """)) {
+                statement.setString(1, workDate.toString());
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    while (resultSet.next()) {
+                        appendRow(
+                                rows,
+                                first,
+                                historicalRowJson(connection, resultSet.getInt("employee_id"), workDate, workDate)
+                        );
+                    }
+                }
+            }
+
+            return "{"
+                    + "\"workDate\":" + Json.nullableString(workDate.toString()) + ","
+                    + "\"sales\":" + dailySalesJson(connection, workDate) + ","
+                    + "\"rows\":[" + rows + "]"
+                    + "}";
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    void saveDailyLabour(Map<String, Object> body) throws SQLException {
+        LocalDate workDate = LocalDate.parse(requireString(body, "workDate"));
+        Object salesValue = body.get("sales");
+        if (!(salesValue instanceof Map<?, ?> sales)) {
+            throw new IllegalArgumentException("sales is required.");
+        }
+        Object rowsValue = body.get("rows");
+        if (!(rowsValue instanceof List<?> rows)) {
+            throw new IllegalArgumentException("rows is required.");
+        }
+
+        try (Connection connection = PostgresConnectionProvider.getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try (PreparedStatement salesStatement = connection.prepareStatement("""
+                    INSERT INTO labour_daily_sales (
+                        sales_date, net_sales, tip_out_pool, finalized
+                    )
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(sales_date)
+                    DO UPDATE SET
+                        net_sales = excluded.net_sales,
+                        tip_out_pool = excluded.tip_out_pool,
+                        finalized = excluded.finalized
+                    """);
+                 PreparedStatement entryStatement = connection.prepareStatement("""
+                    INSERT INTO labour_daily_entries (
+                        work_date, employee_id, position_id, hourly_wage,
+                        shift_1_hours, shift_2_hours, employee_name_snapshot,
+                        position_name_snapshot, labour_group_snapshot, finalized
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(work_date, employee_id)
+                    DO UPDATE SET
+                        position_id = excluded.position_id,
+                        hourly_wage = excluded.hourly_wage,
+                        shift_1_hours = excluded.shift_1_hours,
+                        shift_2_hours = excluded.shift_2_hours,
+                        employee_name_snapshot = excluded.employee_name_snapshot,
+                        position_name_snapshot = excluded.position_name_snapshot,
+                        labour_group_snapshot = excluded.labour_group_snapshot,
+                        finalized = excluded.finalized
+                    """)) {
+                applyDailySales(salesStatement, (Map<String, Object>) sales, workDate);
+                salesStatement.executeUpdate();
+
+                for (Object rowValue : rows) {
+                    if (!(rowValue instanceof Map<?, ?> row)) {
+                        continue;
+                    }
+                    Object entriesValue = ((Map<String, Object>) row).get("entries");
+                    if (!(entriesValue instanceof List<?> entries)) {
+                        continue;
+                    }
+                    for (Object entryValue : entries) {
+                        if (entryValue instanceof Map<?, ?> rawEntry) {
+                            applyDailyEntry(entryStatement, (Map<String, Object>) rawEntry, workDate);
+                            entryStatement.addBatch();
+                        }
+                    }
+                }
+                entryStatement.executeBatch();
                 connection.commit();
             } catch (SQLException | RuntimeException e) {
                 connection.rollback();
@@ -376,8 +543,11 @@ class LabourRepository {
                 resultSet.getString("position_name"),
                 resultSet.getString("labour_group"),
                 resultSet.getInt("sort_order"),
+                nullableDecimal(resultSet, "target_labour_percentage"),
                 wage == null ? BigDecimal.ZERO : wage,
                 resultSet.getInt("employee_active") == 1,
+                resultSet.getInt("tip_pool_eligible") == 1,
+                resultSet.getInt("uniform_deduction_applicable") == 1,
                 entriesJson(connection, employeeId, weekStartDate, weekEndDate)
         );
     }
@@ -404,6 +574,26 @@ class LabourRepository {
         }
     }
 
+    private boolean hasDailyEntry(
+            Connection connection,
+            int employeeId,
+            LocalDate workDate
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT 1
+                FROM labour_daily_entries
+                WHERE employee_id = ?
+                  AND work_date = ?
+                LIMIT 1
+                """)) {
+            statement.setInt(1, employeeId);
+            statement.setString(2, workDate.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
+    }
+
     private String historicalRowJson(
             Connection connection,
             int employeeId,
@@ -416,8 +606,11 @@ class LabourRepository {
                     lde.employee_name_snapshot, lde.position_name_snapshot,
                     lde.labour_group_snapshot,
                     le.name AS current_employee_name, le.active AS employee_active,
+                    le.tip_pool_eligible AS current_tip_pool_eligible,
+                    le.uniform_deduction_applicable AS current_uniform_deduction_applicable,
                     lp.name AS current_position_name, lp.labour_group AS current_labour_group,
-                    lp.sort_order AS current_sort_order
+                    lp.sort_order AS current_sort_order,
+                    lp.target_labour_percentage AS current_target_labour_percentage
                 FROM labour_daily_entries lde
                 LEFT JOIN labour_employees le ON lde.employee_id = le.id
                 LEFT JOIN labour_positions lp ON lde.position_id = lp.id
@@ -450,8 +643,11 @@ class LabourRepository {
                                 resultSet.getString("current_labour_group")
                         ),
                         resultSet.getInt("current_sort_order"),
+                        nullableDecimal(resultSet, "current_target_labour_percentage"),
                         wage == null ? BigDecimal.ZERO : wage,
                         resultSet.getInt("employee_active") == 1,
+                        resultSet.getInt("current_tip_pool_eligible") == 1,
+                        resultSet.getInt("current_uniform_deduction_applicable") == 1,
                         entriesJson(connection, employeeId, weekStartDate, weekEndDate)
                 );
             }
@@ -465,8 +661,11 @@ class LabourRepository {
             String positionName,
             String labourGroup,
             int positionSortOrder,
+            BigDecimal positionTargetLabourPercentage,
             BigDecimal hourlyWage,
             boolean activeEmployee,
+            boolean tipPoolEligible,
+            boolean uniformDeductionApplicable,
             String entriesJson
     ) {
         return "{"
@@ -476,8 +675,12 @@ class LabourRepository {
                 + "\"positionName\":" + Json.nullableString(positionName) + ","
                 + "\"labourGroup\":" + Json.nullableString(labourGroup) + ","
                 + "\"positionSortOrder\":" + positionSortOrder + ","
+                + "\"positionTargetLabourPercentage\":"
+                + (positionTargetLabourPercentage == null ? "null" : positionTargetLabourPercentage.toPlainString()) + ","
                 + "\"hourlyWage\":" + hourlyWage.toPlainString() + ","
                 + "\"activeEmployee\":" + activeEmployee + ","
+                + "\"tipPoolEligible\":" + tipPoolEligible + ","
+                + "\"uniformDeductionApplicable\":" + uniformDeductionApplicable + ","
                 + "\"entries\":[" + entriesJson + "]"
                 + "}";
     }
@@ -549,6 +752,58 @@ class LabourRepository {
                 + "}";
     }
 
+    private String dailySalesJson(Connection connection, LocalDate workDate) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT id, sales_date, net_sales, tip_out_pool, finalized
+                FROM labour_daily_sales
+                WHERE sales_date = ?
+                """)) {
+            statement.setString(1, workDate.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    BigDecimal netSales = resultSet.getBigDecimal("net_sales");
+                    BigDecimal tipOutPool = resultSet.getBigDecimal("tip_out_pool");
+                    return "{"
+                            + "\"id\":" + resultSet.getInt("id") + ","
+                            + "\"salesDate\":" + Json.nullableString(resultSet.getString("sales_date")) + ","
+                            + "\"netSales\":" + (netSales == null ? "0" : netSales.toPlainString()) + ","
+                            + "\"tipOutPool\":" + (tipOutPool == null ? "0" : tipOutPool.toPlainString()) + ","
+                            + "\"finalized\":" + (resultSet.getInt("finalized") == 1)
+                            + "}";
+                }
+            }
+        }
+
+        return "{"
+                + "\"id\":0,"
+                + "\"salesDate\":" + Json.nullableString(workDate.toString()) + ","
+                + "\"netSales\":0,"
+                + "\"tipOutPool\":0,"
+                + "\"finalized\":false"
+                + "}";
+    }
+
+    private void applyDailySales(
+            PreparedStatement statement,
+            Map<String, Object> sales,
+            LocalDate workDate
+    ) throws SQLException {
+        LocalDate salesDate = LocalDate.parse(requireString(sales, "salesDate"));
+        if (!workDate.equals(salesDate)) {
+            throw new IllegalArgumentException("Daily labour sales date must match workDate.");
+        }
+        BigDecimal netSales = decimalValue(sales.get("netSales"));
+        BigDecimal tipOutPool = decimalValue(sales.get("tipOutPool"));
+        if (netSales.compareTo(BigDecimal.ZERO) < 0 || tipOutPool.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Daily sales and tip pool cannot be negative.");
+        }
+
+        statement.setString(1, salesDate.toString());
+        statement.setBigDecimal(2, netSales);
+        statement.setBigDecimal(3, tipOutPool);
+        statement.setInt(4, booleanFalseValue(sales.get("finalized")) ? 1 : 0);
+    }
+
     private void applyWeeklyEntry(
             PreparedStatement statement,
             Map<String, Object> entry,
@@ -557,6 +812,46 @@ class LabourRepository {
         LocalDate workDate = LocalDate.parse(requireString(entry, "workDate"));
         if (workDate.isBefore(weekStartDate) || workDate.isAfter(weekStartDate.plusDays(6))) {
             throw new IllegalArgumentException("Weekly labour entry date is outside the selected week.");
+        }
+
+        int employeeId = intValue(entry.get("employeeId"));
+        int positionId = intValue(entry.get("positionId"));
+        if (employeeId <= 0) {
+            throw new IllegalArgumentException("employeeId is required.");
+        }
+        if (positionId <= 0) {
+            throw new IllegalArgumentException("positionId is required.");
+        }
+
+        BigDecimal wage = decimalValue(entry.get("hourlyWage"));
+        BigDecimal shift1 = decimalValue(entry.get("shift1Hours"));
+        BigDecimal shift2 = decimalValue(entry.get("shift2Hours"));
+        if (wage.compareTo(BigDecimal.ZERO) < 0
+                || shift1.compareTo(BigDecimal.ZERO) < 0
+                || shift2.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Wage and shift hours cannot be negative.");
+        }
+
+        statement.setString(1, workDate.toString());
+        statement.setInt(2, employeeId);
+        statement.setInt(3, positionId);
+        statement.setBigDecimal(4, wage);
+        statement.setBigDecimal(5, shift1);
+        statement.setBigDecimal(6, shift2);
+        statement.setString(7, requireString(entry, "employeeNameSnapshot"));
+        statement.setString(8, requireString(entry, "positionNameSnapshot"));
+        statement.setString(9, requireString(entry, "labourGroupSnapshot"));
+        statement.setInt(10, booleanFalseValue(entry.get("finalized")) ? 1 : 0);
+    }
+
+    private void applyDailyEntry(
+            PreparedStatement statement,
+            Map<String, Object> entry,
+            LocalDate expectedWorkDate
+    ) throws SQLException {
+        LocalDate workDate = LocalDate.parse(requireString(entry, "workDate"));
+        if (!expectedWorkDate.equals(workDate)) {
+            throw new IllegalArgumentException("Daily labour entry date must match workDate.");
         }
 
         int employeeId = intValue(entry.get("employeeId"));
@@ -662,6 +957,11 @@ class LabourRepository {
         }
         String text = value.toString();
         return text.isBlank() ? null : new BigDecimal(text);
+    }
+
+    private BigDecimal nullableDecimal(ResultSet resultSet, String column) throws SQLException {
+        BigDecimal value = resultSet.getBigDecimal(column);
+        return resultSet.wasNull() ? null : value;
     }
 
     private void setNullableDecimal(

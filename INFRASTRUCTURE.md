@@ -116,8 +116,9 @@ Imported into stack: Sunday, September 6, 2026
 Stack status after import/update: UPDATE_COMPLETE
 Verified retention after import/update: 30 days
 Drift status after import/update: IN_SYNC
-API health after later version deployment: 3.1.1
-Weekly Labour API routes deployed: Sunday, September 6, 2026
+API health after later version deployment: 3.1.2
+Labour API routes deployed: Sunday, September 6, 2026
+Labour API route updates for `/labour/weeks`, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support fields deployed: Monday, September 7, 2026
 ```
 
 ## Current Database
@@ -239,11 +240,12 @@ These are still manual or external today:
 
 ## Recommended Next IaC Steps
 
-Do these in order:
+Do these after the multi-location rollout model is designed, so IaC reflects the target operating shape instead of locking in the current single-location assumptions:
 
-1. Move API key and database password handling toward Secrets Manager or SSM SecureString.
-2. Add explicit dev/prod parameter examples.
+1. Define dev/test/prod and per-location environment boundaries.
+2. Move API key and database password handling toward Secrets Manager or SSM SecureString.
 3. Create a dedicated RDS security group and document the direct PostgreSQL fallback decision.
 4. Decide whether to import existing RDS/network resources into CloudFormation or document them as external dependencies.
+5. Add database backup/snapshot policy, cost alarms, API custom domain, DNS, certificate, and per-location/user authentication once rollout requirements are known.
 
 Avoid adding a second RDS instance, NAT Gateway, Multi-AZ RDS, or RDS Proxy until there is a clear reason and the budget impact is accepted.

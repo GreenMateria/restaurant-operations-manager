@@ -86,15 +86,11 @@ public class DatabaseManager {
     }
 
     public static String getActiveDatabaseModeLabel() {
-        if (isPostgresMode()) {
-            return "Cloud PostgreSQL";
-        }
-
         if (isApiMode()) {
-            return "Cloud API";
+            return "Shared Cloud API";
         }
 
-        return "Local SQLite";
+        return "Local SQLite Backup";
     }
 
     public static String getPreferredDatabaseModeLabel() {
@@ -102,9 +98,8 @@ public class DatabaseManager {
                 configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV)
         );
         return switch (preferredMode) {
-            case POSTGRES_MODE -> "Cloud PostgreSQL";
-            case API_MODE -> "Cloud API";
-            default -> "Local SQLite";
+            case API_MODE -> "Shared Cloud API";
+            default -> "Local SQLite Backup";
         };
     }
 
@@ -116,12 +111,6 @@ public class DatabaseManager {
         String normalizedMode = normalizeMode(mode);
         Properties properties = loadDatabaseProperties();
         properties.setProperty(CONFIG_MODE_KEY, normalizedMode);
-
-        if (POSTGRES_MODE.equals(normalizedMode)) {
-            copyConfiguredPostgresValue(properties, DB_URL_PROPERTY, DB_URL_ENV, CONFIG_URL_KEY);
-            copyConfiguredPostgresValue(properties, DB_USER_PROPERTY, DB_USER_ENV, CONFIG_USER_KEY);
-            copyConfiguredPostgresValue(properties, DB_PASSWORD_PROPERTY, DB_PASSWORD_ENV, CONFIG_PASSWORD_KEY);
-        }
 
         if (API_MODE.equals(normalizedMode)) {
             copyConfiguredValue(properties, API_URL_PROPERTY, API_URL_ENV, CONFIG_API_URL_KEY);
@@ -179,18 +168,6 @@ public class DatabaseManager {
         }
 
         try (Connection conn = getConnection()) {
-            if (isPostgresMode()) {
-                PostgresSchemaInitializer initializer = new PostgresSchemaInitializer();
-                if (canInitializePostgresSchema(conn)) {
-                    initializer.initialize(conn);
-                } else {
-                    initializer.validateRequiredSchema(conn);
-                }
-                System.out.println("PostgreSQL development database initialized successfully.");
-                System.out.println("Database URL: " + configuredValue(DB_URL_PROPERTY, DB_URL_ENV));
-                return;
-            }
-
             try (Statement stmt = conn.createStatement()) {
                 createBaseSchema(stmt);
 
@@ -452,7 +429,13 @@ public class DatabaseManager {
 
     private static String initializeActiveDatabaseMode() {
         applyReleaseDatabaseConfig();
-        return normalizeMode(configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV));
+        String configuredMode = normalizeMode(configuredValue(DB_MODE_PROPERTY, DB_MODE_ENV));
+        if (!API_MODE.equals(configuredMode) && hasConfiguredApiConnection()) {
+            setPreferredDatabaseMode(API_MODE);
+            return API_MODE;
+        }
+
+        return configuredMode;
     }
 
     private static String configuredValue(String propertyName, String envName) {
@@ -653,8 +636,11 @@ public class DatabaseManager {
         }
 
         String normalizedMode = mode.trim().toLowerCase();
-        if (POSTGRES_MODE.equals(normalizedMode)
-                || SQLITE_MODE.equals(normalizedMode)
+        if (POSTGRES_MODE.equals(normalizedMode)) {
+            return API_MODE;
+        }
+
+        if (SQLITE_MODE.equals(normalizedMode)
                 || API_MODE.equals(normalizedMode)) {
             return normalizedMode;
         }

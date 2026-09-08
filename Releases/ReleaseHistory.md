@@ -214,3 +214,8 @@ Date: 2026-09-05 15:31
 Date: 2026-09-07 10:46
 
 - Fixed Printing bug, added labour module work in progress
+
+## v3.1.3
+Date: 2026-09-08 18:44
+
+- Completed Alcohol Varience Reporting. Completed Labour Management.

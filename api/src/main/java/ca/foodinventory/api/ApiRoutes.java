@@ -862,6 +862,10 @@ class ApiRoutes {
         }
 
         try {
+            if ("GET".equalsIgnoreCase(method) && "/labour/weeks".equals(path)) {
+                return ApiResult.json(200, labourRepository.savedLabourWeeksJson());
+            }
+
             String weeklyStart = pathDate(path, "/labour/weekly/");
             if ("GET".equalsIgnoreCase(method) && weeklyStart != null) {
                 return ApiResult.json(200, labourRepository.weeklyLabourJson(weeklyStart));
@@ -869,6 +873,14 @@ class ApiRoutes {
             if ("PUT".equalsIgnoreCase(method) && "/labour/weekly".equals(path)) {
                 labourRepository.saveWeeklyLabour(parseBody(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Weekly labour saved."));
+            }
+            String dailyDate = pathDate(path, "/labour/daily/");
+            if ("GET".equalsIgnoreCase(method) && dailyDate != null) {
+                return ApiResult.json(200, labourRepository.dailyLabourJson(dailyDate));
+            }
+            if ("PUT".equalsIgnoreCase(method) && "/labour/daily".equals(path)) {
+                labourRepository.saveDailyLabour(parseBody(body));
+                return ApiResult.json(200, Json.object("status", "ok", "message", "Daily labour saved."));
             }
 
             if ("GET".equalsIgnoreCase(method) && "/labour/positions".equals(path)) {

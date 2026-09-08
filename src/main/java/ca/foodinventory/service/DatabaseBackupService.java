@@ -1,6 +1,7 @@
 package ca.foodinventory.service;
 
 import ca.foodinventory.database.DatabaseManager;
+import ca.foodinventory.database.DatabaseSyncService;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,9 +13,13 @@ import java.time.format.DateTimeFormatter;
 public class DatabaseBackupService {
 
     public File backupDatabase(File destinationFolder) throws IOException {
-        requireLocalDatabase();
+        if (DatabaseManager.isApiDatabase()) {
+            new DatabaseSyncService().downloadCloudToSqlite();
+        } else {
+            requireLocalDatabase();
+        }
 
-        File sourceDb = DatabaseManager.getDatabaseFile();
+        File sourceDb = DatabaseManager.getSqliteDatabaseFile();
 
         String timestamp =
                 LocalDateTime.now()
@@ -49,7 +54,7 @@ public class DatabaseBackupService {
     private void requireLocalDatabase() {
         if (!DatabaseManager.isLocalFileDatabase()) {
             throw new IllegalStateException(
-                    "Backup and restore currently support local SQLite mode only."
+                    "Restore is only available for the local SQLite backup snapshot."
             );
         }
     }

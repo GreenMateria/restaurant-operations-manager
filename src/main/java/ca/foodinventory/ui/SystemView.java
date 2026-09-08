@@ -2,8 +2,10 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.database.DatabaseSyncService;
+import ca.foodinventory.dao.SettingsDao;
 import ca.foodinventory.service.ApiHealthClient;
 import ca.foodinventory.service.DatabaseBackupService;
+import ca.foodinventory.service.GitHubUpdateService;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -22,23 +24,22 @@ public class SystemView {
             new DatabaseBackupService();
     private final DatabaseSyncService syncService =
             new DatabaseSyncService();
+    private final SettingsDao settingsDao = new SettingsDao();
     private final ApiHealthClient apiHealthClient =
             new ApiHealthClient();
+    private final UpdateDialogService updateDialogService =
+            new UpdateDialogService(new GitHubUpdateService());
     private final Label databaseModeLabel = new Label();
     private final Label preferredModeLabel = new Label();
     private final Label sqlitePathLabel = new Label();
-    private final Label cloudStatusLabel = new Label("Cloud Connection: Not checked");
     private final Label apiStatusLabel = new Label("API Connection: Not checked");
     private final Label syncStatusLabel = new Label();
     private Button backupButton;
     private Button restoreButton;
-    private Button uploadButton;
     private Button downloadButton;
-    private Button testCloudButton;
     private Button testApiButton;
-    private Button switchToSqliteButton;
-    private Button switchToCloudButton;
-    private Button switchToApiButton;
+    private Button changePasswordButton;
+    private Button checkUpdatesButton;
 
     public VBox getView() {
 
@@ -52,68 +53,41 @@ public class SystemView {
         databaseModeLabel.getStyleClass().add("section-title");
         preferredModeLabel.getStyleClass().add("section-title");
         sqlitePathLabel.getStyleClass().add("section-title");
-        cloudStatusLabel.getStyleClass().add("section-title");
         apiStatusLabel.getStyleClass().add("section-title");
         syncStatusLabel.getStyleClass().add("section-title");
 
-        backupButton = new Button("Database Backup");
+        backupButton = new Button("Create Backup File");
         backupButton.getStyleClass().add("dashboard-button");
 
-        restoreButton = new Button("Database Restore");
+        restoreButton = new Button("Restore Local SQLite Backup");
         restoreButton.getStyleClass().add("dashboard-button");
 
-        Button changePasswordButton = new Button("Change Password");
+        changePasswordButton = new Button("Change Password");
         changePasswordButton.getStyleClass().add("dashboard-button");
 
-        testCloudButton = new Button("Test Cloud Connection");
-        testCloudButton.getStyleClass().add("dashboard-button");
+        checkUpdatesButton = new Button("Check for Updates");
+        checkUpdatesButton.getStyleClass().add("dashboard-button");
 
         testApiButton = new Button("Test API Connection");
         testApiButton.getStyleClass().add("dashboard-button");
 
-        uploadButton = new Button("Upload This PC to Cloud");
-        uploadButton.getStyleClass().add("dashboard-button");
-
-        downloadButton = new Button("Download Cloud to This PC");
+        downloadButton = new Button("Download Cloud Snapshot");
         downloadButton.getStyleClass().add("dashboard-button");
-
-        switchToSqliteButton = new Button("Use SQLite Mode");
-        switchToSqliteButton.getStyleClass().add("dashboard-button");
-
-        switchToCloudButton = new Button("Use Cloud Mode");
-        switchToCloudButton.getStyleClass().add("dashboard-button");
-
-        switchToApiButton = new Button("Use API Mode");
-        switchToApiButton.getStyleClass().add("dashboard-button");
 
         backupButton.setOnAction(e -> backupDatabase());
 
         restoreButton.setOnAction(e -> restoreDatabase());
 
-        testCloudButton.setOnAction(e -> testCloudConnection());
-
         testApiButton.setOnAction(e -> testApiConnection());
-
-        uploadButton.setOnAction(e -> uploadToCloud());
 
         downloadButton.setOnAction(e -> downloadFromCloud());
 
-        switchToSqliteButton.setOnAction(e -> switchDatabaseMode("sqlite"));
+        changePasswordButton.setOnAction(e -> changePassword());
 
-        switchToCloudButton.setOnAction(e -> switchDatabaseMode("postgres"));
+        checkUpdatesButton.setOnAction(e -> checkForUpdates());
 
-        switchToApiButton.setOnAction(e -> switchDatabaseMode("api"));
-
-        changePasswordButton.setDisable(true);
-
-        HBox cloudButtons = new HBox(15, testCloudButton, uploadButton, downloadButton);
-        cloudButtons.setAlignment(Pos.CENTER);
-
-        HBox apiButtons = new HBox(15, testApiButton);
+        HBox apiButtons = new HBox(15, testApiButton, downloadButton);
         apiButtons.setAlignment(Pos.CENTER);
-
-        HBox modeButtons = new HBox(15, switchToSqliteButton, switchToCloudButton, switchToApiButton);
-        modeButtons.setAlignment(Pos.CENTER);
 
         refreshDatabaseInfo();
 
@@ -122,14 +96,12 @@ public class SystemView {
                 databaseModeLabel,
                 preferredModeLabel,
                 sqlitePathLabel,
-                cloudStatusLabel,
                 apiStatusLabel,
-                modeButtons,
                 backupButton,
                 restoreButton,
-                cloudButtons,
                 apiButtons,
                 syncStatusLabel,
+                checkUpdatesButton,
                 changePasswordButton
         );
 
@@ -256,18 +228,6 @@ public class SystemView {
         }
     }
 
-    private void testCloudConnection() {
-        runBackgroundAction(
-                "Testing cloud connection...",
-                "Cloud connection successful.",
-                "Cloud connection failed. Please contact the administrator.",
-                () -> {
-                    syncService.testCloudConnection();
-                    return null;
-                }
-        );
-    }
-
     private void testApiConnection() {
         runBackgroundAction(
                 "Testing API connection...",
@@ -280,28 +240,11 @@ public class SystemView {
         );
     }
 
-    private void uploadToCloud() {
-        if (!confirmTypedAction(
-                "Upload This PC to Cloud",
-                "This will replace the cloud database with this PC's local data.",
-                "UPLOAD TO CLOUD"
-        )) {
-            return;
-        }
-
-        runBackgroundAction(
-                "Migrating data...",
-                "Data migration complete.",
-                "Data migration failed. Please contact the administrator.",
-                () -> syncService.uploadSqliteToCloud()
-        );
-    }
-
     private void downloadFromCloud() {
         if (!confirmTypedAction(
-                "Download Cloud to This PC",
-                "This will replace this PC's local database with the cloud data.",
-                "DOWNLOAD FROM CLOUD"
+                "Download Cloud Snapshot",
+                "This will download the current cloud database into this PC's local SQLite backup file.",
+                "DOWNLOAD CLOUD SNAPSHOT"
         )) {
             return;
         }
@@ -312,60 +255,6 @@ public class SystemView {
                 "Data migration failed. Please contact the administrator.",
                 () -> syncService.downloadCloudToSqlite()
         );
-    }
-
-    private void switchDatabaseMode(String mode) {
-        boolean switchingToCloud = "postgres".equals(mode);
-        boolean switchingToApi = "api".equals(mode);
-
-        if (switchingToCloud && !DatabaseManager.hasConfiguredPostgresConnection()) {
-            showAlert(
-                    Alert.AlertType.ERROR,
-                    "Cloud Not Configured",
-                    "Cloud database settings are not configured."
-            );
-            return;
-        }
-
-        if (switchingToApi && !DatabaseManager.hasConfiguredApiConnection()) {
-            showAlert(
-                    Alert.AlertType.ERROR,
-                    "API Not Configured",
-                    "API settings are not configured."
-            );
-            return;
-        }
-
-        String targetLabel = switchingToCloud
-                ? "Cloud PostgreSQL"
-                : switchingToApi ? "Cloud API" : "Local SQLite";
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Switch Database Mode");
-        confirm.setHeaderText("Use " + targetLabel + " after restart?");
-        confirm.setContentText("The current session will keep using "
-                + DatabaseManager.getActiveDatabaseModeLabel()
-                + ". Restart the application after changing modes.");
-
-        if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
-            return;
-        }
-
-        try {
-            DatabaseManager.setPreferredDatabaseMode(mode);
-            refreshDatabaseInfo();
-            showAlert(
-                    Alert.AlertType.INFORMATION,
-                    "Database Mode Updated",
-                    "Database mode updated. Please restart the application."
-            );
-        } catch (RuntimeException ex) {
-            ex.printStackTrace();
-            showAlert(
-                    Alert.AlertType.ERROR,
-                    "Mode Switch Failed",
-                    ex.getMessage()
-            );
-        }
     }
 
     private boolean confirmTypedAction(
@@ -452,13 +341,10 @@ public class SystemView {
     private void setDatabaseButtonsDisabled(boolean disabled) {
         backupButton.setDisable(disabled);
         restoreButton.setDisable(disabled);
-        uploadButton.setDisable(disabled);
         downloadButton.setDisable(disabled);
-        testCloudButton.setDisable(disabled);
         testApiButton.setDisable(disabled);
-        switchToSqliteButton.setDisable(disabled);
-        switchToCloudButton.setDisable(disabled);
-        switchToApiButton.setDisable(disabled);
+        changePasswordButton.setDisable(disabled);
+        checkUpdatesButton.setDisable(disabled);
     }
 
     private void refreshDatabaseInfo() {
@@ -466,20 +352,67 @@ public class SystemView {
                 "Current Mode: " + DatabaseManager.getActiveDatabaseModeLabel()
         );
         preferredModeLabel.setText(
-                "Next Startup Mode: " + DatabaseManager.getPreferredDatabaseModeLabel()
+                "Startup Mode: " + DatabaseManager.getPreferredDatabaseModeLabel()
         );
         sqlitePathLabel.setText(
-                "Local Database: " + DatabaseManager.getSqliteDatabaseFile().getAbsolutePath()
-        );
-        cloudStatusLabel.setText(
-                DatabaseManager.hasConfiguredPostgresConnection()
-                        ? "Cloud Connection: Configured"
-                        : "Cloud Connection: Not configured"
+                "Local Backup Snapshot: " + DatabaseManager.getSqliteDatabaseFile().getAbsolutePath()
         );
         apiStatusLabel.setText(
                 DatabaseManager.hasConfiguredApiConnection()
                         ? "API Connection: Configured"
                         : "API Connection: Not configured"
+        );
+    }
+
+    private void changePassword() {
+        PasswordField newPasswordField = new PasswordField();
+        PasswordField confirmPasswordField = new PasswordField();
+
+        VBox fields = new VBox(
+                10,
+                new Label("New Password"),
+                newPasswordField,
+                new Label("Confirm Password"),
+                confirmPasswordField
+        );
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Change Password");
+        dialog.setHeaderText("Set a new administrator password for this PC.");
+        dialog.getDialogPane().setContent(fields);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        Optional<ButtonType> result = dialog.showAndWait();
+        if (result.orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+
+        String newPassword = newPasswordField.getText();
+        if (newPassword == null || newPassword.isBlank()) {
+            showAlert(Alert.AlertType.WARNING, "Invalid Password", "Password cannot be blank.");
+            return;
+        }
+
+        if (!newPassword.equals(confirmPasswordField.getText())) {
+            showAlert(Alert.AlertType.WARNING, "Invalid Password", "Passwords do not match.");
+            return;
+        }
+
+        try {
+            settingsDao.setPassword(newPassword);
+            showAlert(Alert.AlertType.INFORMATION, "Password Updated", "Administrator password updated.");
+        } catch (RuntimeException ex) {
+            showAlert(Alert.AlertType.ERROR, "Password Update Failed", ex.getMessage());
+        }
+    }
+
+    private void checkForUpdates() {
+        updateDialogService.checkForUpdates(
+                checkUpdatesButton.getScene() == null
+                        ? null
+                        : checkUpdatesButton.getScene().getWindow(),
+                true,
+                true
         );
     }
 

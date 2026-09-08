@@ -1,7 +1,9 @@
 package ca.foodinventory.service;
 
 import ca.foodinventory.database.DatabaseManager;
+import ca.foodinventory.model.DailyLabourData;
 import ca.foodinventory.model.LabourDailyEntry;
+import ca.foodinventory.model.LabourDailySales;
 import ca.foodinventory.model.LabourEmployee;
 import ca.foodinventory.model.LabourPosition;
 import ca.foodinventory.model.LabourSettings;
@@ -96,11 +98,38 @@ public class LabourApiClient {
         return parseWeeklyLabour(object);
     }
 
+    public List<LocalDate> findSavedLabourWeeks() {
+        List<LocalDate> weeks = new ArrayList<>();
+        for (Map<String, Object> object : parseArray(get("/labour/weeks", "load saved labour weeks"))) {
+            String weekStartDate = stringValue(object.get("weekStartDate"));
+            if (weekStartDate != null && !weekStartDate.isBlank()) {
+                weeks.add(LocalDate.parse(weekStartDate));
+            }
+        }
+        return weeks;
+    }
+
+    public DailyLabourData loadDailyLabour(LocalDate workDate) {
+        Map<String, Object> object = parseObject(get(
+                "/labour/daily/" + workDate,
+                "load daily labour"
+        ));
+        return parseDailyLabour(object);
+    }
+
     public void saveWeeklyLabour(WeeklyLabourData weeklyLabourData) {
         put(
                 "/labour/weekly",
                 weeklyLabourJson(weeklyLabourData),
                 "save weekly labour"
+        );
+    }
+
+    public void saveDailyLabour(DailyLabourData dailyLabourData) {
+        put(
+                "/labour/daily",
+                dailyLabourJson(dailyLabourData),
+                "save daily labour"
         );
     }
 
@@ -253,8 +282,11 @@ public class LabourApiClient {
         row.setPositionName(stringValue(object.get("positionName")));
         row.setLabourGroup(stringValue(object.get("labourGroup")));
         row.setPositionSortOrder(intValue(object.get("positionSortOrder")));
+        row.setPositionTargetLabourPercentage(nullableMoneyValue(object.get("positionTargetLabourPercentage")));
         row.setHourlyWage(moneyValue(object.get("hourlyWage")));
         row.setActiveEmployee(booleanValue(object.get("activeEmployee")));
+        row.setTipPoolEligible(booleanValue(object.get("tipPoolEligible")));
+        row.setUniformDeductionApplicable(booleanValue(object.get("uniformDeductionApplicable")));
 
         Object entriesValue = object.get("entries");
         if (entriesValue instanceof List<?> entryObjects) {
@@ -266,6 +298,42 @@ public class LabourApiClient {
             }
         }
         return row;
+    }
+
+    @SuppressWarnings("unchecked")
+    private DailyLabourData parseDailyLabour(Map<String, Object> object) {
+        LocalDate workDate = LocalDate.parse(stringValue(object.get("workDate")));
+        LabourDailySales sales = parseDailySales((Map<String, Object>) object.get("sales"));
+        List<WeeklyLabourRow> rows = new ArrayList<>();
+        Object rowsValue = object.get("rows");
+        if (rowsValue instanceof List<?> rowObjects) {
+            for (Object rowValue : rowObjects) {
+                if (rowValue instanceof Map<?, ?> rawRow) {
+                    rows.add(parseWeeklyRow((Map<String, Object>) rawRow));
+                }
+            }
+        }
+        rows.sort(Comparator
+                .comparingInt(WeeklyLabourRow::getPositionSortOrder)
+                .thenComparing(row -> nullSafe(row.getPositionName()))
+                .thenComparing(row -> nullSafe(row.getEmployeeName())));
+        return new DailyLabourData(workDate, sales, rows);
+    }
+
+    private LabourDailySales parseDailySales(Map<String, Object> object) {
+        LabourDailySales sales = new LabourDailySales();
+        if (object == null) {
+            return sales;
+        }
+        sales.setId(intValue(object.get("id")));
+        String salesDate = stringValue(object.get("salesDate"));
+        if (salesDate != null && !salesDate.isBlank()) {
+            sales.setSalesDate(LocalDate.parse(salesDate));
+        }
+        sales.setNetSales(moneyValue(object.get("netSales")));
+        sales.setTipOutPool(moneyValue(object.get("tipOutPool")));
+        sales.setFinalized(booleanValue(object.get("finalized")));
+        return sales;
     }
 
     private LabourDailyEntry parseDailyEntry(Map<String, Object> object) {
@@ -337,8 +405,12 @@ public class LabourApiClient {
                 .append("\"positionName\":").append(jsonString(row.getPositionName())).append(',')
                 .append("\"labourGroup\":").append(jsonString(row.getLabourGroup())).append(',')
                 .append("\"positionSortOrder\":").append(row.getPositionSortOrder()).append(',')
+                .append("\"positionTargetLabourPercentage\":")
+                .append(nullableMoney(row.getPositionTargetLabourPercentage())).append(',')
                 .append("\"hourlyWage\":").append(money(row.getHourlyWage())).append(',')
                 .append("\"activeEmployee\":").append(row.isActiveEmployee()).append(',')
+                .append("\"tipPoolEligible\":").append(row.isTipPoolEligible()).append(',')
+                .append("\"uniformDeductionApplicable\":").append(row.isUniformDeductionApplicable()).append(',')
                 .append("\"entries\":[");
 
         boolean firstEntry = true;
@@ -351,6 +423,39 @@ public class LabourApiClient {
         }
 
         return json.append("]}").toString();
+    }
+
+    private String dailyLabourJson(DailyLabourData data) {
+        StringBuilder json = new StringBuilder();
+        json.append('{')
+                .append("\"workDate\":")
+                .append(jsonString(data.workDate().toString()))
+                .append(",\"sales\":")
+                .append(dailySalesJson(data.sales(), data.workDate()))
+                .append(",\"rows\":[");
+
+        boolean firstRow = true;
+        for (WeeklyLabourRow row : data.rows()) {
+            if (!firstRow) {
+                json.append(',');
+            }
+            json.append(weeklyRowJson(row));
+            firstRow = false;
+        }
+
+        return json.append("]}").toString();
+    }
+
+    private String dailySalesJson(LabourDailySales sales, LocalDate workDate) {
+        LabourDailySales value = sales == null ? new LabourDailySales() : sales;
+        LocalDate salesDate = value.getSalesDate() == null ? workDate : value.getSalesDate();
+        return "{"
+                + "\"id\":" + value.getId() + ","
+                + "\"salesDate\":" + jsonString(salesDate.toString()) + ","
+                + "\"netSales\":" + money(value.getNetSales()) + ","
+                + "\"tipOutPool\":" + money(value.getTipOutPool()) + ","
+                + "\"finalized\":" + value.isFinalized()
+                + "}";
     }
 
     private String dailyEntryJson(LabourDailyEntry entry) {

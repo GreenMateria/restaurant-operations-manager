@@ -1,7 +1,7 @@
 # CLOUD DATABASE PLAN
 
 _Created: Saturday, August 1, 2026_
-_Last Updated: Sunday, September 6, 2026_
+_Last Updated: Tuesday, September 8, 2026_
 
 This document records the completed cloud database transition for ESM Operations Manager.
 
@@ -21,16 +21,16 @@ Each PC connects outbound to the cloud database. The office PC does not need to 
 
 ## Current State
 
-As of Sunday, August 30, 2026, the active cloud database target for configured work PCs is AWS RDS PostgreSQL:
+As of Monday, September 7, 2026, the active cloud database target for configured work PCs is AWS RDS PostgreSQL behind the Cloud API:
 
 ```text
 Normal work PCs -> Cloud API mode -> AWS RDS PostgreSQL postgres database
-Fresh installs  -> local SQLite until cloud mode is configured
+SQLite         -> local cloud snapshot, backup/recovery file, and development fallback
 ```
 
 The previous Aiven PostgreSQL cloud database was dumped and restored into AWS RDS PostgreSQL. Development and installed-app connection tests succeeded, data loaded correctly, and AWS RDS performed faster in the tested workflows. The AWS RDS database is now treated as the accurate master data source for normal daily use.
 
-The mode can still be changed from the password-protected System module. The selected mode is stored in `%LOCALAPPDATA%\FoodInventory\database.properties` and takes effect after application restart. Fresh installs seed this config file from bundled defaults when it does not already exist.
+Direct desktop Cloud PostgreSQL mode has been retired from normal app use. The password-protected System module no longer exposes direct PostgreSQL mode switching or upload-this-PC-to-cloud controls. Fresh installs seed `%LOCALAPPDATA%\FoodInventory\database.properties` from bundled defaults when it does not already exist, and configured release desktops should use API mode for daily operation.
 
 An API layer proof now exists for the next credential-protection step:
 
@@ -38,9 +38,9 @@ An API layer proof now exists for the next credential-protection step:
 Desktop app -> API Gateway HTTP API -> AWS Lambda -> AWS RDS PostgreSQL
 ```
 
-The API stack is deployed as `esm-operations-api` in `ca-central-1`. As of the current development build after v3.1.1, the desktop app can use API mode for normal Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Weekly Labour, GFS product guide import persistence, product purchase history, and administrative upload/download sync workflows. Current work PCs should use Cloud API mode for daily operation, while direct Cloud PostgreSQL mode remains available as an administrator fallback.
+The API stack is deployed as `esm-operations-api` in `ca-central-1`. As of the current development build after v3.1.1, the desktop app can use API mode for normal Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot workflows. Current work PCs should use Cloud API mode for daily operation.
 
-The safe default for a fresh install remains local SQLite:
+The local SQLite file is retained as the backup/snapshot target:
 
 ```text
 %LOCALAPPDATA%\FoodInventory\food_inventory.db
@@ -62,7 +62,7 @@ PC 2 app  -> Cloud API -> AWS RDS PostgreSQL
 PC 3 app /
 ```
 
-When the app is running in Cloud API mode, normal reads and saves go through the API to the shared cloud database. Direct Cloud PostgreSQL mode is still available as an administrator fallback. Multiple PCs can be connected at the same time. The application does not currently provide live screen refresh or edit-conflict warnings, so users should reopen or refresh a screen to see another user's recent changes and should avoid editing the same record at the same time.
+When the app is running in Cloud API mode, normal reads and saves go through the API to the shared cloud database. Multiple PCs can be connected at the same time. The application does not currently provide live screen refresh or edit-conflict warnings, so users should reopen or refresh a screen to see another user's recent changes and should avoid editing the same record at the same time.
 
 Cloud connectivity status:
 
@@ -71,7 +71,9 @@ Cloud connectivity status:
 - AWS RDS schema/table restoration was verified, including 24 public tables and key application table counts.
 - The development app and installed app loaded data successfully from AWS RDS PostgreSQL.
 - Normal app access now uses a lower-access AWS RDS `operations_app` database user.
-- Labour Management schema version 17 was applied to AWS RDS on Sunday, September 6, 2026 after deploying the Weekly Labour API routes.
+- Labour Management schema version 17 was applied to AWS RDS on Sunday, September 6, 2026 after deploying the initial Labour Hours API routes.
+- Daily Labour Cost, Tip Pool support fields, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026.
+- Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
 - `scripts/Apply-LabourSchemaMigration.ps1` is available for the Labour schema setup path and prompts securely for the RDS admin password.
 - Java connection test succeeded on Sunday, August 2, 2026.
 - Connected to Aiven PostgreSQL `defaultdb` using SSL.
@@ -153,17 +155,17 @@ Aiven was used for the initial cloud rollout and remains a temporary fallback co
 
 ## Important Implementation Rule
 
-SQLite remains the default startup mode for fresh installs and fallback use.
+SQLite remains the local backup/snapshot and development fallback path.
 
 The v3.0.1 release includes completed cloud support for the current internal rollout:
 
 ```text
 Normal work PCs -> Cloud API mode
-Fresh installs  -> local SQLite default until configured
-Administrator   -> System-menu mode switch and upload/download tools
+SQLite snapshot -> backup/recovery file and cloud download target
+Administrator   -> System-menu API connection test, backup, restore, and cloud snapshot download
 ```
 
-Cloud API mode is the normal operating mode on the current work PCs. Do not use Upload This PC to Cloud during normal daily operation; it is an administrative replacement/migration tool that overwrites the cloud database with one PC's local SQLite data.
+Cloud API mode is the normal operating mode on the current work PCs. The old Upload This PC to Cloud workflow has been removed from normal desktop use.
 
 ## Current Cloud Database
 
@@ -379,7 +381,7 @@ The upload tool:
 - Rolls back the full upload if any table fails.
 - Requires `FOOD_INVENTORY_UPLOAD_CONFIRM=UPLOAD_TO_POSTGRES`.
 
-The password-protected System module now includes a simple Database Sync interface:
+Historical v3.0.1 direct PostgreSQL rollout used a password-protected Database Sync interface:
 
 - Test Cloud Connection
 - Upload This PC to Cloud
@@ -393,17 +395,17 @@ The visible user flow stays simple:
 - `Data migration complete.`
 - `Data migration failed. Please contact the administrator.`
 
-Upload replaces the configured cloud PostgreSQL database with this PC's local SQLite data. Download backs up the local SQLite database first, then replaces this PC's local SQLite data with configured cloud PostgreSQL data. The download completion message tells the user to restart the application.
+In that retired direct-sync workflow, upload replaced the configured cloud PostgreSQL database with this PC's local SQLite data. Current release desktops should use Cloud API mode and cloud snapshot download instead.
 
-Mode switching writes the selected next-startup mode to:
+The retired direct mode-switching workflow wrote the selected next-startup mode to:
 
 ```text
 %LOCALAPPDATA%\FoodInventory\database.properties
 ```
 
-The running session keeps using its startup database mode. Restart the application after changing modes.
+Current release desktops should not use direct PostgreSQL mode switching for normal work.
 
-Fresh installs create this file automatically from the bundled default config if it does not already exist. The bundled default starts in SQLite mode and intentionally leaves cloud connection credentials blank.
+Fresh installs create this file automatically from the bundled default config if it does not already exist. The bundled default starts in API mode and intentionally leaves API credentials blank unless release packaging supplies ignored release-only settings.
 
 Local IntelliJ run configuration:
 
@@ -428,15 +430,15 @@ UPLOAD_TO_POSTGRES
 
 - Add local backup/export behavior for cloud download. Done.
 - Cloud-to-local download backs up the local SQLite database first. Done.
-- Regular Database Backup and Restore are intentionally blocked while cloud mode is active.
+- In API mode, regular Backup downloads a fresh cloud snapshot before copying the local SQLite backup file. Restore remains a local SQLite emergency recovery action.
 - Showing last backup status in the System screen remains optional future polish.
 
 ### Phase 6: Release Decision
 
-- v3.0.1 is the cloud-complete release candidate planned for release on Sunday, August 9, 2026.
-- Release installer starts in SQLite mode by default.
+- v3.0.1 was the direct cloud database release candidate planned for release on Sunday, August 9, 2026.
+- Current release installers should start in API mode when release API settings are packaged.
 - Database details are hidden from normal workflows.
-- Cloud controls live behind the existing password-protected System module.
+- Current cloud backup and API diagnostic controls live behind the existing password-protected System module.
 - Current work PCs should run in Cloud API mode for daily shared-data use, with AWS RDS PostgreSQL behind the API.
 
 ### Phase 7: AWS RDS Cutover
@@ -480,4 +482,4 @@ A more secure long-term architecture is:
 Desktop app -> application backend/API -> PostgreSQL
 ```
 
-The first version of this architecture has been deployed with API Gateway HTTP API and AWS Lambda. API mode now covers Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, GFS product guide import persistence, product purchase history, and administrative upload/download sync workflows, while direct PostgreSQL mode remains available as a fallback until API mode is proven through normal daily use.
+The first version of this architecture has been deployed with API Gateway HTTP API and AWS Lambda. API mode now covers Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot workflows. Direct desktop PostgreSQL mode has been retired from normal client use.

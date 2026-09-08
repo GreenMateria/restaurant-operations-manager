@@ -1,19 +1,67 @@
 # Release History
 
-## Unreleased Development After v3.1.1
+## v3.1.3
 
-Date: 2026-09-06
+Date: 2026-09-08
+
+### Labour Management
+
+- Completed Labour Management manager workflow polish on Tuesday, September 8, 2026.
+- Updated Labour Hours department headers to use a clearer styled band in the pop-out entry window.
+- Fixed the Labour Hours pop-out window so it loads the shared application stylesheet.
+- Updated Tip Pool Breakdown net payout amounts to round to the nearest nickel for Canadian cash payout handling.
+- Added Tip Pool Breakdown printing with a compact black-and-white employee payout report and totals row.
+- Labour Management is accepted as working as intended for the v3.1.3 development build.
+
+### Update System
+
+- Added SHA-256 checksum generation to release packaging.
+- GitHub Releases now receive the Windows installer and matching `.sha256` checksum asset.
+- In-app update downloads now verify the installer against the published SHA-256 checksum before offering to launch it when a checksum asset is available.
+- Added a manual Check for Updates action to the System screen.
+- Added a release-script guard for the stable Windows upgrade UUID so future installers keep upgrading the existing installed app entry.
+
+### Alcohol Variance
+
+- Connected Alcohol Variance Report generation to completed alcohol counts, period purchase usage, imported POS usage, and active Alcohol Sales Mappings.
+- Added category filtering and actual-vs-sold variance rows for the v3.1.3 development build.
+- Converted Sales Mapping ounce/mL portions into inventory-equivalent usage for bottle and keg alcohol products before variance is calculated.
+- Added red/green color coding for variance quantity and variance-dollar values.
+- Alcohol Variance Report is accepted as complete for the v3.1.3 development build.
+
+## v3.1.2
+
+Date: 2026-09-07
+
+### API Mode / Administration
+
+- Retired direct desktop Cloud PostgreSQL mode from normal app use.
+- Changed bundled defaults so new local configs start in API mode.
+- Existing `mode=postgres` desktop configs now normalize to API mode on startup.
+- Removed direct cloud mode switching, direct cloud connection testing, and upload-this-PC-to-cloud controls from the System screen.
+- Kept SQLite as a local cloud-snapshot/backup target rather than a normal daily operating mode.
+- Updated backup behavior in API mode so creating a backup downloads a fresh cloud snapshot before copying the local SQLite backup file.
+- Moved the System administrator password to local salted PBKDF2 hash storage in `%LOCALAPPDATA%\FoodInventory\database.properties`.
+- Added legacy plain-text password migration after successful login.
+- Added the local `scripts/Reset-AdminPassword.ps1` password recovery helper.
+- Enabled Change Password from the System screen.
 
 ### Labour Management
 
 - Added Labour Management Phase 1 and Phase 2 in the development build.
 - Added administrator-protected Labour Setup for configurable positions, employees, hourly wages, tip-pool eligibility, uniform-deduction applicability, active/inactive state, target labour percentages, and default uniform deduction settings.
-- Added Weekly Labour Entry with a compact spreadsheet-style Monday-Sunday grid and separate Shift 1 / Shift 2 employee-hour fields.
-- Added employee, position, labour group, and hourly wage snapshots to daily labour entries so historical Weekly Labour does not recalculate from later setup changes.
+- Added Labour Hours with an inventory-count-style saved-week list and a separate pop-out spreadsheet-style Monday-Sunday Shift 1 / Shift 2 employee-hour entry window.
+- Removed employee number, hourly rate, total pay, restaurant header, position total rows, and bottom labour total rows from the Labour Hours entry grid.
+- Added Daily Labour Cost as a weekly start/end date range screen with editable daily net sales, BOH labour dollars/percentages, FOH labour dollars/percentages, total labour percentage, and a total row.
+- Added Tip Pool with editable daily tip-out pool amounts, tip-pool eligible employee hours, calculated employee daily tip allocations, and weekly totals.
+- Added Tip Pool Breakdown with start/end date selection, gross tip allocation, configured per-worked-day uniform deductions for applicable employees, and net payout totals.
+- Added `/labour/weeks` for Labour Hours saved-week listing.
+- Added Daily Labour API routes `GET /labour/daily/{workDate}` and `PUT /labour/daily`.
+- Added employee, position, labour group, hourly wage, tip-pool eligibility, and uniform-deduction context to daily labour rows so historical Labour Management views stay aligned with setup.
 - Added schema migrations 16 and 17 for Labour Management tables and daily labour snapshot columns.
-- Added and deployed Labour API routes for setup and Weekly Labour bulk load/save.
+- Added and deployed initial Labour API routes for setup and Labour Hours bulk load/save.
 - Added `scripts/Apply-LabourSchemaMigration.ps1` to apply the Labour schema to AWS RDS through a schema-capable admin user without storing the admin password.
-- Tightened Weekly Labour grid spacing after live testing to reduce horizontal scrolling while preserving the Excel-style workflow.
+- Deployed Labour API updates for Daily Labour Cost, Tip Pool, Tip Pool Breakdown support fields, and Labour Hours saved-week listing on Monday, September 7, 2026.
 
 ### Printing
 
