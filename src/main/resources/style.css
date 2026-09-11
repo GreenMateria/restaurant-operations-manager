@@ -160,6 +160,14 @@
     -fx-background-color: #1e1e1e;
 }
 
+.weekly-labour-frozen-scroll,
+.weekly-labour-body-scroll,
+.weekly-labour-frozen-scroll > .viewport,
+.weekly-labour-body-scroll > .viewport {
+    -fx-background-color: #1e1e1e;
+    -fx-background: #1e1e1e;
+}
+
 .weekly-labour-header {
     -fx-background-color: #303030;
     -fx-text-fill: white;

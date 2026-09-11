@@ -10,7 +10,7 @@ import java.util.Map;
 
 class ProductRepository {
 
-    String findActiveProductsJson() throws SQLException {
+    String findActiveProductsJson(int locationId) throws SQLException {
         String sql = """
                 SELECT
                     p.id,
@@ -36,30 +36,34 @@ class ProductRepository {
                 LEFT JOIN alcohol_product_profiles ap
                     ON ap.product_id = p.id
                     AND ap.active = 1
-                WHERE p.active = 1
+                    AND ap.location_id = p.location_id
+                WHERE p.location_id = ?
+                  AND p.active = 1
                 ORDER BY p.category, p.description
                 """;
 
-        try (PreparedStatement statement = prepareStatement(sql);
-             ResultSet resultSet = statement.executeQuery()) {
+        try (PreparedStatement statement = prepareStatement(sql)) {
+            statement.setInt(1, locationId);
 
-            StringBuilder json = new StringBuilder("[");
-            boolean first = true;
+            try (ResultSet resultSet = statement.executeQuery()) {
+                StringBuilder json = new StringBuilder("[");
+                boolean first = true;
 
-            while (resultSet.next()) {
-                if (!first) {
-                    json.append(',');
+                while (resultSet.next()) {
+                    if (!first) {
+                        json.append(',');
+                    }
+
+                    json.append(productJson(resultSet));
+                    first = false;
                 }
 
-                json.append(productJson(resultSet));
-                first = false;
+                return json.append(']').toString();
             }
-
-            return json.append(']').toString();
         }
     }
 
-    void save(Map<String, Object> body) throws SQLException {
+    void save(int locationId, Map<String, Object> body) throws SQLException {
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
@@ -67,10 +71,10 @@ class ProductRepository {
             try {
                 int id = intValue(body.get("id"));
                 int productId = id > 0
-                        ? updateProduct(connection, id, body)
-                        : insertProduct(connection, body);
+                        ? updateProduct(connection, locationId, id, body)
+                        : insertProduct(connection, locationId, body);
 
-                saveOrDeactivateAlcoholProfile(connection, productId, body);
+                saveOrDeactivateAlcoholProfile(connection, locationId, productId, body);
                 connection.commit();
             } catch (SQLException | RuntimeException e) {
                 connection.rollback();
@@ -81,16 +85,18 @@ class ProductRepository {
         }
     }
 
-    boolean deactivate(int productId) throws SQLException {
+    boolean deactivate(int locationId, int productId) throws SQLException {
         String sql = """
                 UPDATE products
                 SET active = 0
                 WHERE id = ?
+                  AND location_id = ?
                 """;
         String profileSql = """
                 UPDATE alcohol_product_profiles
                 SET active = 0
                 WHERE product_id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
@@ -100,9 +106,11 @@ class ProductRepository {
             try (PreparedStatement productStatement = connection.prepareStatement(sql);
                  PreparedStatement profileStatement = connection.prepareStatement(profileSql)) {
                 productStatement.setInt(1, productId);
+                productStatement.setInt(2, locationId);
                 boolean deactivated = productStatement.executeUpdate() > 0;
 
                 profileStatement.setInt(1, productId);
+                profileStatement.setInt(2, locationId);
                 profileStatement.executeUpdate();
                 connection.commit();
                 return deactivated;
@@ -115,7 +123,7 @@ class ProductRepository {
         }
     }
 
-    String findPurchaseHistoryJson(int productId) throws SQLException {
+    String findPurchaseHistoryJson(int locationId, int productId) throws SQLException {
         String sql = """
                 SELECT i.invoice_date,
                        i.invoice_number,
@@ -125,12 +133,16 @@ class ProductRepository {
                 FROM invoice_lines il
                 JOIN invoices i ON il.invoice_id = i.id
                 WHERE il.product_id = ?
+                  AND il.location_id = ?
+                  AND i.location_id = ?
                 ORDER BY i.invoice_date DESC, i.id DESC
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, productId);
+            statement.setInt(2, locationId);
+            statement.setInt(3, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 StringBuilder json = new StringBuilder("[");
@@ -155,7 +167,7 @@ class ProductRepository {
         }
     }
 
-    int upsertImportedProducts(List<Map<String, Object>> products) throws SQLException {
+    int upsertImportedProducts(int locationId, List<Map<String, Object>> products) throws SQLException {
         if (products == null || products.isEmpty()) {
             return 0;
         }
@@ -171,10 +183,11 @@ class ProductRepository {
                     pack_size,
                     pack_count,
                     last_case_cost,
+                    location_id,
                     active
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                ON CONFLICT(sku) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                ON CONFLICT(location_id, sku) DO UPDATE SET
                     description = excluded.description,
                     category = excluded.category,
                     reporting_category = excluded.reporting_category,
@@ -199,6 +212,7 @@ class ProductRepository {
                 statement.setString(7, stringValue(product.get("packSize")));
                 statement.setString(8, stringValue(product.get("packCount")));
                 statement.setString(9, stringValue(product.get("lastCaseCost")));
+                statement.setInt(10, locationId);
                 statement.addBatch();
                 count++;
             }
@@ -208,7 +222,7 @@ class ProductRepository {
         }
     }
 
-    private int insertProduct(Connection connection, Map<String, Object> body) throws SQLException {
+    private int insertProduct(Connection connection, int locationId, Map<String, Object> body) throws SQLException {
         String sql = """
                 INSERT INTO products (
                     sku,
@@ -220,9 +234,10 @@ class ProductRepository {
                     pack_size,
                     pack_count,
                     last_case_cost,
+                    location_id,
                     active
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(
@@ -230,6 +245,7 @@ class ProductRepository {
                 Statement.RETURN_GENERATED_KEYS
         )) {
             bindProductFields(statement, body);
+            statement.setInt(10, locationId);
             statement.executeUpdate();
 
             try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -243,6 +259,7 @@ class ProductRepository {
 
     private int updateProduct(
             Connection connection,
+            int locationId,
             int productId,
             Map<String, Object> body
     ) throws SQLException {
@@ -259,47 +276,54 @@ class ProductRepository {
                     last_case_cost = ?,
                     active = ?
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             bindProductFields(statement, body);
             statement.setInt(10, booleanValue(body.get("active")) ? 1 : 0);
             statement.setInt(11, productId);
-            statement.executeUpdate();
+            statement.setInt(12, locationId);
+            if (statement.executeUpdate() == 0) {
+                throw new IllegalArgumentException("Product was not found for this location.");
+            }
             return productId;
         }
     }
 
     private void saveOrDeactivateAlcoholProfile(
             Connection connection,
+            int locationId,
             int productId,
             Map<String, Object> body
     ) throws SQLException {
         if (!explicitBoolean(body.get("alcoholProduct"))) {
-            deactivateAlcoholProfile(connection, productId);
+            deactivateAlcoholProfile(connection, locationId, productId);
             return;
         }
 
-        Integer existingProfileId = findActiveAlcoholProfileId(connection, productId);
+        Integer existingProfileId = findActiveAlcoholProfileId(connection, locationId, productId);
         if (existingProfileId == null) {
-            insertAlcoholProfile(connection, productId, body);
+            insertAlcoholProfile(connection, locationId, productId, body);
         } else {
-            updateAlcoholProfile(connection, existingProfileId, body);
+            updateAlcoholProfile(connection, locationId, existingProfileId, body);
         }
     }
 
-    private Integer findActiveAlcoholProfileId(Connection connection, int productId)
+    private Integer findActiveAlcoholProfileId(Connection connection, int locationId, int productId)
             throws SQLException {
         String sql = """
                 SELECT id
                 FROM alcohol_product_profiles
                 WHERE product_id = ?
+                  AND location_id = ?
                   AND active = 1
                 LIMIT 1
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, productId);
+            statement.setInt(2, locationId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt("id") : null;
             }
@@ -308,6 +332,7 @@ class ProductRepository {
 
     private void insertAlcoholProfile(
             Connection connection,
+            int locationId,
             int productId,
             Map<String, Object> body
     ) throws SQLException {
@@ -319,20 +344,23 @@ class ProductRepository {
                     measurement_unit,
                     tare_weight,
                     full_content_weight,
+                    location_id,
                     active
                 )
-                VALUES (?, ?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, productId);
             bindAlcoholProfileFields(statement, body, 2);
+            statement.setInt(7, locationId);
             statement.executeUpdate();
         }
     }
 
     private void updateAlcoholProfile(
             Connection connection,
+            int locationId,
             int profileId,
             Map<String, Object> body
     ) throws SQLException {
@@ -345,11 +373,13 @@ class ProductRepository {
                     full_content_weight = ?,
                     active = 1
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             bindAlcoholProfileFields(statement, body, 1);
             statement.setInt(6, profileId);
+            statement.setInt(7, locationId);
             statement.executeUpdate();
         }
     }
@@ -366,16 +396,18 @@ class ProductRepository {
         statement.setDouble(startIndex + 4, doubleValue(body.get("fullContentWeight")));
     }
 
-    private void deactivateAlcoholProfile(Connection connection, int productId)
+    private void deactivateAlcoholProfile(Connection connection, int locationId, int productId)
             throws SQLException {
         String sql = """
                 UPDATE alcohol_product_profiles
                 SET active = 0
                 WHERE product_id = ?
+                  AND location_id = ?
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, productId);
+            statement.setInt(2, locationId);
             statement.executeUpdate();
         }
     }

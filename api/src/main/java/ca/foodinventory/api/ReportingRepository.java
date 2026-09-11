@@ -13,7 +13,7 @@ import java.util.Map;
 
 class ReportingRepository {
 
-    String findInvoicesJson() throws SQLException {
+    String findInvoicesJson(int locationId) throws SQLException {
         String sql = """
                 SELECT id,
                        invoice_number,
@@ -25,28 +25,31 @@ class ReportingRepository {
                        COALESCE(hst, 0) AS hst,
                        invoice_total
                 FROM invoices
+                WHERE location_id = ?
                 ORDER BY invoice_date DESC, id DESC
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet resultSet = statement.executeQuery()) {
-            StringBuilder json = new StringBuilder("[");
-            boolean first = true;
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                StringBuilder json = new StringBuilder("[");
+                boolean first = true;
 
-            while (resultSet.next()) {
-                if (!first) {
-                    json.append(',');
+                while (resultSet.next()) {
+                    if (!first) {
+                        json.append(',');
+                    }
+                    json.append(invoiceJson(resultSet));
+                    first = false;
                 }
-                json.append(invoiceJson(resultSet));
-                first = false;
-            }
 
-            return json.append(']').toString();
+                return json.append(']').toString();
+            }
         }
     }
 
-    String findInvoiceLinesJson(int invoiceId) throws SQLException {
+    String findInvoiceLinesJson(int locationId, int invoiceId) throws SQLException {
         String sql = """
                 SELECT p.sku,
                        p.description,
@@ -56,13 +59,16 @@ class ReportingRepository {
                        il.extended_cost
                 FROM invoice_lines il
                 JOIN products p ON il.product_id = p.id
+                    AND p.location_id = il.location_id
                 WHERE il.invoice_id = ?
+                  AND il.location_id = ?
                 ORDER BY il.id
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, invoiceId);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 StringBuilder json = new StringBuilder("[");
@@ -81,14 +87,16 @@ class ReportingRepository {
         }
     }
 
-    String findInvoiceBreakdownJson(int invoiceId) throws SQLException {
+    String findInvoiceBreakdownJson(int locationId, int invoiceId) throws SQLException {
         String sql = """
                 SELECT
                     COALESCE(p.reporting_category, 'OTHER') AS reporting_category,
                     COALESCE(SUM(il.extended_cost), 0) AS total
                 FROM invoice_lines il
                 JOIN products p ON il.product_id = p.id
+                    AND p.location_id = il.location_id
                 WHERE il.invoice_id = ?
+                  AND il.location_id = ?
                 GROUP BY COALESCE(p.reporting_category, 'OTHER')
                 ORDER BY
                     CASE COALESCE(p.reporting_category, 'OTHER')
@@ -109,8 +117,9 @@ class ReportingRepository {
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, invoiceId);
+            statement.setInt(2, locationId);
 
             StringBuilder json = new StringBuilder("[");
             boolean first = true;
@@ -127,7 +136,7 @@ class ReportingRepository {
                 }
             }
 
-            for (Adjustment adjustment : findInvoiceAdjustments(connection, invoiceId)) {
+            for (Adjustment adjustment : findInvoiceAdjustments(connection, locationId, invoiceId)) {
                 if (!first) {
                     json.append(',');
                 }
@@ -139,10 +148,10 @@ class ReportingRepository {
         }
     }
 
-    boolean deleteInvoice(int invoiceId) throws SQLException {
-        String deleteLinesSql = "DELETE FROM invoice_lines WHERE invoice_id = ?";
-        String deleteAdjustmentsSql = "DELETE FROM invoice_adjustments WHERE invoice_id = ?";
-        String deleteInvoiceSql = "DELETE FROM invoices WHERE id = ?";
+    boolean deleteInvoice(int locationId, int invoiceId) throws SQLException {
+        String deleteLinesSql = "DELETE FROM invoice_lines WHERE invoice_id = ? AND location_id = ?";
+        String deleteAdjustmentsSql = "DELETE FROM invoice_adjustments WHERE invoice_id = ? AND location_id = ?";
+        String deleteInvoiceSql = "DELETE FROM invoices WHERE id = ? AND location_id = ?";
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -152,12 +161,15 @@ class ReportingRepository {
                  PreparedStatement deleteAdjustments = connection.prepareStatement(deleteAdjustmentsSql);
                  PreparedStatement deleteInvoice = connection.prepareStatement(deleteInvoiceSql)) {
                 deleteLines.setInt(1, invoiceId);
+                deleteLines.setInt(2, locationId);
                 deleteLines.executeUpdate();
 
                 deleteAdjustments.setInt(1, invoiceId);
+                deleteAdjustments.setInt(2, locationId);
                 deleteAdjustments.executeUpdate();
 
                 deleteInvoice.setInt(1, invoiceId);
+                deleteInvoice.setInt(2, locationId);
                 boolean deleted = deleteInvoice.executeUpdate() > 0;
                 connection.commit();
                 return deleted;
@@ -170,32 +182,35 @@ class ReportingRepository {
         }
     }
 
-    String findSalesPeriodsJson() throws SQLException {
+    String findSalesPeriodsJson(int locationId) throws SQLException {
         String sql = """
                 SELECT *
                 FROM sales_periods
+                WHERE location_id = ?
                 ORDER BY period_start_date DESC
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet resultSet = statement.executeQuery()) {
-            StringBuilder json = new StringBuilder("[");
-            boolean first = true;
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                StringBuilder json = new StringBuilder("[");
+                boolean first = true;
 
-            while (resultSet.next()) {
-                if (!first) {
-                    json.append(',');
+                while (resultSet.next()) {
+                    if (!first) {
+                        json.append(',');
+                    }
+                    json.append(salesPeriodJson(resultSet));
+                    first = false;
                 }
-                json.append(salesPeriodJson(resultSet));
-                first = false;
-            }
 
-            return json.append(']').toString();
+                return json.append(']').toString();
+            }
         }
     }
 
-    void saveSalesPeriod(Map<String, Object> body) throws SQLException {
+    void saveSalesPeriod(int locationId, Map<String, Object> body) throws SQLException {
         String sql = """
                 INSERT INTO sales_periods (
                     period_start_date,
@@ -211,10 +226,11 @@ class ReportingRepository {
                     wine_net_sales,
                     draught_net_sales,
                     import_draught_net_sales,
-                    liquor_net_sales
+                    liquor_net_sales,
+                    location_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(period_start_date, period_end_date) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(location_id, period_start_date, period_end_date) DO UPDATE SET
                     food_sales = excluded.food_sales,
                     beer_sales = excluded.beer_sales,
                     wine_sales = excluded.wine_sales,
@@ -245,15 +261,16 @@ class ReportingRepository {
             statement.setBigDecimal(12, moneyValue(body.get("draughtNetSales")));
             statement.setBigDecimal(13, moneyValue(body.get("importDraughtNetSales")));
             statement.setBigDecimal(14, moneyValue(body.get("liquorNetSales")));
+            statement.setInt(15, locationId);
             statement.executeUpdate();
         }
     }
 
-    String calculateValuationJson(int countId) throws SQLException {
+    String calculateValuationJson(int locationId, int countId) throws SQLException {
         StringBuilder json = new StringBuilder("[");
         boolean first = true;
 
-        for (ValuationLine line : calculateValuation(countId)) {
+        for (ValuationLine line : calculateValuation(locationId, countId)) {
             if (!first) {
                 json.append(',');
             }
@@ -264,18 +281,19 @@ class ReportingRepository {
         return json.append(']').toString();
     }
 
-    String weeklyCostReportTextJson(int openingCountId, int closingCountId) throws SQLException {
-        WeeklyCostData report = generateWeeklyCostReport(openingCountId, closingCountId);
+    String weeklyCostReportTextJson(int locationId, int openingCountId, int closingCountId) throws SQLException {
+        WeeklyCostData report = generateWeeklyCostReport(locationId, openingCountId, closingCountId);
         return Json.object("reportText", buildWeeklyCostReportText(report));
     }
 
-    private List<ValuationLine> calculateValuation(int countId) throws SQLException {
+    private List<ValuationLine> calculateValuation(int locationId, int countId) throws SQLException {
         List<ValuationLine> lines = new ArrayList<>();
         String sql = """
                 WITH selected_count AS (
                     SELECT id, period_start_date, period_end_date
                     FROM inventory_counts
                     WHERE id = ?
+                      AND location_id = ?
                 ),
                 purchase_totals AS (
                     SELECT
@@ -287,6 +305,8 @@ class ReportingRepository {
                     JOIN invoices i ON i.id = il.invoice_id
                     JOIN selected_count sc
                       ON i.invoice_date BETWEEN sc.period_start_date AND sc.period_end_date
+                    WHERE il.location_id = ?
+                      AND i.location_id = ?
                     GROUP BY il.product_id
                 )
                 SELECT
@@ -303,13 +323,19 @@ class ReportingRepository {
                 FROM inventory_count_lines icl
                 JOIN selected_count sc ON sc.id = icl.count_id
                 JOIN products p ON p.id = icl.product_id
+                    AND p.location_id = icl.location_id
                 LEFT JOIN purchase_totals pt ON pt.product_id = icl.product_id
+                WHERE icl.location_id = ?
                 ORDER BY p.reporting_category, p.category, p.description
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, countId);
+            statement.setInt(2, locationId);
+            statement.setInt(3, locationId);
+            statement.setInt(4, locationId);
+            statement.setInt(5, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
@@ -364,10 +390,10 @@ class ReportingRepository {
         return lines;
     }
 
-    private WeeklyCostData generateWeeklyCostReport(int openingCountId, int closingCountId)
+    private WeeklyCostData generateWeeklyCostReport(int locationId, int openingCountId, int closingCountId)
             throws SQLException {
-        CountInfo openingCount = countInfo(openingCountId);
-        CountInfo closingCount = countInfo(closingCountId);
+        CountInfo openingCount = countInfo(locationId, openingCountId);
+        CountInfo closingCount = countInfo(locationId, closingCountId);
         String department = determineDepartment(openingCount.templateName());
 
         if (!department.equals(determineDepartment(closingCount.templateName()))) {
@@ -376,7 +402,7 @@ class ReportingRepository {
 
         String reportStartDate = openingCount.countDate();
         String reportEndDate = closingCount.periodEndDate();
-        SalesTotals sales = salesTotals(reportStartDate, reportEndDate);
+        SalesTotals sales = salesTotals(locationId, reportStartDate, reportEndDate);
 
         if (sales == null) {
             throw new IllegalArgumentException(
@@ -384,9 +410,9 @@ class ReportingRepository {
             );
         }
 
-        Map<String, BigDecimal> openingValues = inventoryValuesByReportingCategory(openingCountId);
-        Map<String, BigDecimal> closingValues = inventoryValuesByReportingCategory(closingCountId);
-        Map<String, BigDecimal> purchases = purchasesByReportingCategory(reportStartDate, reportEndDate);
+        Map<String, BigDecimal> openingValues = inventoryValuesByReportingCategory(locationId, openingCountId);
+        Map<String, BigDecimal> closingValues = inventoryValuesByReportingCategory(locationId, closingCountId);
+        Map<String, BigDecimal> purchases = purchasesByReportingCategory(locationId, reportStartDate, reportEndDate);
         WeeklyCostData report = new WeeklyCostData(reportStartDate, reportEndDate);
 
         if ("ALCOHOL".equals(department)) {
@@ -453,10 +479,10 @@ class ReportingRepository {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
-    private Map<String, BigDecimal> inventoryValuesByReportingCategory(int countId)
+    private Map<String, BigDecimal> inventoryValuesByReportingCategory(int locationId, int countId)
             throws SQLException {
         Map<String, BigDecimal> values = new HashMap<>();
-        for (ValuationLine line : calculateValuation(countId)) {
+        for (ValuationLine line : calculateValuation(locationId, countId)) {
             values.merge(
                     normalizeCategory(line.reportingCategory()),
                     line.inventoryValue(),
@@ -466,7 +492,7 @@ class ReportingRepository {
         return values;
     }
 
-    private Map<String, BigDecimal> purchasesByReportingCategory(String startDate, String endDate)
+    private Map<String, BigDecimal> purchasesByReportingCategory(int locationId, String startDate, String endDate)
             throws SQLException {
         String sql = """
                 SELECT p.reporting_category,
@@ -474,15 +500,20 @@ class ReportingRepository {
                 FROM invoice_lines il
                 JOIN invoices i ON i.id = il.invoice_id
                 JOIN products p ON p.id = il.product_id
+                    AND p.location_id = il.location_id
                 WHERE i.invoice_date BETWEEN ? AND ?
+                  AND i.location_id = ?
+                  AND il.location_id = ?
                 GROUP BY p.reporting_category
                 """;
         Map<String, BigDecimal> purchases = new HashMap<>();
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, startDate);
             statement.setString(2, endDate);
+            statement.setInt(3, locationId);
+            statement.setInt(4, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
@@ -497,19 +528,22 @@ class ReportingRepository {
         return purchases;
     }
 
-    private CountInfo countInfo(int countId) throws SQLException {
+    private CountInfo countInfo(int locationId, int countId) throws SQLException {
         String sql = """
                 SELECT t.name AS template_name,
                        c.count_date,
                        c.period_end_date
                 FROM inventory_counts c
                 JOIN inventory_count_templates t ON t.id = c.template_id
+                    AND t.location_id = c.location_id
                 WHERE c.id = ?
+                  AND c.location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, countId);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
@@ -525,7 +559,7 @@ class ReportingRepository {
         throw new IllegalArgumentException("Inventory count not found.");
     }
 
-    private SalesTotals salesTotals(String startDate, String endDate) throws SQLException {
+    private SalesTotals salesTotals(int locationId, String startDate, String endDate) throws SQLException {
         String sql = """
                 SELECT
                     COUNT(*) AS row_count,
@@ -544,12 +578,14 @@ class ReportingRepository {
                 FROM sales_periods
                 WHERE period_start_date >= ?
                   AND period_end_date <= ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, startDate);
             statement.setString(2, endDate);
+            statement.setInt(3, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next() && resultSet.getInt("row_count") > 0) {
@@ -661,18 +697,20 @@ class ReportingRepository {
         return periodTotalQuantity;
     }
 
-    private List<Adjustment> findInvoiceAdjustments(Connection connection, int invoiceId)
+    private List<Adjustment> findInvoiceAdjustments(Connection connection, int locationId, int invoiceId)
             throws SQLException {
         String sql = """
                 SELECT description, amount
                 FROM invoice_adjustments
                 WHERE invoice_id = ?
+                  AND location_id = ?
                 ORDER BY display_order, id
                 """;
         List<Adjustment> adjustments = new ArrayList<>();
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, invoiceId);
+            statement.setInt(2, locationId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     adjustments.add(new Adjustment(

@@ -21,14 +21,20 @@ public class DatabaseManager {
     private static final String DB_URL_PROPERTY = "foodinventory.db.url";
     private static final String DB_USER_PROPERTY = "foodinventory.db.user";
     private static final String DB_PASSWORD_PROPERTY = "foodinventory.db.password";
+    private static final String SQLITE_PATH_PROPERTY = "foodinventory.db.sqlite.path";
     private static final String API_URL_PROPERTY = "foodinventory.api.url";
     private static final String API_KEY_PROPERTY = "foodinventory.api.key";
+    private static final String LOCATION_LOGIN_REQUIRED_PROPERTY = "foodinventory.location.login.required";
+    private static final String LOCATION_SESSION_TOKEN_PROPERTY = "foodinventory.location.session.token";
+    private static final String LOCATION_CODE_PROPERTY = "foodinventory.location.code";
+    private static final String LOCATION_NAME_PROPERTY = "foodinventory.location.name";
     private static final String DB_MODE_ENV = "FOOD_INVENTORY_DB_MODE";
     private static final String DB_URL_ENV = "FOOD_INVENTORY_DB_URL";
     private static final String DB_USER_ENV = "FOOD_INVENTORY_DB_USER";
     private static final String DB_PASSWORD_ENV = "FOOD_INVENTORY_DB_PASSWORD";
     private static final String API_URL_ENV = "FOOD_INVENTORY_API_URL";
     private static final String API_KEY_ENV = "FOOD_INVENTORY_API_KEY";
+    private static final String LOCATION_LOGIN_REQUIRED_ENV = "FOOD_INVENTORY_LOCATION_LOGIN_REQUIRED";
     private static final String POSTGRES_MODE = "postgres";
     private static final String SQLITE_MODE = "sqlite";
     private static final String API_MODE = "api";
@@ -41,6 +47,10 @@ public class DatabaseManager {
     private static final String CONFIG_PASSWORD_KEY = "cloud.password";
     private static final String CONFIG_API_URL_KEY = "api.url";
     private static final String CONFIG_API_KEY_KEY = "api.key";
+    private static final String CONFIG_LOCATION_LOGIN_REQUIRED_KEY = "location.login.required";
+    private static final String CONFIG_LOCATION_SESSION_TOKEN_KEY = "location.session.token";
+    private static final String CONFIG_LOCATION_CODE_KEY = "location.code";
+    private static final String CONFIG_LOCATION_NAME_KEY = "location.name";
     private static final String RELEASE_AUTO_CONFIGURE_API_KEY = "auto.configure.api";
     private static final String RELEASE_CONFIG_ID_KEY = "release.config.id";
     private static final String LOCAL_APPLIED_RELEASE_CONFIG_ID_KEY = "applied.release.config.id";
@@ -83,6 +93,47 @@ public class DatabaseManager {
 
     public static String getConfiguredApiKey() {
         return configuredValue(API_KEY_PROPERTY, API_KEY_ENV);
+    }
+
+    public static boolean isLocationLoginRequired() {
+        return Boolean.parseBoolean(
+                configuredValue(
+                        LOCATION_LOGIN_REQUIRED_PROPERTY,
+                        LOCATION_LOGIN_REQUIRED_ENV
+                )
+        );
+    }
+
+    public static String getLocationSessionToken() {
+        return configuredValue(LOCATION_SESSION_TOKEN_PROPERTY, null);
+    }
+
+    public static String getConfiguredLocationCode() {
+        return configuredValue(LOCATION_CODE_PROPERTY, null);
+    }
+
+    public static String getConfiguredLocationName() {
+        return configuredValue(LOCATION_NAME_PROPERTY, null);
+    }
+
+    public static void saveLocationSession(
+            String token,
+            String locationCode,
+            String locationName
+    ) {
+        Properties properties = loadDatabaseProperties();
+        properties.setProperty(CONFIG_LOCATION_SESSION_TOKEN_KEY, token == null ? "" : token);
+        properties.setProperty(CONFIG_LOCATION_CODE_KEY, locationCode == null ? "" : locationCode);
+        properties.setProperty(CONFIG_LOCATION_NAME_KEY, locationName == null ? "" : locationName);
+        saveDatabaseProperties(properties);
+    }
+
+    public static void clearLocationSession() {
+        Properties properties = loadDatabaseProperties();
+        properties.remove(CONFIG_LOCATION_SESSION_TOKEN_KEY);
+        properties.remove(CONFIG_LOCATION_CODE_KEY);
+        properties.remove(CONFIG_LOCATION_NAME_KEY);
+        saveDatabaseProperties(properties);
     }
 
     public static String getActiveDatabaseModeLabel() {
@@ -135,6 +186,11 @@ public class DatabaseManager {
     }
 
     public static String getDatabasePath() {
+        String configuredPath = System.getProperty(SQLITE_PATH_PROPERTY);
+        if (configuredPath != null && !configuredPath.isBlank()) {
+            return configuredPath.trim();
+        }
+
         File appDir = getAppDirectory();
         File dbFile = new File(appDir, DB_FILE_NAME);
         return dbFile.getAbsolutePath();
@@ -414,6 +470,10 @@ public class DatabaseManager {
     }
 
     private static boolean isPostgresMode() {
+        if (hasTestSqlitePath()) {
+            return false;
+        }
+
         return POSTGRES_MODE.equals(ACTIVE_DATABASE_MODE);
     }
 
@@ -444,9 +504,11 @@ public class DatabaseManager {
             return propertyValue.trim();
         }
 
-        String envValue = System.getenv(envName);
-        if (envValue != null && !envValue.isBlank()) {
-            return envValue.trim();
+        if (envName != null && !envName.isBlank()) {
+            String envValue = System.getenv(envName);
+            if (envValue != null && !envValue.isBlank()) {
+                return envValue.trim();
+            }
         }
 
         String configValue = localConfigValue(propertyName);
@@ -467,6 +529,10 @@ public class DatabaseManager {
             case DB_PASSWORD_PROPERTY -> properties.getProperty(CONFIG_PASSWORD_KEY);
             case API_URL_PROPERTY -> properties.getProperty(CONFIG_API_URL_KEY);
             case API_KEY_PROPERTY -> properties.getProperty(CONFIG_API_KEY_KEY);
+            case LOCATION_LOGIN_REQUIRED_PROPERTY -> properties.getProperty(CONFIG_LOCATION_LOGIN_REQUIRED_KEY);
+            case LOCATION_SESSION_TOKEN_PROPERTY -> properties.getProperty(CONFIG_LOCATION_SESSION_TOKEN_KEY);
+            case LOCATION_CODE_PROPERTY -> properties.getProperty(CONFIG_LOCATION_CODE_KEY);
+            case LOCATION_NAME_PROPERTY -> properties.getProperty(CONFIG_LOCATION_NAME_KEY);
             default -> "";
         };
     }
@@ -520,6 +586,11 @@ public class DatabaseManager {
         changed |= setPropertyIfDifferent(localProperties, CONFIG_MODE_KEY, API_MODE);
         changed |= setPropertyIfDifferent(localProperties, CONFIG_API_URL_KEY, releaseApiUrl);
         changed |= setPropertyIfDifferent(localProperties, CONFIG_API_KEY_KEY, releaseApiKey);
+        changed |= copyReleasePropertyIfPresent(
+                releaseProperties,
+                localProperties,
+                CONFIG_LOCATION_LOGIN_REQUIRED_KEY
+        );
         changed |= setPropertyIfDifferent(
                 localProperties,
                 LOCAL_APPLIED_RELEASE_CONFIG_ID_KEY,
@@ -529,6 +600,19 @@ public class DatabaseManager {
         if (changed) {
             saveDatabaseProperties(localProperties);
         }
+    }
+
+    private static boolean copyReleasePropertyIfPresent(
+            Properties releaseProperties,
+            Properties localProperties,
+            String key
+    ) {
+        String value = releaseProperties.getProperty(key);
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+
+        return setPropertyIfDifferent(localProperties, key, value.trim());
     }
 
     private static Properties loadReleaseDatabaseProperties() {
@@ -664,6 +748,15 @@ public class DatabaseManager {
     }
 
     private static boolean isApiMode() {
+        if (hasTestSqlitePath()) {
+            return false;
+        }
+
         return API_MODE.equals(ACTIVE_DATABASE_MODE);
+    }
+
+    private static boolean hasTestSqlitePath() {
+        String configuredPath = System.getProperty(SQLITE_PATH_PROPERTY);
+        return configuredPath != null && !configuredPath.isBlank();
     }
 }

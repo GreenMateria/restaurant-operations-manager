@@ -2,15 +2,15 @@
 
 ## Current Version
 
-**Current Stable Release Target:** v3.1.3
+**Current Stable Release Target:** v4.0.0
 
-Current database schema version: **17**
+Current database schema version: **21**
 
 Application compiles successfully.
 
-The latest stable release being prepared is v3.1.3.
+The latest stable release being prepared is v4.0.0.
 
-All implemented features through v3.1.3 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through v4.0.0 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 # Completed This Session
 
@@ -18,6 +18,22 @@ All implemented features through v3.1.3 are considered working as intended unles
 
 Completed:
 
+-   Multi-location rollout foundation started on Thursday, September 10, 2026.
+-   Migration 18 adds `locations` and `location_sessions` for one username/password per location and session-token based API login.
+-   Migration 19 adds `location_id` to Labour Management tables and the Labour API now scopes positions, employees, daily sales, daily entries, and saved weeks by the logged-in location.
+-   Migration 20 adds `location_id` to store-owned operational tables for products, aliases, invoices, inventory templates/counts, sales periods, alcohol setup, and production setup/weeks so existing records remain attached to current location `1` while future locations can be separated.
+-   Migration 21 updates the PostgreSQL multi-location uniqueness model so products, aliases, sales periods, alcohol sales mappings, production setup names, POS menu SKUs, and production weeks are unique per location instead of globally.
+-   The API now includes `POST /auth/login`, returning a session token and resolved location details when location credentials are valid.
+-   The desktop app now has a Store Login dialog that can be enabled in API mode with `location.login.required=true`.
+-   Successful Store Login saves the returned session token and location display details in local app configuration; it does not store the location password.
+-   Desktop API clients now attach the Store Login session token to normal business API requests when a store session is present.
+-   API reads and writes are now scoped to the resolved store location for Labour, Products, Invoices, Inventory templates/counts/order guides, Reporting/Sales periods/valuations/weekly cost reports, Alcohol Profiles/Sales Mappings, and Production/POS Menu/Weekly Production workflows.
+-   The live API stack was redeployed with location auth required, and TEST-store validation confirmed that a new store does not see home-store products while the home store still sees its own data.
+-   `scripts/Apply-LocationAuthSchemaMigration.ps1` was added as a secure prompt-based helper for applying the location-auth schema to AWS RDS and setting the initial current-store password without storing plain text credentials.
+-   `scripts/Set-LocationCredentials.ps1` was added as a development-machine-only helper for creating or resetting location credentials without shipping scripts in the store installer.
+-   `scripts/Apply-StoreLocationSchemaMigration.ps1`, `scripts/Apply-LocationUniqueConstraintsMigration.ps1`, and `scripts/Copy-LocationSetup.ps1` were added for RDS multi-location schema upgrades and controlled setup/master-data copying between stores.
+-   `scripts/Manage-Locations.ps1` now lists stores, creates/resets store credentials, renames stores, applies location schema migrations, applies location-aware uniqueness, and copies setup data between stores.
+-   Release packaging now bundles `location.login.required=true` by default so updated client PCs require Store Login without manual per-machine configuration.
 -   Labour Management Phase 1 foundation added on Sunday, September 6, 2026.
 -   Labour Management is now a top-level dashboard module with submenu entries for Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Setup.
 -   Labour Management Phase 2 Labour Hours foundation added on Sunday, September 6, 2026 and reshaped on Monday, September 7, 2026.
@@ -117,7 +133,7 @@ Completed:
 -   Alcohol Sales Mapping add/edit now reuses the existing Production POS Menu Items catalog through a searchable POS item picker, then fills POS SKU/PLU and POS Item Name automatically
 -   Alcohol Sales Mapping schema preparation now checks whether `alcohol_sales_mappings` already exists before attempting PostgreSQL create/index SQL, so lower-access cloud app users can open the screen after the table has been applied by a schema-capable user
 -   Alcohol Variance Report now generates actual-vs-sold usage rows from opening/closing alcohol counts, period purchases, imported POS usage, and active Sales Mappings; bottle and keg products convert mapped ounce/mL portions into inventory-equivalent usage before variance is calculated
--   Alcohol Variance Report includes red/green variance quantity and variance-dollar columns and is accepted as complete for the v3.1.3 development build.
+-   Alcohol Variance Report includes red/green variance quantity and variance-dollar columns and is accepted as complete for the v4.0.0 release target.
 -   Menu open errors now show the root cause and expandable stack trace details instead of clipping long exception text
 -   Shared searchable combo boxes now cap live popup matches to reduce JavaFX VirtualFlow warnings and improve large-list picker responsiveness
 -   v3.0.6 fixed shared combo box support after the AWS RDS database release.
@@ -180,6 +196,9 @@ Completed:
 
 Current behaviour:
 
+-   Multi-location login is implemented for Cloud API mode. Store Login is enabled in release builds, and the main store-owned API workflows require and use the resolved location session.
+-   PostgreSQL multi-location uniqueness has been moved to location-aware composite constraints for the main store-owned duplicate-sensitive records.
+-   Store Login is enabled in release packaging by default through `location.login.required=true`; source-controlled defaults still keep it disabled for local fallback unless configured.
 -   Fresh installs and release desktops are intended to start in Cloud API mode when API settings are present.
 -   Current work PCs should use Cloud API mode for Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, product support, and administrative cloud snapshot workflows.
 -   Direct Cloud PostgreSQL mode is no longer a normal desktop operating mode.
@@ -201,7 +220,7 @@ Current behaviour:
 -   Alcohol invoice history breakdown now shows saved adjustments such as HST and Bottle Deposit.
 -   Inventory valuation still uses purchase history first, then the product fallback cost.
 -   Freezer Pull is an independent manual workflow and does not require POS usage report import.
--   Alcohol Variance Report is complete and accepted as working as intended in the v3.1.3 development build.
+-   Alcohol Variance Report is complete and accepted as working as intended in the v4.0.0 development build.
 -   After an update download completes, the user sees a readable install-now / install-later prompt.
 -   Installers built from the updated release script use the same `--win-upgrade-uuid` on every release.
 -   Release packaging now generates and uploads a `.sha256` checksum asset beside the Windows installer.
@@ -212,12 +231,12 @@ Current behaviour:
 
 # Future Enhancement
 
--   Prepare the application for multi-location rollout, including database structure, location identity, permissions, reporting rollups, backup/restore, and migration from the current single-location data model.
+-   Extend multi-location administration with safer in-app/through-API setup-copy tooling and future reporting rollups as requirements emerge.
 -   Convert the remaining manually managed cloud infrastructure into Infrastructure as Code once the multi-location target shape is clear.
 -   Defer Recipe Costing and Food Variance until after multi-location and infrastructure priorities are settled.
 
 # Next Development Priorities
 
-1.  Prepare and validate the v3.1.3 release package.
-2.  Design the multi-location rollout path and database model.
+1.  Prepare and validate the v4.0.0 release package.
+2.  Monitor multi-location rollout on the first updated workstations.
 3.  Convert cloud infrastructure to IaC based on the multi-location design.

@@ -1,5 +1,30 @@
 # Release History
 
+## v4.0.0
+
+Date: 2026-09-11
+
+### Multi-Location
+
+- Added Store Login for Cloud API mode.
+- Added location credentials and hashed location sessions through `locations` and `location_sessions`.
+- Added `POST /auth/login` to the API and desktop login support that stores the returned session token without storing the location password.
+- Added `location_id` to Labour Management tables and store-owned operational tables.
+- Scoped main API reads and writes by the resolved store location for Labour, Products, Invoices, Inventory templates/counts/order guides, Reporting/Sales periods/valuations/weekly cost reports, Alcohol Profiles/Sales Mappings, and Production/POS Menu/Weekly Production workflows.
+- Updated PostgreSQL uniqueness so duplicate-sensitive records such as product SKUs, POS SKUs, sales periods, production names, and production weeks are unique per location instead of globally.
+- Deployed the API with location auth required and verified TEST-store isolation from the home store.
+
+### Store Administration
+
+- Added PowerShell tools to list stores, create/reset store credentials, rename stores, apply location schema migrations, apply location-aware uniqueness, and copy setup/master data between stores.
+- Added controlled setup-copy support for products, aliases, inventory templates, alcohol setup, production setup, POS menu items, and production product mappings.
+- Setup-copy tooling intentionally does not copy invoices, inventory counts, sales periods, labour history, generated production weeks, sessions, or passwords.
+
+### Release Configuration
+
+- Release packaging now bundles `location.login.required=true` by default so updated client PCs require Store Login without manual local configuration.
+- Fixed the Store Login dialog startup path for JavaFX 25 by avoiding owner binding before the primary stage has a scene.
+
 ## v3.1.3
 
 Date: 2026-09-08

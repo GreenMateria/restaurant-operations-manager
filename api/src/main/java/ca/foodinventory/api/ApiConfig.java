@@ -16,6 +16,8 @@ public final class ApiConfig {
     private static final String ERROR_DETAILS_ENV = "FOOD_INVENTORY_API_ERROR_DETAILS";
     private static final String API_KEY_PROPERTY = "foodinventory.api.key";
     private static final String API_KEY_ENV = "FOOD_INVENTORY_API_KEY";
+    private static final String LOCATION_AUTH_REQUIRED_PROPERTY = "foodinventory.api.locationAuthRequired";
+    private static final String LOCATION_AUTH_REQUIRED_ENV = "FOOD_INVENTORY_API_LOCATION_AUTH_REQUIRED";
     private static final String PORT_PROPERTY = "foodinventory.api.port";
     private static final String PORT_ENV = "FOOD_INVENTORY_API_PORT";
     private static final String DB_URL_PROPERTY = "foodinventory.api.db.url";
@@ -64,6 +66,15 @@ public final class ApiConfig {
 
     public static String apiKey() {
         return configuredValue(API_KEY_PROPERTY, API_KEY_ENV);
+    }
+
+    public static boolean locationAuthRequired() {
+        return Boolean.parseBoolean(
+                configuredValue(
+                        LOCATION_AUTH_REQUIRED_PROPERTY,
+                        LOCATION_AUTH_REQUIRED_ENV
+                )
+        );
     }
 
     private static String requiredValue(String propertyName, String envName) {

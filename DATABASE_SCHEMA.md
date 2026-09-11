@@ -1,6 +1,6 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: Monday, September 7, 2026_
+_Last Updated: Friday, September 11, 2026_
 
 This file documents the current database structure for the Food Inventory / ESM Operations Manager application.
 
@@ -27,7 +27,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **17**.
+- Current migration version: **21**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -53,6 +53,10 @@ Current known migration files:
 - `Migration15`
 - `Migration16`
 - `Migration17`
+- `Migration18`
+- `Migration19`
+- `Migration20`
+- `Migration21`
 
 PostgreSQL support:
 
@@ -73,6 +77,20 @@ PostgreSQL support:
   - Applies the Labour Management schema foundation and Migration 17 snapshot columns to AWS RDS through a schema-capable admin user.
   - Prompts for the RDS admin password securely and does not store it.
   - Refreshes `operations_app` grants for Labour tables/sequences after schema creation.
+- `scripts/Apply-LocationAuthSchemaMigration.ps1`
+  - Applies the location-auth schema foundation to AWS RDS through a schema-capable admin user.
+  - Prompts for the RDS admin password and initial location password securely.
+  - Stores only salted PBKDF2 password hash data in `locations`.
+- `scripts/Apply-StoreLocationSchemaMigration.ps1`
+  - Applies store-owned `location_id` columns for the multi-location data model.
+  - Prompts for the RDS admin password securely and does not store it.
+- `scripts/Apply-LocationUniqueConstraintsMigration.ps1`
+  - Applies the Migration 21 PostgreSQL uniqueness changes to AWS RDS through a schema-capable admin user.
+  - Prompts for the RDS admin password securely and does not store it.
+- `scripts/Copy-LocationSetup.ps1`
+  - Copies selected setup/master data from one location to another after both locations exist.
+  - Supports products, aliases, inventory templates, alcohol setup, production setup, POS menu items, and production product mappings.
+  - Does not copy invoices, counts, sales periods, labour history, generated production weeks, sessions, or passwords.
 
 Migration responsibilities:
 
@@ -112,6 +130,23 @@ Migration responsibilities:
   - Added `labour_daily_entries` snapshot columns:
     `employee_name_snapshot`, `position_name_snapshot`, and `labour_group_snapshot`.
   - These snapshots preserve historical Labour Hours context when employee wages or positions later change.
+- `Migration18`
+  - Added `locations` for one username/password credential per store/location.
+  - Added `location_sessions` for hashed API session tokens.
+  - Seeded the current restaurant as location `1` with code `ESM` and username `esm`.
+- `Migration19`
+  - Added `location_id` to Labour Management tables:
+    `labour_positions`, `labour_employees`, `labour_daily_sales`, and `labour_daily_entries`.
+  - Existing Labour records default to location `1`.
+  - Labour API reads and writes are scoped to the resolved location session.
+- `Migration20`
+  - Added `location_id` to store-owned operational tables, including products, aliases, invoices, inventory templates/counts, sales periods, alcohol setup, and production setup/weeks.
+  - Existing records default to location `1`.
+  - Main store-owned API routes now use the resolved location session to filter and write these tables by `location_id`.
+- `Migration21`
+  - PostgreSQL multi-location uniqueness migration.
+  - Replaces global uniqueness for product SKUs, product alias SKUs, sales periods, alcohol sales mapping POS SKUs, production station/item/profile names, POS menu SKUs, and production weeks with location-aware composite uniqueness.
+  - SQLite fallback keeps its original single-location uniqueness model.
 
 ---
 
@@ -138,7 +173,7 @@ Important fields:
 
 Notes:
 
-- `sku` should be unique.
+- `sku` is unique per location in PostgreSQL API mode.
 - `reporting_category` drives department/reporting grouping.
 - `last_case_cost` is used as a fallback for valuation when no period purchase cost exists.
 
@@ -355,6 +390,53 @@ Notes:
 - `pos_sku` should match the SKU/PLU from the POS usage report used by Weekly Production.
 - The Alcohol Sales Mapping dialog reuses active records from `pos_menu_items` to fill `pos_sku` and `pos_item_name`, but `alcohol_sales_mappings` remains the authoritative alcohol variance mapping table.
 - `quantity_per_sale` and `unit` describe how much inventory product is consumed by one sale, such as `20 OZ` for a draught pint or `1 EACH` for a bottle.
+
+---
+
+# Location Authentication Tables
+
+Migrations 18 through 21 provide the multi-location Store Login, row ownership, and location-aware uniqueness foundation used by v4.0.0.
+
+## locations
+
+Stores one login credential per location.
+
+Important fields:
+
+- `id`
+- `code`
+- `name`
+- `username`
+- `password_hash`
+- `password_salt`
+- `password_iterations`
+- `active`
+- `created_at`
+
+Notes:
+
+- Passwords are stored as salted PBKDF2 hashes, not plain text.
+- The initial current-store row is location `1`, code `ESM`, username `esm`.
+- This is location identity, not employee/user identity.
+
+## location_sessions
+
+Stores API login sessions for location credentials.
+
+Important fields:
+
+- `id`
+- `location_id`
+- `token_hash`
+- `created_at`
+- `expires_at`
+- `revoked`
+
+Notes:
+
+- The API returns the raw session token to the desktop after successful login.
+- Only a SHA-256 hash of the session token is stored in the database.
+- Labour and the main store-owned operational API routes filter reads and writes by `location_id` from the resolved store session.
 
 ---
 

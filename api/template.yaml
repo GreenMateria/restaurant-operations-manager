@@ -22,6 +22,13 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Shared API key required for protected endpoints.
+  LocationAuthRequired:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Require a valid store location token for location-scoped endpoints.
   LambdaSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: Private subnets that can route to the RDS instance.
@@ -64,6 +71,7 @@ Globals:
         FOOD_INVENTORY_API_DB_PASSWORD: !Ref DbPassword
         FOOD_INVENTORY_API_KEY: !Ref ApiKey
         FOOD_INVENTORY_API_ERROR_DETAILS: 'false'
+        FOOD_INVENTORY_API_LOCATION_AUTH_REQUIRED: !Ref LocationAuthRequired
 
 Resources:
   FoodInventoryHttpApi:

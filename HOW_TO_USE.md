@@ -15,7 +15,8 @@ Screenshot placeholders are included throughout the guide. Add cropped screensho
 1. Click the Windows **Start** menu.
 2. Search for **ESM Operations Manager**.
 3. Open the program.
-4. Wait until the main dashboard appears.
+4. If the Store Login window appears, enter the store username and password for this location.
+5. Wait until the main dashboard appears.
 
 You should see the main dashboard with buttons for the main areas of the program.
 
@@ -817,6 +818,8 @@ Use Tip Pool Breakdown to review payout totals for a date range.
 Most managers will not use this often, but they should understand the basics.
 
 For normal daily use on the configured work PCs, the program should run in **Cloud API mode**. Normal saves go through the API to the shared AWS RDS PostgreSQL database, so separate PCs use the same current data without storing PostgreSQL credentials on the workstations.
+
+When Store Login is enabled, each location signs in before the dashboard opens. This keeps normal Food, Alcohol, Supplies, Production, Reporting/Sales, Purchasing, and Labour data scoped to the signed-in store.
 
 ## Local Backup
 

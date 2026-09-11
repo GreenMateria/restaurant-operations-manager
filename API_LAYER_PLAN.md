@@ -1,7 +1,7 @@
 # API Layer Plan
 
 _Created: Tuesday, September 1, 2026_
-_Last Updated: Tuesday, September 8, 2026_
+_Last Updated: Friday, September 11, 2026_
 
 This document plans the next architecture step for ESM Operations Manager: moving database credentials off client PCs by putting an authenticated API layer between the desktop application and AWS RDS PostgreSQL.
 
@@ -278,7 +278,7 @@ Remaining:
 
 ## Current Recommendation
 
-Keep the Java Lambda/API Gateway API against the existing AWS RDS PostgreSQL database. As of the current development build after v3.1.1, Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot download are API-backed for normal desktop use. Direct PostgreSQL mode is retired from desktop clients.
+Keep the Java Lambda/API Gateway API against the existing AWS RDS PostgreSQL database. As of the v4.0.0 release target, Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot download are API-backed for normal desktop use. Store Login scopes normal store-owned workflows to the signed-in location. Direct PostgreSQL mode is retired from desktop clients.
 
 ## Implementation Status
 
@@ -375,12 +375,21 @@ Current Labour implementation status:
 - Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
 - Labour Hours stores wage, employee name, position name, labour group, tip-pool eligibility, and uniform-deduction context on daily entries so historical weeks do not recalculate from later setup changes.
 - Labour routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026, and updated on Monday, September 7, 2026 for `/labour/weeks`, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support fields.
-- The live AWS RDS Labour schema was advanced to schema version 17 using `scripts/Apply-LabourSchemaMigration.ps1`; the restricted `operations_app` runtime user remains unable to create tables by design.
+- The live AWS RDS schema was advanced through schema version 21 using the Labour and multi-location migration scripts; the restricted `operations_app` runtime user remains unable to create tables by design.
+
+Current multi-location implementation status:
+
+- Store Login is implemented for Cloud API mode and enabled in release packaging with `location.login.required=true`.
+- `POST /auth/login` issues location session tokens; normal store-owned API routes require the location token when `LocationAuthRequired=true`.
+- Food, Alcohol, Supplies, Production, Reporting/Sales, Purchasing, and Labour API workflows scope reads and writes to the resolved `location_id`.
+- PostgreSQL uniqueness for duplicate-sensitive store-owned records is location-aware, so each store can have its own SKUs, POS SKUs, setup names, and production weeks.
+- Administrative scripts can create/rename stores, reset store passwords, apply schema migrations, apply location-aware uniqueness, and copy selected setup/master data between stores.
+- The live API was deployed with location auth required; smoke checks confirmed `/products` rejects requests without a location token and a TEST store token returns isolated data.
 
 Remaining API migration targets:
 
-- Multi-location design decisions for store identity, row ownership, access rules, and cross-location reporting.
 - Infrastructure-as-Code completion for the chosen API/database/security architecture.
+- Future cross-location reporting and safer non-direct-RDS administration once real multi-store operating requirements are known.
 - Keep CSV/Excel parsing client-side unless a future browser client or file-processing requirement needs server-side parsing.
 
 Deployment status:
@@ -401,7 +410,8 @@ Deployment status:
 - Admin sync smoke checks passed for missing-key `401` on `/admin/sync/download` and `/admin/sync/upload`; authenticated read-only download returned 24 tables, 11,417 rows, and a 1.85 MB cloud snapshot. Authenticated upload should only be tested through intentional desktop UI use because it replaces production cloud data.
 - Labour Setup and Labour Hours routes were deployed on Sunday, September 6, 2026; Labour Hours initially returned 404 until the Lambda update was deployed, then required the Labour schema to be applied to AWS RDS. Daily Labour Cost, Tip Pool support fields, and `/labour/weeks` were deployed on Monday, September 7, 2026. Smoke checks confirmed `/labour/weeks` responds and `/labour/daily/{workDate}` returns tip-pool/uniform context.
 - Labour Management was accepted as complete after manager workflow testing on Tuesday, September 8, 2026.
-- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working on the latest stable version.
+- Multi-location Store Login, location token enforcement, and TEST-store isolation were deployed and validated on Friday, September 11, 2026.
+- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase history, Labour, and store-scoped operation are confirmed working for the v4.0.0 release target.
 
 Next implementation step:
 

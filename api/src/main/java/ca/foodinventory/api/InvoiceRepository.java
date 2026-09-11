@@ -14,16 +14,18 @@ import java.util.Map;
 
 class InvoiceRepository {
 
-    boolean invoiceExists(String invoiceNumber) throws SQLException {
+    boolean invoiceExists(int locationId, String invoiceNumber) throws SQLException {
         String sql = """
                 SELECT COUNT(*)
                 FROM invoices
                 WHERE invoice_number = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, invoiceNumber);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() && resultSet.getInt(1) > 0;
@@ -31,13 +33,14 @@ class InvoiceRepository {
         }
     }
 
-    void deleteInvoice(String invoiceNumber) throws SQLException {
+    void deleteInvoice(int locationId, String invoiceNumber) throws SQLException {
         String deleteLinesSql = """
                 DELETE FROM invoice_lines
                 WHERE invoice_id IN (
                     SELECT id
                     FROM invoices
                     WHERE invoice_number = ?
+                      AND location_id = ?
                 )
                 """;
         String deleteAdjustmentsSql = """
@@ -46,11 +49,13 @@ class InvoiceRepository {
                     SELECT id
                     FROM invoices
                     WHERE invoice_number = ?
+                      AND location_id = ?
                 )
                 """;
         String deleteInvoiceSql = """
                 DELETE FROM invoices
                 WHERE invoice_number = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
@@ -61,12 +66,15 @@ class InvoiceRepository {
                  PreparedStatement deleteAdjustments = connection.prepareStatement(deleteAdjustmentsSql);
                  PreparedStatement deleteInvoice = connection.prepareStatement(deleteInvoiceSql)) {
                 deleteLines.setString(1, invoiceNumber);
+                deleteLines.setInt(2, locationId);
                 deleteLines.executeUpdate();
 
                 deleteAdjustments.setString(1, invoiceNumber);
+                deleteAdjustments.setInt(2, locationId);
                 deleteAdjustments.executeUpdate();
 
                 deleteInvoice.setString(1, invoiceNumber);
+                deleteInvoice.setInt(2, locationId);
                 deleteInvoice.executeUpdate();
                 connection.commit();
             } catch (SQLException e) {
@@ -78,7 +86,7 @@ class InvoiceRepository {
         }
     }
 
-    void saveInvoice(List<Map<String, Object>> records) throws SQLException {
+    void saveInvoice(int locationId, List<Map<String, Object>> records) throws SQLException {
         if (records == null || records.isEmpty()) {
             throw new IllegalArgumentException("Invoice payload is required.");
         }
@@ -102,9 +110,10 @@ class InvoiceRepository {
                     merchandise_subtotal,
                     freight,
                     hst,
-                    invoice_total
+                    invoice_total,
+                    location_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         String insertLineSql = """
                 INSERT INTO invoice_lines (
@@ -114,18 +123,20 @@ class InvoiceRepository {
                     base_quantity,
                     pack_size,
                     case_cost,
-                    extended_cost
+                    extended_cost,
+                    location_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         String insertAdjustmentSql = """
                 INSERT INTO invoice_adjustments (
                     invoice_id,
                     description,
                     amount,
-                    display_order
+                    display_order,
+                    location_id
                 )
-                VALUES (?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
@@ -146,6 +157,7 @@ class InvoiceRepository {
                 insertInvoice.setBigDecimal(6, freight);
                 insertInvoice.setBigDecimal(7, hst);
                 insertInvoice.setString(8, invoiceTotal.toPlainString());
+                insertInvoice.setInt(9, locationId);
                 insertInvoice.executeUpdate();
 
                 long invoiceId;
@@ -161,7 +173,7 @@ class InvoiceRepository {
                         continue;
                     }
 
-                    Integer productId = findIdBySkuOrAlias(connection, requireString(record, "sku"));
+                    Integer productId = findIdBySkuOrAlias(connection, locationId, requireString(record, "sku"));
                     if (productId == null) {
                         throw new SQLException("Product not found for SKU: " + record.get("sku"));
                     }
@@ -180,14 +192,16 @@ class InvoiceRepository {
                     insertLine.setString(5, stringValue(record.get("packSize")));
                     insertLine.setBigDecimal(6, caseCost);
                     insertLine.setBigDecimal(7, moneyValue(record.get("extendedCost")));
+                    insertLine.setInt(8, locationId);
                     insertLine.addBatch();
 
                     updateLastCaseCost(
                             connection,
+                            locationId,
                             productId,
                             deriveLastCaseCost(record, conversionFactor)
                     );
-                    updateLastPurchasedDate(connection, productId, invoiceDate);
+                    updateLastPurchasedDate(connection, locationId, productId, invoiceDate);
                 }
                 insertLine.executeBatch();
 
@@ -205,6 +219,7 @@ class InvoiceRepository {
                     insertAdjustment.setString(2, description);
                     insertAdjustment.setBigDecimal(3, moneyValue(record.get("amount")));
                     insertAdjustment.setInt(4, intValue(record.get("displayOrder")));
+                    insertAdjustment.setInt(5, locationId);
                     insertAdjustment.addBatch();
                 }
                 insertAdjustment.executeBatch();
@@ -218,16 +233,18 @@ class InvoiceRepository {
         }
     }
 
-    private Integer findIdBySkuOrAlias(Connection connection, String sku) throws SQLException {
+    private Integer findIdBySkuOrAlias(Connection connection, int locationId, String sku) throws SQLException {
         String productSql = """
                 SELECT id
                 FROM products
                 WHERE sku = ?
+                  AND location_id = ?
                 LIMIT 1
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(productSql)) {
             statement.setString(1, sku);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
@@ -240,12 +257,14 @@ class InvoiceRepository {
                 SELECT product_id
                 FROM product_sku_aliases
                 WHERE sku = ?
+                  AND location_id = ?
                   AND active = 1
                 LIMIT 1
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(aliasSql)) {
             statement.setString(1, sku);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
@@ -302,6 +321,7 @@ class InvoiceRepository {
 
     private void updateLastCaseCost(
             Connection connection,
+            int locationId,
             int productId,
             BigDecimal caseCost
     ) throws SQLException {
@@ -313,17 +333,20 @@ class InvoiceRepository {
                 UPDATE products
                 SET last_case_cost = ?
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setBigDecimal(1, caseCost);
             statement.setInt(2, productId);
+            statement.setInt(3, locationId);
             statement.executeUpdate();
         }
     }
 
     private void updateLastPurchasedDate(
             Connection connection,
+            int locationId,
             int productId,
             String invoiceDate
     ) throws SQLException {
@@ -331,11 +354,13 @@ class InvoiceRepository {
                 UPDATE products
                 SET last_purchased_date = ?
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, invoiceDate);
             statement.setInt(2, productId);
+            statement.setInt(3, locationId);
             statement.executeUpdate();
         }
     }

@@ -1,10 +1,8 @@
 package ca.foodinventory.service;
 
-import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.PosMenuItem;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -28,19 +26,7 @@ public class PosMenuItemApiClient {
     }
 
     public List<PosMenuItem> findAll() {
-        String baseUrl = DatabaseManager.getConfiguredApiUrl();
-        String apiKey = DatabaseManager.getConfiguredApiKey();
-
-        if (baseUrl.isBlank() || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                    "API mode requires api.url and api.key configuration."
-            );
-        }
-
-        HttpRequest request = HttpRequest.newBuilder(endpoint(baseUrl))
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/json")
-                .header("x-api-key", apiKey)
+        HttpRequest request = ApiRequestSupport.requestBuilder("/pos-menu-items")
                 .GET()
                 .build();
 
@@ -61,15 +47,6 @@ public class PosMenuItemApiClient {
             Thread.currentThread().interrupt();
             throw new RuntimeException("POS Menu Items API request was interrupted.", e);
         }
-    }
-
-    private URI endpoint(String baseUrl) {
-        String normalized = baseUrl.trim();
-        if (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-
-        return URI.create(normalized + "/pos-menu-items");
     }
 
     private List<PosMenuItem> parseItems(String json) {

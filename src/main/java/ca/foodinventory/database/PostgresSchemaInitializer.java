@@ -8,7 +8,31 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 17;
+    public static final int CURRENT_SCHEMA_VERSION = 21;
+
+    private static final String[] STORE_OWNED_TABLES = {
+            "products",
+            "product_sku_aliases",
+            "invoices",
+            "invoice_lines",
+            "invoice_adjustments",
+            "inventory_count_templates",
+            "inventory_count_template_lines",
+            "inventory_counts",
+            "inventory_count_lines",
+            "sales_periods",
+            "alcohol_product_profiles",
+            "alcohol_sales_mappings",
+            "production_stations",
+            "production_items",
+            "production_profiles",
+            "production_profile_lines",
+            "pos_menu_items",
+            "production_item_product_mappings",
+            "production_weeks",
+            "production_week_days",
+            "production_week_lines"
+    };
 
     public void initialize(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
@@ -47,7 +71,16 @@ public class PostgresSchemaInitializer {
         requireTable(connection, "labour_employees");
         requireTable(connection, "labour_daily_sales");
         requireTable(connection, "labour_daily_entries");
+        requireTable(connection, "locations");
+        requireTable(connection, "location_sessions");
         requireTable(connection, "schema_version");
+        for (String tableName : STORE_OWNED_TABLES) {
+            requireColumn(connection, tableName, "location_id");
+        }
+        requireColumn(connection, "labour_positions", "location_id");
+        requireColumn(connection, "labour_employees", "location_id");
+        requireColumn(connection, "labour_daily_sales", "location_id");
+        requireColumn(connection, "labour_daily_entries", "location_id");
         requireColumn(connection, "labour_daily_entries", "employee_name_snapshot");
         requireColumn(connection, "labour_daily_entries", "position_name_snapshot");
         requireColumn(connection, "labour_daily_entries", "labour_group_snapshot");
@@ -66,7 +99,8 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS products (
                     id SERIAL PRIMARY KEY,
-                    sku TEXT UNIQUE NOT NULL,
+                    location_id INTEGER NOT NULL DEFAULT 1,
+                    sku TEXT NOT NULL,
                     description TEXT NOT NULL,
                     category TEXT DEFAULT 'Uncategorized',
                     reporting_category TEXT DEFAULT 'OTHER',
@@ -76,19 +110,22 @@ public class PostgresSchemaInitializer {
                     pack_count TEXT,
                     last_case_cost TEXT,
                     last_purchased_date TEXT,
-                    active INTEGER DEFAULT 1
+                    active INTEGER DEFAULT 1,
+                    CONSTRAINT products_location_sku_key UNIQUE(location_id, sku)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS product_sku_aliases (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     product_id INTEGER NOT NULL REFERENCES products(id),
                     supplier TEXT NOT NULL,
-                    sku TEXT NOT NULL UNIQUE,
+                    sku TEXT NOT NULL,
                     description TEXT,
                     pack_size TEXT,
-                    active INTEGER DEFAULT 1
+                    active INTEGER DEFAULT 1,
+                    CONSTRAINT product_sku_aliases_location_sku_key UNIQUE(location_id, sku)
                 )
                 """);
 
@@ -179,6 +216,7 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS sales_periods (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     period_start_date TEXT NOT NULL,
                     period_end_date TEXT NOT NULL,
                     food_sales TEXT DEFAULT '0.00',
@@ -194,7 +232,8 @@ public class PostgresSchemaInitializer {
                     import_draught_net_sales TEXT DEFAULT '0.00',
                     liquor_net_sales TEXT DEFAULT '0.00',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(period_start_date, period_end_date)
+                    CONSTRAINT sales_periods_location_dates_key
+                        UNIQUE(location_id, period_start_date, period_end_date)
                 )
                 """);
 
@@ -217,6 +256,7 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS alcohol_product_profiles (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     product_id INTEGER NOT NULL UNIQUE REFERENCES products(id),
                     count_method TEXT NOT NULL,
                     container_type TEXT,
@@ -230,30 +270,49 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS alcohol_sales_mappings (
                     id SERIAL PRIMARY KEY,
-                    pos_sku TEXT NOT NULL UNIQUE,
+                    location_id INTEGER NOT NULL DEFAULT 1,
+                    pos_sku TEXT NOT NULL,
                     pos_item_name TEXT,
                     reporting_category TEXT NOT NULL,
                     product_id INTEGER NOT NULL REFERENCES products(id),
                     quantity_per_sale DOUBLE PRECISION NOT NULL DEFAULT 0,
                     unit TEXT NOT NULL,
-                    active INTEGER NOT NULL DEFAULT 1
+                    active INTEGER NOT NULL DEFAULT 1,
+                    CONSTRAINT alcohol_sales_mappings_location_pos_sku_key UNIQUE(location_id, pos_sku)
+                )
+                """);
+
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS locations (
+                    id SERIAL PRIMARY KEY,
+                    code TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT,
+                    password_salt TEXT,
+                    password_iterations INTEGER NOT NULL DEFAULT 600000,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS labour_positions (
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
+                    location_id INTEGER NOT NULL DEFAULT 1 REFERENCES locations(id),
+                    name TEXT NOT NULL,
                     labour_group TEXT NOT NULL,
                     sort_order INTEGER NOT NULL DEFAULT 0,
                     target_labour_percentage NUMERIC,
-                    active INTEGER NOT NULL DEFAULT 1
+                    active INTEGER NOT NULL DEFAULT 1,
+                    CONSTRAINT production_stations_location_name_key UNIQUE(location_id, name)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS labour_employees (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1 REFERENCES locations(id),
                     name TEXT NOT NULL,
                     position_id INTEGER NOT NULL REFERENCES labour_positions(id),
                     hourly_wage NUMERIC NOT NULL DEFAULT 0,
@@ -266,16 +325,19 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS labour_daily_sales (
                     id SERIAL PRIMARY KEY,
-                    sales_date TEXT NOT NULL UNIQUE,
+                    location_id INTEGER NOT NULL DEFAULT 1 REFERENCES locations(id),
+                    sales_date TEXT NOT NULL,
                     net_sales NUMERIC NOT NULL DEFAULT 0,
                     tip_out_pool NUMERIC NOT NULL DEFAULT 0,
-                    finalized INTEGER NOT NULL DEFAULT 0
+                    finalized INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(location_id, sales_date)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS labour_daily_entries (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1 REFERENCES locations(id),
                     work_date TEXT NOT NULL,
                     employee_id INTEGER NOT NULL REFERENCES labour_employees(id),
                     position_id INTEGER NOT NULL REFERENCES labour_positions(id),
@@ -286,7 +348,18 @@ public class PostgresSchemaInitializer {
                     position_name_snapshot TEXT,
                     labour_group_snapshot TEXT,
                     finalized INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(work_date, employee_id)
+                    UNIQUE(location_id, work_date, employee_id)
+                )
+                """);
+
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS location_sessions (
+                    id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL REFERENCES locations(id),
+                    token_hash TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT NOT NULL,
+                    revoked INTEGER NOT NULL DEFAULT 0
                 )
                 """);
 
@@ -301,39 +374,46 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_stations (
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
+                    location_id INTEGER NOT NULL DEFAULT 1,
+                    name TEXT NOT NULL,
                     prep_sheet TEXT NOT NULL DEFAULT 'Main Line',
                     sort_order INTEGER NOT NULL DEFAULT 0,
-                    active INTEGER NOT NULL DEFAULT 1
+                    active INTEGER NOT NULL DEFAULT 1,
+                    CONSTRAINT production_items_location_name_key UNIQUE(location_id, name)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_items (
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
+                    location_id INTEGER NOT NULL DEFAULT 1,
+                    name TEXT NOT NULL,
                     unit TEXT NOT NULL,
                     shelf_life TEXT,
                     yield_factor DOUBLE PRECISION NOT NULL DEFAULT 1.0,
                     station_id INTEGER REFERENCES production_stations(id),
                     print_order INTEGER NOT NULL DEFAULT 0,
                     permanent_override_par INTEGER,
-                    active INTEGER NOT NULL DEFAULT 1
+                    active INTEGER NOT NULL DEFAULT 1,
+                    CONSTRAINT production_profiles_location_name_key UNIQUE(location_id, name)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_profiles (
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
+                    location_id INTEGER NOT NULL DEFAULT 1,
+                    name TEXT NOT NULL,
                     category TEXT,
-                    active INTEGER NOT NULL DEFAULT 1
+                    active INTEGER NOT NULL DEFAULT 1,
+                    UNIQUE(location_id, name)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_profile_lines (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     profile_id INTEGER NOT NULL REFERENCES production_profiles(id),
                     production_item_id INTEGER NOT NULL REFERENCES production_items(id),
                     quantity_per_sale DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -347,17 +427,20 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS pos_menu_items (
                     id SERIAL PRIMARY KEY,
-                    pos_sku TEXT NOT NULL UNIQUE,
+                    location_id INTEGER NOT NULL DEFAULT 1,
+                    pos_sku TEXT NOT NULL,
                     name TEXT NOT NULL,
                     category TEXT,
                     production_profile_id INTEGER REFERENCES production_profiles(id),
-                    active INTEGER NOT NULL DEFAULT 1
+                    active INTEGER NOT NULL DEFAULT 1,
+                    CONSTRAINT pos_menu_items_location_pos_sku_key UNIQUE(location_id, pos_sku)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_item_product_mappings (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     production_item_id INTEGER NOT NULL REFERENCES production_items(id),
                     product_id INTEGER NOT NULL REFERENCES products(id),
                     quantity_per_unit DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -369,6 +452,7 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_weeks (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     week_start_date TEXT NOT NULL,
                     week_end_date TEXT NOT NULL,
                     source_sales_start_date TEXT,
@@ -376,13 +460,15 @@ public class PostgresSchemaInitializer {
                     par_multiplier DOUBLE PRECISION NOT NULL DEFAULT 1.25,
                     finalized INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(week_start_date, week_end_date)
+                    CONSTRAINT production_weeks_location_dates_key
+                        UNIQUE(location_id, week_start_date, week_end_date)
                 )
                 """);
 
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_week_days (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     production_week_id INTEGER NOT NULL REFERENCES production_weeks(id),
                     prep_date TEXT NOT NULL,
                     day_name TEXT NOT NULL,
@@ -393,6 +479,7 @@ public class PostgresSchemaInitializer {
         statement.execute("""
                 CREATE TABLE IF NOT EXISTS production_week_lines (
                     id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1,
                     production_week_day_id INTEGER NOT NULL REFERENCES production_week_days(id),
                     production_item_id INTEGER NOT NULL REFERENCES production_items(id),
                     previous_sales_quantity DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -453,16 +540,34 @@ public class PostgresSchemaInitializer {
                 """);
         statement.execute("""
                 CREATE INDEX IF NOT EXISTS idx_labour_positions_group_active
-                ON labour_positions(labour_group, active)
+                ON labour_positions(location_id, labour_group, active)
                 """);
         statement.execute("""
                 CREATE INDEX IF NOT EXISTS idx_labour_employees_position_active
-                ON labour_employees(position_id, active)
+                ON labour_employees(location_id, position_id, active)
                 """);
         statement.execute("""
                 CREATE INDEX IF NOT EXISTS idx_labour_daily_entries_date
-                ON labour_daily_entries(work_date)
+                ON labour_daily_entries(location_id, work_date)
                 """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_labour_daily_sales_location_date
+                ON labour_daily_sales(location_id, sales_date)
+                """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_location_sessions_location
+                ON location_sessions(location_id)
+                """);
+        statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_location_sessions_token_active
+                ON location_sessions(token_hash, revoked, expires_at)
+                """);
+        for (String tableName : STORE_OWNED_TABLES) {
+            statement.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_%s_location_id
+                    ON %s(location_id)
+                    """.formatted(tableName, tableName));
+        }
     }
 
     private void repairSchemaCompatibility(
@@ -492,6 +597,14 @@ public class PostgresSchemaInitializer {
         addColumnIfMissing(connection, statement, "labour_daily_entries", "employee_name_snapshot", "TEXT");
         addColumnIfMissing(connection, statement, "labour_daily_entries", "position_name_snapshot", "TEXT");
         addColumnIfMissing(connection, statement, "labour_daily_entries", "labour_group_snapshot", "TEXT");
+        addColumnIfMissing(connection, statement, "labour_positions", "location_id", "INTEGER NOT NULL DEFAULT 1");
+        addColumnIfMissing(connection, statement, "labour_employees", "location_id", "INTEGER NOT NULL DEFAULT 1");
+        addColumnIfMissing(connection, statement, "labour_daily_sales", "location_id", "INTEGER NOT NULL DEFAULT 1");
+        addColumnIfMissing(connection, statement, "labour_daily_entries", "location_id", "INTEGER NOT NULL DEFAULT 1");
+        for (String tableName : STORE_OWNED_TABLES) {
+            addColumnIfMissing(connection, statement, tableName, "location_id", "INTEGER NOT NULL DEFAULT 1");
+        }
+        repairLocationUniqueConstraints(connection, statement);
 
         statement.executeUpdate("""
                 UPDATE sales_periods
@@ -502,6 +615,143 @@ public class PostgresSchemaInitializer {
                     import_draught_net_sales = CASE WHEN import_draught_net_sales IS NULL OR import_draught_net_sales = '0.00' THEN import_draught_sales ELSE import_draught_net_sales END,
                     liquor_net_sales = CASE WHEN liquor_net_sales IS NULL OR liquor_net_sales = '0.00' THEN liquor_sales ELSE liquor_net_sales END
                 """);
+    }
+
+    private void repairLocationUniqueConstraints(Connection connection, Statement statement)
+            throws SQLException {
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "products",
+                "UNIQUE (sku)",
+                "products_location_sku_key",
+                "UNIQUE (location_id, sku)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "product_sku_aliases",
+                "UNIQUE (sku)",
+                "product_sku_aliases_location_sku_key",
+                "UNIQUE (location_id, sku)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "sales_periods",
+                "UNIQUE (period_start_date, period_end_date)",
+                "sales_periods_location_dates_key",
+                "UNIQUE (location_id, period_start_date, period_end_date)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "alcohol_sales_mappings",
+                "UNIQUE (pos_sku)",
+                "alcohol_sales_mappings_location_pos_sku_key",
+                "UNIQUE (location_id, pos_sku)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "production_stations",
+                "UNIQUE (name)",
+                "production_stations_location_name_key",
+                "UNIQUE (location_id, name)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "production_items",
+                "UNIQUE (name)",
+                "production_items_location_name_key",
+                "UNIQUE (location_id, name)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "production_profiles",
+                "UNIQUE (name)",
+                "production_profiles_location_name_key",
+                "UNIQUE (location_id, name)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "pos_menu_items",
+                "UNIQUE (pos_sku)",
+                "pos_menu_items_location_pos_sku_key",
+                "UNIQUE (location_id, pos_sku)"
+        );
+        replaceUniqueConstraint(
+                connection,
+                statement,
+                "production_weeks",
+                "UNIQUE (week_start_date, week_end_date)",
+                "production_weeks_location_dates_key",
+                "UNIQUE (location_id, week_start_date, week_end_date)"
+        );
+    }
+
+    private void replaceUniqueConstraint(
+            Connection connection,
+            Statement statement,
+            String tableName,
+            String oldConstraintDefinition,
+            String newConstraintName,
+            String newConstraintDefinition
+    ) throws SQLException {
+        String sql = """
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid = ?::regclass
+                  AND contype = 'u'
+                  AND pg_get_constraintdef(oid) = ?
+                """;
+
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setString(1, tableName);
+            preparedStatement.setString(2, oldConstraintDefinition);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    statement.execute(
+                            "ALTER TABLE " + quoteIdentifier(tableName)
+                                    + " DROP CONSTRAINT " + quoteIdentifier(resultSet.getString("conname"))
+                    );
+                }
+            }
+        }
+
+        if (!constraintExists(connection, tableName, newConstraintName)) {
+            statement.execute(
+                    "ALTER TABLE " + quoteIdentifier(tableName)
+                            + " ADD CONSTRAINT " + quoteIdentifier(newConstraintName)
+                            + " " + newConstraintDefinition
+            );
+        }
+    }
+
+    private boolean constraintExists(
+            Connection connection,
+            String tableName,
+            String constraintName
+    ) throws SQLException {
+        String sql = """
+                SELECT 1
+                FROM pg_constraint
+                WHERE conrelid = ?::regclass
+                  AND conname = ?
+                """;
+
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setString(1, tableName);
+            preparedStatement.setString(2, constraintName);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
     }
 
     private void addColumnIfMissing(
@@ -606,16 +856,16 @@ public class PostgresSchemaInitializer {
                 """);
 
         statement.execute("""
-                INSERT INTO production_stations (name, prep_sheet, sort_order, active)
+                INSERT INTO production_stations (location_id, name, prep_sheet, sort_order, active)
                 VALUES
-                ('Line', 'Main Line', 10, 1),
-                ('Pasta', 'Main Line', 20, 1),
-                ('Prep', 'Main Line', 30, 1),
-                ('Pizza', 'Pizza Salad', 40, 1),
-                ('Salad', 'Pizza Salad', 50, 1),
-                ('Dessert', 'Main Line', 60, 1),
-                ('Freezer Pull', 'Main Line', 70, 1)
-                ON CONFLICT(name) DO NOTHING
+                (1, 'Line', 'Main Line', 10, 1),
+                (1, 'Pasta', 'Main Line', 20, 1),
+                (1, 'Prep', 'Main Line', 30, 1),
+                (1, 'Pizza', 'Pizza Salad', 40, 1),
+                (1, 'Salad', 'Pizza Salad', 50, 1),
+                (1, 'Dessert', 'Main Line', 60, 1),
+                (1, 'Freezer Pull', 'Main Line', 70, 1)
+                ON CONFLICT(location_id, name) DO NOTHING
                 """);
 
         statement.execute("""
@@ -630,6 +880,20 @@ public class PostgresSchemaInitializer {
                 INSERT INTO settings (setting_key, setting_value)
                 VALUES ('labour.default_uniform_deduction', '0.00')
                 ON CONFLICT(setting_key) DO NOTHING
+                """);
+
+        statement.execute("""
+                INSERT INTO locations (id, code, name, username, active)
+                VALUES (1, 'ESM', 'Existing Store', 'esm', 1)
+                ON CONFLICT(id) DO NOTHING
+                """);
+
+        statement.execute("""
+                SELECT setval(
+                    pg_get_serial_sequence('locations', 'id'),
+                    COALESCE((SELECT MAX(id) FROM locations), 1),
+                    true
+                )
                 """);
     }
 

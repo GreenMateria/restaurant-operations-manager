@@ -80,6 +80,10 @@ public class PosSalesImportService {
     }
 
     private BigDecimal getCurrencyValue(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+
         if (cell.getCellType() == CellType.NUMERIC) {
             return BigDecimal.valueOf(cell.getNumericCellValue());
         }

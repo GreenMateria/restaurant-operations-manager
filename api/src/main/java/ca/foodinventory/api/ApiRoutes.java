@@ -16,6 +16,7 @@ class ApiRoutes {
     private final ReportingRepository reportingRepository;
     private final AdminSyncRepository adminSyncRepository;
     private final LabourRepository labourRepository;
+    private final LocationAuthRepository locationAuthRepository;
 
     ApiRoutes() {
         this(
@@ -28,7 +29,8 @@ class ApiRoutes {
                 new ProductionRepository(),
                 new ReportingRepository(),
                 new AdminSyncRepository(),
-                new LabourRepository()
+                new LabourRepository(),
+                new LocationAuthRepository()
         );
     }
 
@@ -42,7 +44,8 @@ class ApiRoutes {
             ProductionRepository productionRepository,
             ReportingRepository reportingRepository,
             AdminSyncRepository adminSyncRepository,
-            LabourRepository labourRepository
+            LabourRepository labourRepository,
+            LocationAuthRepository locationAuthRepository
     ) {
         this.productRepository = productRepository;
         this.posMenuItemRepository = posMenuItemRepository;
@@ -54,6 +57,7 @@ class ApiRoutes {
         this.reportingRepository = reportingRepository;
         this.adminSyncRepository = adminSyncRepository;
         this.labourRepository = labourRepository;
+        this.locationAuthRepository = locationAuthRepository;
     }
 
     ApiResult handle(
@@ -70,6 +74,33 @@ class ApiRoutes {
                     """.formatted(Json.escape(ApiConfig.VERSION)).trim());
         }
 
+        if ("POST".equalsIgnoreCase(method) && "/auth/login".equals(normalizedPath)) {
+            try {
+                Map<String, Object> request = parseBody(body);
+                String username = requiredBodyString(request, "username");
+                String password = requiredBodyString(request, "password");
+                LocationSession session = locationAuthRepository.login(username, password);
+                if (session == null) {
+                    return ApiResult.json(401, Json.object(
+                            "error", "invalid_credentials",
+                            "message", "The location username or password is incorrect."
+                    ));
+                }
+
+                return ApiResult.json(200, locationSessionJson(session));
+            } catch (IllegalArgumentException e) {
+                return badRequest(e);
+            } catch (IllegalStateException e) {
+                return ApiResult.json(503, Json.object(
+                        "error", "database_not_configured",
+                        "message", e.getMessage()
+                ));
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return databaseError("Failed to log in.");
+            }
+        }
+
         if ("GET".equalsIgnoreCase(method) && "/products".equals(normalizedPath)) {
             ApiResult unauthorized = requireApiKey(headers);
             if (unauthorized != null) {
@@ -77,7 +108,11 @@ class ApiRoutes {
             }
 
             try {
-                return ApiResult.json(200, productRepository.findActiveProductsJson());
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                return ApiResult.json(200, productRepository.findActiveProductsJson(locationContext.id()));
             } catch (IllegalStateException e) {
                 return ApiResult.json(503, Json.object(
                         "error", "database_not_configured",
@@ -96,7 +131,11 @@ class ApiRoutes {
             }
 
             try {
-                productRepository.save(parseBody(body));
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                productRepository.save(locationContext.id(), parseBody(body));
                 return ApiResult.json(201, Json.object(
                         "status", "ok",
                         "message", "Product saved."
@@ -122,7 +161,14 @@ class ApiRoutes {
             }
 
             try {
-                int importedCount = productRepository.upsertImportedProducts(parseBodyArray(body));
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                int importedCount = productRepository.upsertImportedProducts(
+                        locationContext.id(),
+                        parseBodyArray(body)
+                );
                 return ApiResult.json(200, Json.object(
                         "importedCount", String.valueOf(importedCount)
                 ));
@@ -148,8 +194,12 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 if ("PUT".equalsIgnoreCase(method)) {
-                    productRepository.save(parseBody(body));
+                    productRepository.save(locationContext.id(), parseBody(body));
                     return ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Product saved."
@@ -158,7 +208,7 @@ class ApiRoutes {
 
                 if ("POST".equalsIgnoreCase(method)
                         && normalizedPath.endsWith("/deactivate")) {
-                    return productRepository.deactivate(productId)
+                    return productRepository.deactivate(locationContext.id(), productId)
                             ? ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Product deactivated."
@@ -171,7 +221,10 @@ class ApiRoutes {
 
                 if ("GET".equalsIgnoreCase(method)
                         && normalizedPath.endsWith("/purchase-history")) {
-                    return ApiResult.json(200, productRepository.findPurchaseHistoryJson(productId));
+                    return ApiResult.json(
+                            200,
+                            productRepository.findPurchaseHistoryJson(locationContext.id(), productId)
+                    );
                 }
             } catch (IllegalArgumentException e) {
                 return ApiResult.json(400, Json.object(
@@ -194,7 +247,15 @@ class ApiRoutes {
             }
 
             try {
-                return ApiResult.json(200, posMenuItemRepository.findAllJson());
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+
+                return ApiResult.json(
+                        200,
+                        productionRepository.findPosMenuItemsJson(locationContext.id(), false)
+                );
             } catch (IllegalStateException e) {
                 return ApiResult.json(503, Json.object(
                         "error", "database_not_configured",
@@ -216,7 +277,15 @@ class ApiRoutes {
             }
 
             try {
-                return ApiResult.json(201, productionRepository.savePosMenuItemJson(parseBody(body)));
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+
+                return ApiResult.json(
+                        201,
+                        productionRepository.savePosMenuItemJson(locationContext.id(), parseBody(body))
+                );
             } catch (IllegalArgumentException e) {
                 return badRequest(e);
             } catch (SQLException e) {
@@ -232,7 +301,12 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 boolean exists = invoiceRepository.invoiceExists(
+                        locationContext.id(),
                         stringBodyField(body, "invoiceNumber")
                 );
                 return ApiResult.json(200, Json.object("exists", String.valueOf(exists)));
@@ -257,7 +331,14 @@ class ApiRoutes {
             }
 
             try {
-                invoiceRepository.deleteInvoice(stringBodyField(body, "invoiceNumber"));
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                invoiceRepository.deleteInvoice(
+                        locationContext.id(),
+                        stringBodyField(body, "invoiceNumber")
+                );
                 return ApiResult.json(200, Json.object(
                         "status", "ok",
                         "message", "Invoice deleted."
@@ -283,7 +364,11 @@ class ApiRoutes {
             }
 
             try {
-                invoiceRepository.saveInvoice(parseBodyArray(body));
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                invoiceRepository.saveInvoice(locationContext.id(), parseBodyArray(body));
                 return ApiResult.json(201, Json.object(
                         "status", "ok",
                         "message", "Invoice saved."
@@ -309,7 +394,11 @@ class ApiRoutes {
             }
 
             try {
-                invoiceRepository.saveInvoice(parseBodyArray(body));
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                invoiceRepository.saveInvoice(locationContext.id(), parseBodyArray(body));
                 return ApiResult.json(201, Json.object(
                         "status", "ok",
                         "message", "Invoice saved."
@@ -335,7 +424,11 @@ class ApiRoutes {
             }
 
             try {
-                invoiceRepository.saveInvoice(parseBodyArray(body));
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                invoiceRepository.saveInvoice(locationContext.id(), parseBodyArray(body));
                 return ApiResult.json(201, Json.object(
                         "status", "ok",
                         "message", "Invoice saved."
@@ -361,7 +454,15 @@ class ApiRoutes {
             }
 
             try {
-                return ApiResult.json(200, alcoholProductProfileRepository.findAllActiveJson());
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+
+                return ApiResult.json(
+                        200,
+                        alcoholProductProfileRepository.findAllActiveJson(locationContext.id())
+                );
             } catch (SQLException e) {
                 e.printStackTrace();
                 return ApiResult.json(500, Json.object(
@@ -389,11 +490,18 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 if ("GET".equalsIgnoreCase(method)
                         && "inventory-count-templates".equals(departmentPath.resource())) {
                     return ApiResult.json(
                             200,
-                            inventoryRepository.findActiveTemplatesJson(departmentPath.department())
+                            inventoryRepository.findActiveTemplatesJson(
+                                    locationContext.id(),
+                                    departmentPath.department()
+                            )
                     );
                 }
 
@@ -401,7 +509,7 @@ class ApiRoutes {
                         && "inventory-count-templates".equals(departmentPath.resource())) {
                     return ApiResult.json(
                             201,
-                            inventoryRepository.addTemplateJson(parseBody(body))
+                            inventoryRepository.addTemplateJson(locationContext.id(), parseBody(body))
                     );
                 }
 
@@ -409,7 +517,11 @@ class ApiRoutes {
                         && "inventory-counts".equals(departmentPath.resource())) {
                     return ApiResult.json(
                             200,
-                            inventoryRepository.findCountsJson(departmentPath.department(), false)
+                            inventoryRepository.findCountsJson(
+                                    locationContext.id(),
+                                    departmentPath.department(),
+                                    false
+                            )
                     );
                 }
 
@@ -417,7 +529,7 @@ class ApiRoutes {
                         && "inventory-counts".equals(departmentPath.resource())) {
                     return ApiResult.json(
                             201,
-                            inventoryRepository.createCountJson(parseBody(body))
+                            inventoryRepository.createCountJson(locationContext.id(), parseBody(body))
                     );
                 }
 
@@ -425,7 +537,11 @@ class ApiRoutes {
                         && "completed-inventory-counts".equals(departmentPath.resource())) {
                     return ApiResult.json(
                             200,
-                            inventoryRepository.findCountsJson(departmentPath.department(), true)
+                            inventoryRepository.findCountsJson(
+                                    locationContext.id(),
+                                    departmentPath.department(),
+                                    true
+                            )
                     );
                 }
             } catch (IllegalArgumentException e) {
@@ -455,9 +571,13 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 if ("POST".equalsIgnoreCase(method)
                         && normalizedPath.endsWith("/deactivate")) {
-                    return inventoryRepository.deactivateTemplate(templateId)
+                    return inventoryRepository.deactivateTemplate(locationContext.id(), templateId)
                             ? ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count template deactivated."
@@ -472,7 +592,11 @@ class ApiRoutes {
                         && normalizedPath.endsWith("/duplicate")) {
                     return ApiResult.json(
                             201,
-                            inventoryRepository.duplicateTemplateJson(templateId, parseBody(body))
+                            inventoryRepository.duplicateTemplateJson(
+                                    locationContext.id(),
+                                    templateId,
+                                    parseBody(body)
+                            )
                     );
                 }
             } catch (IllegalArgumentException e) {
@@ -497,15 +621,26 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 if ("GET".equalsIgnoreCase(method) && templateLinesPath.linesRequest()) {
                     return ApiResult.json(
                             200,
-                            inventoryRepository.findTemplateLinesJson(templateLinesPath.templateId())
+                            inventoryRepository.findTemplateLinesJson(
+                                    locationContext.id(),
+                                    templateLinesPath.templateId()
+                            )
                     );
                 }
 
                 if ("POST".equalsIgnoreCase(method) && templateLinesPath.linesRequest()) {
-                    inventoryRepository.addTemplateLine(templateLinesPath.templateId(), parseBody(body));
+                    inventoryRepository.addTemplateLine(
+                            locationContext.id(),
+                            templateLinesPath.templateId(),
+                            parseBody(body)
+                    );
                     return ApiResult.json(201, Json.object(
                             "status", "ok",
                             "message", "Inventory count template line added."
@@ -513,7 +648,10 @@ class ApiRoutes {
                 }
 
                 if ("PUT".equalsIgnoreCase(method) && templateLinesPath.sortRequest()) {
-                    inventoryRepository.updateTemplateLineSortOrders(parseBodyArray(body));
+                    inventoryRepository.updateTemplateLineSortOrders(
+                            locationContext.id(),
+                            parseBodyArray(body)
+                    );
                     return ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count template line order saved."
@@ -541,9 +679,14 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 if ("PUT".equalsIgnoreCase(method)) {
                     if (normalizedPath.endsWith("/order-guide-case-size")) {
                         return inventoryRepository.updateOrderGuideCaseSize(
+                                locationContext.id(),
                                 templateLineId,
                                 parseBody(body)
                         )
@@ -557,7 +700,11 @@ class ApiRoutes {
                         ));
                     }
 
-                    return inventoryRepository.updateTemplateLine(templateLineId, parseBody(body))
+                    return inventoryRepository.updateTemplateLine(
+                            locationContext.id(),
+                            templateLineId,
+                            parseBody(body)
+                    )
                             ? ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count template line saved."
@@ -570,7 +717,7 @@ class ApiRoutes {
 
                 if ("POST".equalsIgnoreCase(method)
                         && normalizedPath.endsWith("/deactivate")) {
-                    return inventoryRepository.deactivateTemplateLine(templateLineId)
+                    return inventoryRepository.deactivateTemplateLine(locationContext.id(), templateLineId)
                             ? ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count template line deactivated."
@@ -602,10 +749,15 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 if ("GET".equalsIgnoreCase(method)) {
                     return ApiResult.json(
                             200,
                             inventoryRepository.generateOrderGuideJson(
+                                    locationContext.id(),
                                     orderGuidePath.openingCountId(),
                                     orderGuidePath.closingCountId()
                             )
@@ -633,15 +785,19 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
                 if ("GET".equalsIgnoreCase(method) && countLinesPath.linesRequest()) {
                     return ApiResult.json(
                             200,
-                            inventoryRepository.findCountLinesJson(countLinesPath.countId())
+                            inventoryRepository.findCountLinesJson(locationContext.id(), countLinesPath.countId())
                     );
                 }
 
                 if ("PUT".equalsIgnoreCase(method) && countLinesPath.linesRequest()) {
-                    inventoryRepository.updateCountLines(parseBodyArray(body));
+                    inventoryRepository.updateCountLines(locationContext.id(), parseBodyArray(body));
                     return ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count quantities saved."
@@ -649,7 +805,11 @@ class ApiRoutes {
                 }
 
                 if ("POST".equalsIgnoreCase(method) && countLinesPath.completeRequest()) {
-                    inventoryRepository.completeCount(countLinesPath.countId(), parseBodyArray(body));
+                    inventoryRepository.completeCount(
+                            locationContext.id(),
+                            countLinesPath.countId(),
+                            parseBodyArray(body)
+                    );
                     return ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count completed."
@@ -657,7 +817,7 @@ class ApiRoutes {
                 }
 
                 if ("DELETE".equalsIgnoreCase(method) && countLinesPath.countRequest()) {
-                    return inventoryRepository.deleteCount(countLinesPath.countId())
+                    return inventoryRepository.deleteCount(locationContext.id(), countLinesPath.countId())
                             ? ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count deleted."
@@ -688,7 +848,12 @@ class ApiRoutes {
             }
 
             try {
-                return ApiResult.json(200, alcoholSalesMappingRepository.findAllJson());
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+
+                return ApiResult.json(200, alcoholSalesMappingRepository.findAllJson(locationContext.id()));
             } catch (IllegalStateException e) {
                 return ApiResult.json(503, Json.object(
                         "error", "database_not_configured",
@@ -710,9 +875,14 @@ class ApiRoutes {
             }
 
             try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+
                 return ApiResult.json(
                         201,
-                        alcoholSalesMappingRepository.insertJson(parseBody(body))
+                        alcoholSalesMappingRepository.insertJson(locationContext.id(), parseBody(body))
                 );
             } catch (IllegalArgumentException e) {
                 return ApiResult.json(400, Json.object(
@@ -737,7 +907,13 @@ class ApiRoutes {
 
             if ("PUT".equalsIgnoreCase(method)) {
                 try {
+                    LocationContext locationContext = requireLocationContext(headers);
+                    if (locationContext == null) {
+                        return locationUnauthorized();
+                    }
+
                     String json = alcoholSalesMappingRepository.updateJson(
+                            locationContext.id(),
                             alcoholMappingId,
                             parseBody(body)
                     );
@@ -764,7 +940,12 @@ class ApiRoutes {
             if ("POST".equalsIgnoreCase(method)
                     && normalizedPath.endsWith("/deactivate")) {
                 try {
-                    return alcoholSalesMappingRepository.deactivate(alcoholMappingId)
+                    LocationContext locationContext = requireLocationContext(headers);
+                    if (locationContext == null) {
+                        return locationUnauthorized();
+                    }
+
+                    return alcoholSalesMappingRepository.deactivate(locationContext.id(), alcoholMappingId)
                             ? ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Alcohol sales mapping deactivated."
@@ -861,45 +1042,64 @@ class ApiRoutes {
             return unauthorized;
         }
 
+        LocationContext locationContext;
+        try {
+            locationContext = requireLocationContext(headers);
+        } catch (IllegalStateException e) {
+            return ApiResult.json(503, Json.object(
+                    "error", "database_not_configured",
+                    "message", e.getMessage()
+            ));
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return databaseError("Failed to validate location session.");
+        }
+        if (locationContext == null) {
+            return ApiResult.json(401, Json.object(
+                    "error", "location_unauthorized",
+                    "message", "A valid location login is required."
+            ));
+        }
+
         try {
             if ("GET".equalsIgnoreCase(method) && "/labour/weeks".equals(path)) {
-                return ApiResult.json(200, labourRepository.savedLabourWeeksJson());
+                return ApiResult.json(200, labourRepository.savedLabourWeeksJson(locationContext.id()));
             }
 
             String weeklyStart = pathDate(path, "/labour/weekly/");
             if ("GET".equalsIgnoreCase(method) && weeklyStart != null) {
-                return ApiResult.json(200, labourRepository.weeklyLabourJson(weeklyStart));
+                return ApiResult.json(200, labourRepository.weeklyLabourJson(locationContext.id(), weeklyStart));
             }
             if ("PUT".equalsIgnoreCase(method) && "/labour/weekly".equals(path)) {
-                labourRepository.saveWeeklyLabour(parseBody(body));
+                labourRepository.saveWeeklyLabour(locationContext.id(), parseBody(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Weekly labour saved."));
             }
             String dailyDate = pathDate(path, "/labour/daily/");
             if ("GET".equalsIgnoreCase(method) && dailyDate != null) {
-                return ApiResult.json(200, labourRepository.dailyLabourJson(dailyDate));
+                return ApiResult.json(200, labourRepository.dailyLabourJson(locationContext.id(), dailyDate));
             }
             if ("PUT".equalsIgnoreCase(method) && "/labour/daily".equals(path)) {
-                labourRepository.saveDailyLabour(parseBody(body));
+                labourRepository.saveDailyLabour(locationContext.id(), parseBody(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Daily labour saved."));
             }
 
             if ("GET".equalsIgnoreCase(method) && "/labour/positions".equals(path)) {
-                return ApiResult.json(200, labourRepository.findPositionsJson(false));
+                return ApiResult.json(200, labourRepository.findPositionsJson(locationContext.id(), false));
             }
             if ("GET".equalsIgnoreCase(method) && "/labour/positions/active".equals(path)) {
-                return ApiResult.json(200, labourRepository.findPositionsJson(true));
+                return ApiResult.json(200, labourRepository.findPositionsJson(locationContext.id(), true));
             }
             if ("POST".equalsIgnoreCase(method) && "/labour/positions".equals(path)) {
-                return ApiResult.json(201, labourRepository.savePositionJson(parseBody(body)));
+                return ApiResult.json(201, labourRepository.savePositionJson(locationContext.id(), parseBody(body)));
             }
             Integer positionId = pathId(path, "/labour/positions/");
             if (positionId != null) {
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, labourRepository.savePositionJson(parseBody(body)));
+                    return ApiResult.json(200, labourRepository.savePositionJson(locationContext.id(), parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            labourRepository.deactivatePosition(positionId),
+                            labourRepository.deactivatePosition(locationContext.id(), positionId),
                             "Labour position deactivated.",
                             "Labour position not found."
                     );
@@ -907,19 +1107,19 @@ class ApiRoutes {
             }
 
             if ("GET".equalsIgnoreCase(method) && "/labour/employees".equals(path)) {
-                return ApiResult.json(200, labourRepository.findEmployeesJson());
+                return ApiResult.json(200, labourRepository.findEmployeesJson(locationContext.id()));
             }
             if ("POST".equalsIgnoreCase(method) && "/labour/employees".equals(path)) {
-                return ApiResult.json(201, labourRepository.saveEmployeeJson(parseBody(body)));
+                return ApiResult.json(201, labourRepository.saveEmployeeJson(locationContext.id(), parseBody(body)));
             }
             Integer employeeId = pathId(path, "/labour/employees/");
             if (employeeId != null) {
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, labourRepository.saveEmployeeJson(parseBody(body)));
+                    return ApiResult.json(200, labourRepository.saveEmployeeJson(locationContext.id(), parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            labourRepository.deactivateEmployee(employeeId),
+                            labourRepository.deactivateEmployee(locationContext.id(), employeeId),
                             "Labour employee deactivated.",
                             "Labour employee not found."
                     );
@@ -965,21 +1165,31 @@ class ApiRoutes {
         }
 
         try {
+            LocationContext locationContext = requireLocationContext(headers);
+            if (locationContext == null) {
+                return locationUnauthorized();
+            }
             if ("GET".equalsIgnoreCase(method) && "/reporting/invoices".equals(path)) {
-                return ApiResult.json(200, reportingRepository.findInvoicesJson());
+                return ApiResult.json(200, reportingRepository.findInvoicesJson(locationContext.id()));
             }
 
             Integer invoiceId = pathId(path, "/reporting/invoices/");
             if (invoiceId != null) {
                 if ("GET".equalsIgnoreCase(method) && path.endsWith("/lines")) {
-                    return ApiResult.json(200, reportingRepository.findInvoiceLinesJson(invoiceId));
+                    return ApiResult.json(
+                            200,
+                            reportingRepository.findInvoiceLinesJson(locationContext.id(), invoiceId)
+                    );
                 }
                 if ("GET".equalsIgnoreCase(method) && path.endsWith("/breakdown")) {
-                    return ApiResult.json(200, reportingRepository.findInvoiceBreakdownJson(invoiceId));
+                    return ApiResult.json(
+                            200,
+                            reportingRepository.findInvoiceBreakdownJson(locationContext.id(), invoiceId)
+                    );
                 }
                 if ("DELETE".equalsIgnoreCase(method)) {
                     return okOrNotFound(
-                            reportingRepository.deleteInvoice(invoiceId),
+                            reportingRepository.deleteInvoice(locationContext.id(), invoiceId),
                             "Invoice deleted.",
                             "Invoice not found."
                     );
@@ -987,10 +1197,10 @@ class ApiRoutes {
             }
 
             if ("GET".equalsIgnoreCase(method) && "/sales-periods".equals(path)) {
-                return ApiResult.json(200, reportingRepository.findSalesPeriodsJson());
+                return ApiResult.json(200, reportingRepository.findSalesPeriodsJson(locationContext.id()));
             }
             if ("POST".equalsIgnoreCase(method) && "/sales-periods".equals(path)) {
-                reportingRepository.saveSalesPeriod(parseBody(body));
+                reportingRepository.saveSalesPeriod(locationContext.id(), parseBody(body));
                 return ApiResult.json(201, Json.object(
                         "status", "ok",
                         "message", "Sales period saved."
@@ -999,14 +1209,21 @@ class ApiRoutes {
 
             Integer valuationCountId = pathId(path, "/reporting/inventory-valuations/");
             if (valuationCountId != null && "GET".equalsIgnoreCase(method)) {
-                return ApiResult.json(200, reportingRepository.calculateValuationJson(valuationCountId));
+                return ApiResult.json(
+                        200,
+                        reportingRepository.calculateValuationJson(locationContext.id(), valuationCountId)
+                );
             }
 
             int[] weeklyCostIds = twoPathIds(path, "/reporting/weekly-cost/");
             if (weeklyCostIds != null && "GET".equalsIgnoreCase(method)) {
                 return ApiResult.json(
                         200,
-                        reportingRepository.weeklyCostReportTextJson(weeklyCostIds[0], weeklyCostIds[1])
+                        reportingRepository.weeklyCostReportTextJson(
+                                locationContext.id(),
+                                weeklyCostIds[0],
+                                weeklyCostIds[1]
+                        )
                 );
             }
         } catch (IllegalArgumentException e) {
@@ -1041,23 +1258,29 @@ class ApiRoutes {
         }
 
         try {
+            LocationContext locationContext = requireLocationContext(headers);
+            if (locationContext == null) {
+                return locationUnauthorized();
+            }
+            int locationId = locationContext.id();
+
             if ("GET".equalsIgnoreCase(method) && "/production/stations".equals(path)) {
-                return ApiResult.json(200, productionRepository.findStationsJson(false));
+                return ApiResult.json(200, productionRepository.findStationsJson(locationId, false));
             }
             if ("GET".equalsIgnoreCase(method) && "/production/stations/active".equals(path)) {
-                return ApiResult.json(200, productionRepository.findStationsJson(true));
+                return ApiResult.json(200, productionRepository.findStationsJson(locationId, true));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/stations".equals(path)) {
-                return ApiResult.json(201, productionRepository.saveStationJson(parseBody(body)));
+                return ApiResult.json(201, productionRepository.saveStationJson(locationId, parseBody(body)));
             }
             Integer stationId = pathId(path, "/production/stations/");
             if (stationId != null) {
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, productionRepository.saveStationJson(parseBody(body)));
+                    return ApiResult.json(200, productionRepository.saveStationJson(locationId, parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            productionRepository.deactivateStation(stationId),
+                            productionRepository.deactivateStation(locationId, stationId),
                             "Production station deactivated.",
                             "Production station not found."
                     );
@@ -1065,29 +1288,29 @@ class ApiRoutes {
             }
 
             if ("GET".equalsIgnoreCase(method) && "/production/items".equals(path)) {
-                return ApiResult.json(200, productionRepository.findProductionItemsJson(false));
+                return ApiResult.json(200, productionRepository.findProductionItemsJson(locationId, false));
             }
             if ("GET".equalsIgnoreCase(method) && "/production/items/active".equals(path)) {
-                return ApiResult.json(200, productionRepository.findProductionItemsJson(true));
+                return ApiResult.json(200, productionRepository.findProductionItemsJson(locationId, true));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/items".equals(path)) {
-                return ApiResult.json(201, productionRepository.saveProductionItemJson(parseBody(body)));
+                return ApiResult.json(201, productionRepository.saveProductionItemJson(locationId, parseBody(body)));
             }
             Integer itemId = pathId(path, "/production/items/");
             if (itemId != null) {
                 if ("PUT".equalsIgnoreCase(method) && path.endsWith("/permanent-override-par")) {
                     return okOrNotFound(
-                            productionRepository.updatePermanentOverridePar(itemId, parseBody(body)),
+                            productionRepository.updatePermanentOverridePar(locationId, itemId, parseBody(body)),
                             "Permanent override saved.",
                             "Production item not found."
                     );
                 }
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, productionRepository.saveProductionItemJson(parseBody(body)));
+                    return ApiResult.json(200, productionRepository.saveProductionItemJson(locationId, parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            productionRepository.deactivateProductionItem(itemId),
+                            productionRepository.deactivateProductionItem(locationId, itemId),
                             "Production item deactivated.",
                             "Production item not found."
                     );
@@ -1095,29 +1318,29 @@ class ApiRoutes {
             }
 
             if ("GET".equalsIgnoreCase(method) && "/production/profiles".equals(path)) {
-                return ApiResult.json(200, productionRepository.findProfilesJson(false));
+                return ApiResult.json(200, productionRepository.findProfilesJson(locationId, false));
             }
             if ("GET".equalsIgnoreCase(method) && "/production/profiles/active".equals(path)) {
-                return ApiResult.json(200, productionRepository.findProfilesJson(true));
+                return ApiResult.json(200, productionRepository.findProfilesJson(locationId, true));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/profiles".equals(path)) {
-                return ApiResult.json(201, productionRepository.saveProfileJson(parseBody(body)));
+                return ApiResult.json(201, productionRepository.saveProfileJson(locationId, parseBody(body)));
             }
             Integer profileId = pathId(path, "/production/profiles/");
             if (profileId != null) {
                 if ("GET".equalsIgnoreCase(method) && path.endsWith("/lines")) {
-                    return ApiResult.json(200, productionRepository.findProfileLinesJson(profileId));
+                    return ApiResult.json(200, productionRepository.findProfileLinesJson(locationId, profileId));
                 }
                 if ("PUT".equalsIgnoreCase(method) && path.endsWith("/lines")) {
-                    productionRepository.replaceProfileLines(profileId, parseBodyArray(body));
+                    productionRepository.replaceProfileLines(locationId, profileId, parseBodyArray(body));
                     return ApiResult.json(200, Json.object("status", "ok", "message", "Profile lines saved."));
                 }
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, productionRepository.saveProfileJson(parseBody(body)));
+                    return ApiResult.json(200, productionRepository.saveProfileJson(locationId, parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            productionRepository.deactivateProfile(profileId),
+                            productionRepository.deactivateProfile(locationId, profileId),
                             "Production profile deactivated.",
                             "Production profile not found."
                     );
@@ -1125,29 +1348,29 @@ class ApiRoutes {
             }
 
             if ("GET".equalsIgnoreCase(method) && "/production/pos-menu-items".equals(path)) {
-                return ApiResult.json(200, productionRepository.findPosMenuItemsJson(false));
+                return ApiResult.json(200, productionRepository.findPosMenuItemsJson(locationId, false));
             }
             if ("GET".equalsIgnoreCase(method) && "/production/pos-menu-items/active".equals(path)) {
-                return ApiResult.json(200, productionRepository.findPosMenuItemsJson(true));
+                return ApiResult.json(200, productionRepository.findPosMenuItemsJson(locationId, true));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/pos-menu-items".equals(path)) {
-                return ApiResult.json(201, productionRepository.savePosMenuItemJson(parseBody(body)));
+                return ApiResult.json(201, productionRepository.savePosMenuItemJson(locationId, parseBody(body)));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/pos-menu-items/import".equals(path)) {
-                return ApiResult.json(200, productionRepository.upsertPosMenuItemsJson(parseBodyArray(body)));
+                return ApiResult.json(200, productionRepository.upsertPosMenuItemsJson(locationId, parseBodyArray(body)));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/pos-menu-items/delete-by-skus".equals(path)) {
-                int deleted = productionRepository.deletePosMenuItemsBySkus(parseBodyArray(body));
+                int deleted = productionRepository.deletePosMenuItemsBySkus(locationId, parseBodyArray(body));
                 return ApiResult.json(200, "{\"deleted\":" + deleted + "}");
             }
             Integer posItemId = pathId(path, "/production/pos-menu-items/");
             if (posItemId != null) {
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, productionRepository.savePosMenuItemJson(parseBody(body)));
+                    return ApiResult.json(200, productionRepository.savePosMenuItemJson(locationId, parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            productionRepository.deactivatePosMenuItem(posItemId),
+                            productionRepository.deactivatePosMenuItem(locationId, posItemId),
                             "POS menu item deactivated.",
                             "POS menu item not found."
                     );
@@ -1156,11 +1379,11 @@ class ApiRoutes {
             Integer legacyPosItemId = pathId(path, "/pos-menu-items/");
             if (legacyPosItemId != null) {
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, productionRepository.savePosMenuItemJson(parseBody(body)));
+                    return ApiResult.json(200, productionRepository.savePosMenuItemJson(locationId, parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            productionRepository.deactivatePosMenuItem(legacyPosItemId),
+                            productionRepository.deactivatePosMenuItem(locationId, legacyPosItemId),
                             "POS menu item deactivated.",
                             "POS menu item not found."
                     );
@@ -1168,19 +1391,19 @@ class ApiRoutes {
             }
 
             if ("GET".equalsIgnoreCase(method) && "/production/product-mappings".equals(path)) {
-                return ApiResult.json(200, productionRepository.findProductMappingsJson());
+                return ApiResult.json(200, productionRepository.findProductMappingsJson(locationId));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/product-mappings".equals(path)) {
-                return ApiResult.json(201, productionRepository.saveProductMappingJson(parseBody(body)));
+                return ApiResult.json(201, productionRepository.saveProductMappingJson(locationId, parseBody(body)));
             }
             Integer productMappingId = pathId(path, "/production/product-mappings/");
             if (productMappingId != null) {
                 if ("PUT".equalsIgnoreCase(method)) {
-                    return ApiResult.json(200, productionRepository.saveProductMappingJson(parseBody(body)));
+                    return ApiResult.json(200, productionRepository.saveProductMappingJson(locationId, parseBody(body)));
                 }
                 if ("POST".equalsIgnoreCase(method) && path.endsWith("/deactivate")) {
                     return okOrNotFound(
-                            productionRepository.deactivateProductMapping(productMappingId),
+                            productionRepository.deactivateProductMapping(locationId, productMappingId),
                             "Product mapping deactivated.",
                             "Product mapping not found."
                     );
@@ -1188,35 +1411,35 @@ class ApiRoutes {
             }
 
             if ("GET".equalsIgnoreCase(method) && "/production/freezer-pull/lines".equals(path)) {
-                return ApiResult.json(200, productionRepository.findFreezerPullLinesJson());
+                return ApiResult.json(200, productionRepository.findFreezerPullLinesJson(locationId));
             }
             if ("PUT".equalsIgnoreCase(method) && "/production/freezer-pull/par".equals(path)) {
-                productionRepository.saveFreezerPullPar(parseBody(body));
+                productionRepository.saveFreezerPullPar(locationId, parseBody(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Freezer Pull par saved."));
             }
 
             if ("GET".equalsIgnoreCase(method) && "/production/weeks".equals(path)) {
-                return ApiResult.json(200, productionRepository.findWeeksJson());
+                return ApiResult.json(200, productionRepository.findWeeksJson(locationId));
             }
             if ("POST".equalsIgnoreCase(method) && "/production/weeks/generate".equals(path)) {
-                int weekId = productionRepository.saveGeneratedWeek(parseBody(body));
+                int weekId = productionRepository.saveGeneratedWeek(locationId, parseBody(body));
                 return ApiResult.json(201, "{\"productionWeekId\":" + weekId + "}");
             }
             if ("PUT".equalsIgnoreCase(method) && path.endsWith("/refresh")) {
-                productionRepository.refreshWeek(parseBody(body));
+                productionRepository.refreshWeek(locationId, parseBody(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Week refreshed."));
             }
             Integer weekId = pathId(path, "/production/weeks/");
             if (weekId != null) {
                 if ("GET".equalsIgnoreCase(method) && path.endsWith("/days")) {
-                    return ApiResult.json(200, productionRepository.findWeekDaysJson(weekId));
+                    return ApiResult.json(200, productionRepository.findWeekDaysJson(locationId, weekId));
                 }
                 if ("GET".equalsIgnoreCase(method) && path.endsWith("/lines")) {
-                    return ApiResult.json(200, productionRepository.findWeekLinesJson(weekId));
+                    return ApiResult.json(200, productionRepository.findWeekLinesJson(locationId, weekId));
                 }
             }
             if ("PUT".equalsIgnoreCase(method) && "/production/week-lines/overrides".equals(path)) {
-                productionRepository.updateWeekLineOverrides(parseBodyArray(body));
+                productionRepository.updateWeekLineOverrides(locationId, parseBodyArray(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Overrides saved."));
             }
         } catch (IllegalArgumentException e) {
@@ -1251,6 +1474,16 @@ class ApiRoutes {
         ));
     }
 
+    private LocationContext requireLocationContext(
+            Map<String, List<String>> headers
+    ) throws SQLException {
+        if (!ApiConfig.locationAuthRequired()) {
+            return new LocationContext(1, "ESM", "Existing Store", "esm");
+        }
+
+        return locationAuthRepository.resolveSession(headerValue(headers, "x-location-token"));
+    }
+
     private ApiResult badRequest(IllegalArgumentException e) {
         return ApiResult.json(400, Json.object(
                 "error", "bad_request",
@@ -1262,6 +1495,13 @@ class ApiRoutes {
         return ApiResult.json(500, Json.object(
                 "error", "database_error",
                 "message", message
+        ));
+    }
+
+    private ApiResult locationUnauthorized() {
+        return ApiResult.json(401, Json.object(
+                "error", "location_unauthorized",
+                "message", "A valid store login session is required."
         ));
     }
 
@@ -1350,6 +1590,27 @@ class ApiRoutes {
         }
 
         return new JsonObjectParser().parse(body);
+    }
+
+    private String requiredBodyString(Map<String, Object> body, String key) {
+        Object value = body.get(key);
+        if (value == null || value.toString().isBlank()) {
+            throw new IllegalArgumentException(key + " is required.");
+        }
+
+        return value.toString().trim();
+    }
+
+    private String locationSessionJson(LocationSession session) {
+        return "{"
+                + "\"token\":" + Json.nullableString(session.token()) + ","
+                + "\"location\":{"
+                + "\"id\":" + session.locationId() + ","
+                + "\"code\":" + Json.nullableString(session.locationCode()) + ","
+                + "\"name\":" + Json.nullableString(session.locationName()) + ","
+                + "\"username\":" + Json.nullableString(session.username())
+                + "}"
+                + "}";
     }
 
     private List<Map<String, Object>> parseBodyArray(String body) {

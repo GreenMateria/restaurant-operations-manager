@@ -1,5 +1,16 @@
 # Release History
 
+## v4.0.0
+Date: 2026-09-11
+
+- Added multi-location Store Login for Cloud API mode.
+- Added location credentials, hashed location sessions, `POST /auth/login`, and desktop session-token handling.
+- Scoped main store-owned API workflows by location, including Food, Alcohol, Supplies, Production, Reporting/Sales, Purchasing, and Labour.
+- Added `location_id` schema support and PostgreSQL location-aware uniqueness through schema version 21.
+- Added location administration scripts for creating stores, editing stores, resetting store passwords, applying migrations, and copying selected setup/master data between stores.
+- Release builds now enable Store Login by default with `location.login.required=true`.
+- Deployed the API with location auth required and verified TEST-store isolation.
+
 ## v3.0.6
 Date: 2026-08-31
 
@@ -219,3 +230,8 @@ Date: 2026-09-07 10:46
 Date: 2026-09-08 18:44
 
 - Completed Alcohol Varience Reporting. Completed Labour Management.
+
+## v4.0.0
+Date: 2026-09-11 17:08
+
+- Multi Store mode activated. User name and password login requred.

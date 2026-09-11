@@ -7,7 +7,7 @@ import java.sql.SQLException;
 
 class AlcoholProductProfileRepository {
 
-    String findAllActiveJson() throws SQLException {
+    String findAllActiveJson(int locationId) throws SQLException {
         String sql = """
                 SELECT
                     id,
@@ -19,25 +19,28 @@ class AlcoholProductProfileRepository {
                     full_content_weight,
                     active
                 FROM alcohol_product_profiles
-                WHERE active = 1
+                WHERE location_id = ?
+                  AND active = 1
                 ORDER BY product_id
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet resultSet = statement.executeQuery()) {
-            StringBuilder json = new StringBuilder("[");
-            boolean first = true;
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                StringBuilder json = new StringBuilder("[");
+                boolean first = true;
 
-            while (resultSet.next()) {
-                if (!first) {
-                    json.append(',');
+                while (resultSet.next()) {
+                    if (!first) {
+                        json.append(',');
+                    }
+                    json.append(profileJson(resultSet));
+                    first = false;
                 }
-                json.append(profileJson(resultSet));
-                first = false;
-            }
 
-            return json.append(']').toString();
+                return json.append(']').toString();
+            }
         }
     }
 

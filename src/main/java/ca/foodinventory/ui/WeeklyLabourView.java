@@ -25,6 +25,9 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.RowConstraints;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
@@ -38,11 +41,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class
-WeeklyLabourView extends BorderPane {
+public class WeeklyLabourView extends BorderPane {
 
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("EEE");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d");
+    private static final double NAME_COLUMN_WIDTH = 230;
+    private static final double SHIFT_COLUMN_WIDTH = 56;
+    private static final double TOTAL_COLUMN_WIDTH = 76;
+    private static final double HEADER_ROW_HEIGHT = 44;
+    private static final double EMPLOYEE_ROW_HEIGHT = 28;
+    private static final double POSITION_ROW_HEIGHT = 44;
 
     private final LabourDailyEntryDao labourDailyEntryDao = new LabourDailyEntryDao();
     private final LabourApiClient apiClient = new LabourApiClient();
@@ -52,7 +60,14 @@ WeeklyLabourView extends BorderPane {
     private final Button loadButton = primaryButton("Load Week", this::loadSelectedWeek);
     private final Button saveButton = primaryButton("Save Hours", this::saveWeek);
     private final Label statusLabel = new Label("Ready");
-    private final GridPane grid = new GridPane();
+    private final GridPane cornerGrid = sheetGrid();
+    private final GridPane headerGrid = sheetGrid();
+    private final GridPane rowHeaderGrid = sheetGrid();
+    private final GridPane bodyGrid = sheetGrid();
+    private final Label weekBandLabel = new Label("");
+    private final ScrollPane headerScrollPane = frozenScrollPane(headerGrid);
+    private final ScrollPane rowHeaderScrollPane = frozenScrollPane(rowHeaderGrid);
+    private final ScrollPane bodyScrollPane = new ScrollPane(bodyGrid);
     private final List<TextField> entryFields = new ArrayList<>();
     private final Map<WeeklyLabourRow, Label> rowHoursLabels = new LinkedHashMap<>();
     private final Map<WeeklyLabourRow, Label> rowDollarsLabels = new LinkedHashMap<>();
@@ -102,31 +117,91 @@ WeeklyLabourView extends BorderPane {
         top.setPadding(new Insets(12, 16, 10, 16));
         setTop(top);
 
-        grid.setHgap(1);
-        grid.setVgap(1);
-        grid.setPadding(new Insets(8));
-        grid.getStyleClass().add("weekly-labour-grid");
-        configureColumns();
-
-        ScrollPane scrollPane = new ScrollPane(grid);
-        scrollPane.setFitToHeight(false);
-        scrollPane.setFitToWidth(false);
-        scrollPane.setPannable(true);
-        scrollPane.getStyleClass().add("content-area");
-        BorderPane.setMargin(scrollPane, new Insets(0, 12, 0, 12));
-        setCenter(scrollPane);
+        configureSheetGrids();
+        setCenter(buildFrozenSheet());
 
         setBottom(null);
         loadWeek(weekStartPicker.getValue());
     }
 
-    private void configureColumns() {
-        grid.getColumnConstraints().clear();
-        grid.getColumnConstraints().add(column(170, HPos.LEFT));
+    private GridPane sheetGrid() {
+        GridPane pane = new GridPane();
+        pane.setHgap(1);
+        pane.setVgap(1);
+        pane.getStyleClass().add("weekly-labour-grid");
+        return pane;
+    }
+
+    private ScrollPane frozenScrollPane(GridPane content) {
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToHeight(false);
+        scrollPane.setFitToWidth(false);
+        scrollPane.setPannable(false);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.getStyleClass().add("weekly-labour-frozen-scroll");
+        return scrollPane;
+    }
+
+    private StackPane buildFrozenSheet() {
+        weekBandLabel.getStyleClass().addAll("weekly-labour-group", "labour-sheet-subtitle");
+        weekBandLabel.setMinHeight(POSITION_ROW_HEIGHT);
+        weekBandLabel.setMaxWidth(Double.MAX_VALUE);
+
+        HBox headerRow = new HBox(cornerGrid, headerScrollPane);
+        HBox.setHgrow(headerScrollPane, Priority.ALWAYS);
+
+        HBox bodyRow = new HBox(rowHeaderScrollPane, bodyScrollPane);
+        HBox.setHgrow(bodyScrollPane, Priority.ALWAYS);
+        VBox.setVgrow(bodyRow, Priority.ALWAYS);
+
+        bodyScrollPane.setFitToHeight(false);
+        bodyScrollPane.setFitToWidth(false);
+        bodyScrollPane.setPannable(true);
+        bodyScrollPane.getStyleClass().add("weekly-labour-body-scroll");
+        rowHeaderScrollPane.setMinWidth(NAME_COLUMN_WIDTH + 2);
+        rowHeaderScrollPane.setPrefWidth(NAME_COLUMN_WIDTH + 2);
+        rowHeaderScrollPane.setMaxWidth(NAME_COLUMN_WIDTH + 2);
+
+        bodyScrollPane.hvalueProperty().addListener((obs, oldValue, newValue) ->
+                headerScrollPane.setHvalue(newValue.doubleValue()));
+        bodyScrollPane.vvalueProperty().addListener((obs, oldValue, newValue) ->
+                rowHeaderScrollPane.setVvalue(newValue.doubleValue()));
+
+        VBox gridArea = new VBox(headerRow, bodyRow);
+        VBox.setVgrow(bodyRow, Priority.ALWAYS);
+
+        VBox sheet = new VBox(weekBandLabel, gridArea);
+        VBox.setVgrow(gridArea, Priority.ALWAYS);
+        sheet.setPadding(new Insets(8));
+        sheet.getStyleClass().add("content-area");
+
+        StackPane wrapper = new StackPane(sheet);
+        BorderPane.setMargin(wrapper, new Insets(0, 12, 0, 12));
+        return wrapper;
+    }
+
+    private void configureSheetGrids() {
+        cornerGrid.getColumnConstraints().clear();
+        cornerGrid.getRowConstraints().clear();
+        cornerGrid.getColumnConstraints().add(column(NAME_COLUMN_WIDTH, HPos.LEFT));
+        cornerGrid.getRowConstraints().add(row(HEADER_ROW_HEIGHT));
+        cornerGrid.getRowConstraints().add(row(HEADER_ROW_HEIGHT));
+
+        rowHeaderGrid.getColumnConstraints().clear();
+        rowHeaderGrid.getColumnConstraints().add(column(NAME_COLUMN_WIDTH, HPos.LEFT));
+
+        headerGrid.getColumnConstraints().clear();
+        headerGrid.getRowConstraints().clear();
+        bodyGrid.getColumnConstraints().clear();
         for (int i = 0; i < 14; i++) {
-            grid.getColumnConstraints().add(column(56, HPos.CENTER));
+            headerGrid.getColumnConstraints().add(column(SHIFT_COLUMN_WIDTH, HPos.CENTER));
+            bodyGrid.getColumnConstraints().add(column(SHIFT_COLUMN_WIDTH, HPos.CENTER));
         }
-        grid.getColumnConstraints().add(column(76, HPos.RIGHT));
+        headerGrid.getColumnConstraints().add(column(TOTAL_COLUMN_WIDTH, HPos.RIGHT));
+        headerGrid.getRowConstraints().add(row(HEADER_ROW_HEIGHT));
+        headerGrid.getRowConstraints().add(row(HEADER_ROW_HEIGHT));
+        bodyGrid.getColumnConstraints().add(column(TOTAL_COLUMN_WIDTH, HPos.RIGHT));
     }
 
     private ColumnConstraints column(double width, HPos alignment) {
@@ -134,6 +209,13 @@ WeeklyLabourView extends BorderPane {
         constraints.setMinWidth(width);
         constraints.setPrefWidth(width);
         constraints.setHalignment(alignment);
+        return constraints;
+    }
+
+    private RowConstraints row(double height) {
+        RowConstraints constraints = new RowConstraints();
+        constraints.setMinHeight(height);
+        constraints.setPrefHeight(height);
         return constraints;
     }
 
@@ -217,7 +299,12 @@ WeeklyLabourView extends BorderPane {
     }
 
     private void buildGrid() {
-        grid.getChildren().clear();
+        cornerGrid.getChildren().clear();
+        headerGrid.getChildren().clear();
+        rowHeaderGrid.getChildren().clear();
+        bodyGrid.getChildren().clear();
+        rowHeaderGrid.getRowConstraints().clear();
+        bodyGrid.getRowConstraints().clear();
         entryFields.clear();
         rowHoursLabels.clear();
         rowDollarsLabels.clear();
@@ -225,21 +312,29 @@ WeeklyLabourView extends BorderPane {
         groupDollarsLabels.clear();
 
         if (currentData == null || currentData.rows().isEmpty()) {
-            grid.add(messageLabel("No active labour employees are configured."), 0, 0, 6, 1);
+            weekBandLabel.setText("");
+            rowHeaderGrid.add(messageLabel("No active labour employees are configured."), 0, 0);
             updateSummary();
             return;
         }
 
+        LocalDate start = currentData.weekStartDate();
+        weekBandLabel.setText("WEEK OF " + DATE_FORMAT.format(start).toUpperCase()
+                + " TO " + DATE_FORMAT.format(start.plusDays(6)).toUpperCase());
+
+        addHeader();
         int rowIndex = 0;
-        addDateBand(rowIndex++);
-        addHeader(rowIndex);
-        rowIndex += 2;
 
         currentRowsByPosition = rowsByPosition();
         for (Map.Entry<String, List<WeeklyLabourRow>> group : currentRowsByPosition.entrySet()) {
-            grid.add(positionGroupLabel("DEPARTMENT: " + group.getKey().toUpperCase()), 0, rowIndex++, 16, 1);
+            addBodyRowConstraint(POSITION_ROW_HEIGHT);
+            rowHeaderGrid.add(positionGroupLabel("DEPARTMENT: " + group.getKey().toUpperCase()), 0, rowIndex);
+            Label band = positionGroupLabel("");
+            bodyGrid.add(band, 0, rowIndex, 15, 1);
+            rowIndex++;
 
             for (WeeklyLabourRow labourRow : group.getValue()) {
+                addBodyRowConstraint(EMPLOYEE_ROW_HEIGHT);
                 addEmployeeRow(labourRow, rowIndex++);
             }
         }
@@ -248,31 +343,35 @@ WeeklyLabourView extends BorderPane {
         updateAllTotals();
     }
 
-    private void addDateBand(int rowIndex) {
-        LocalDate start = currentData.weekStartDate();
-        Label label = groupLabel("WEEK OF " + DATE_FORMAT.format(start).toUpperCase()
-                + " TO " + DATE_FORMAT.format(start.plusDays(6)).toUpperCase());
-        label.getStyleClass().add("labour-sheet-subtitle");
-        grid.add(label, 0, rowIndex, 16, 1);
+    private void addBodyRowConstraint(double height) {
+        RowConstraints row = new RowConstraints();
+        row.setMinHeight(height);
+        row.setPrefHeight(height);
+        rowHeaderGrid.getRowConstraints().add(row);
+
+        RowConstraints bodyRow = new RowConstraints();
+        bodyRow.setMinHeight(height);
+        bodyRow.setPrefHeight(height);
+        bodyGrid.getRowConstraints().add(bodyRow);
     }
 
-    private void addHeader(int rowIndex) {
-        addHeaderCell("NAME", 0, rowIndex, 1, 1);
+    private void addHeader() {
+        addCornerHeaderCell("NAME", 0, 0, 1, 2);
         for (int day = 0; day < 7; day++) {
             LocalDate date = currentData.weekStartDate().plusDays(day);
             addHeaderCell(DAY_FORMAT.format(date).toUpperCase() + "\n" + DATE_FORMAT.format(date),
-                    1 + day * 2,
-                    rowIndex,
+                    day * 2,
+                    0,
                     2,
                     1);
-            addHeaderCell("SHIFT 1", 1 + day * 2, rowIndex + 1, 1, 1);
-            addHeaderCell("SHIFT 2", 2 + day * 2, rowIndex + 1, 1, 1);
+            addHeaderCell("SHIFT 1", day * 2, 1, 1, 1);
+            addHeaderCell("SHIFT 2", 1 + day * 2, 1, 1, 1);
         }
-        addHeaderCell("TOTAL\nHOURS", 15, rowIndex, 1, 1);
+        addHeaderCell("TOTAL\nHOURS", 14, 0, 1, 2);
     }
 
     private void addEmployeeRow(WeeklyLabourRow labourRow, int rowIndex) {
-        grid.add(cellLabel(labourRow.getEmployeeName()), 0, rowIndex);
+        rowHeaderGrid.add(cellLabel(labourRow.getEmployeeName()), 0, rowIndex);
 
         List<TextField> rowFields = new ArrayList<>();
         for (int day = 0; day < 7; day++) {
@@ -284,8 +383,8 @@ WeeklyLabourView extends BorderPane {
             rowFields.add(shift2);
             entryFields.add(shift1);
             entryFields.add(shift2);
-            grid.add(shift1, 1 + day * 2, rowIndex);
-            grid.add(shift2, 2 + day * 2, rowIndex);
+            bodyGrid.add(shift1, day * 2, rowIndex);
+            bodyGrid.add(shift2, 1 + day * 2, rowIndex);
 
             shift1.textProperty().addListener((obs, oldText, newText) ->
                     handleHoursEdit(shift1, entry, true));
@@ -294,7 +393,7 @@ WeeklyLabourView extends BorderPane {
         }
 
         Label totalHours = rightCellLabel("");
-        grid.add(totalHours, 15, rowIndex);
+        bodyGrid.add(totalHours, 14, rowIndex);
         rowHoursLabels.put(labourRow, totalHours);
 
         Runnable refreshRow = () -> {
@@ -570,13 +669,23 @@ WeeklyLabourView extends BorderPane {
         addHeaderCell(text, column, row, 1, 1);
     }
 
+    private void addCornerHeaderCell(String text, int column, int row, int columnSpan, int rowSpan) {
+        Label label = headerLabel(text);
+        cornerGrid.add(label, column, row, columnSpan, rowSpan);
+    }
+
     private void addHeaderCell(String text, int column, int row, int columnSpan, int rowSpan) {
+        Label label = headerLabel(text);
+        headerGrid.add(label, column, row, columnSpan, rowSpan);
+    }
+
+    private Label headerLabel(String text) {
         Label label = new Label(text);
         label.setAlignment(Pos.CENTER);
-        label.setMinHeight(44);
+        label.setMinHeight(HEADER_ROW_HEIGHT);
         label.setMaxWidth(Double.MAX_VALUE);
         label.getStyleClass().add("weekly-labour-header");
-        grid.add(label, column, row, columnSpan, rowSpan);
+        return label;
     }
 
     private Button primaryButton(String text, Runnable action) {

@@ -4,6 +4,7 @@ import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.service.AppVersionService;
 import ca.foodinventory.service.GitHubUpdateService;
 import ca.foodinventory.service.GitHubUpdateService.UpdateInfo;
+import ca.foodinventory.ui.LocationLoginDialog;
 import ca.foodinventory.ui.MainView;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -36,6 +37,13 @@ public class MainApp extends Application {
     public void start(Stage stage) {
         primaryStage = stage;
         DatabaseManager.initializeDatabase();
+
+        if (DatabaseManager.isApiDatabase()
+                && DatabaseManager.isLocationLoginRequired()
+                && !new LocationLoginDialog(stage).showAndLogin()) {
+            Platform.exit();
+            return;
+        }
 
         MainView mainView = new MainView();
         Scene scene = new Scene(mainView.getView(), 1200, 700);

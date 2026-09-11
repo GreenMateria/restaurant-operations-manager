@@ -1,6 +1,5 @@
 package ca.foodinventory.service;
 
-import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InventoryValuationLine;
 import ca.foodinventory.model.Invoice;
 import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
@@ -95,19 +94,7 @@ public class ReportingApiClient {
     }
 
     private HttpRequest.Builder requestBuilder(String path) {
-        String baseUrl = DatabaseManager.getConfiguredApiUrl();
-        String apiKey = DatabaseManager.getConfiguredApiKey();
-
-        if (baseUrl.isBlank() || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                    "API mode requires api.url and api.key configuration."
-            );
-        }
-
-        return HttpRequest.newBuilder(endpoint(baseUrl, path))
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/json")
-                .header("x-api-key", apiKey);
+        return ApiRequestSupport.requestBuilder(path);
     }
 
     private HttpResponse<String> send(HttpRequest request, String action) {
@@ -125,15 +112,6 @@ public class ReportingApiClient {
         if (response.statusCode() != expectedStatus) {
             throw new RuntimeException(apiName + " returned HTTP " + response.statusCode());
         }
-    }
-
-    private URI endpoint(String baseUrl, String path) {
-        String normalized = baseUrl.trim();
-        if (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-
-        return URI.create(normalized + path);
     }
 
     private List<Invoice> parseInvoices(String json) {

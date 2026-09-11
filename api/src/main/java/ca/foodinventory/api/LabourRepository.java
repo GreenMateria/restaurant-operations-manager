@@ -17,19 +17,21 @@ import java.util.Set;
 
 class LabourRepository {
 
-    String findPositionsJson(boolean activeOnly) throws SQLException {
+    String findPositionsJson(int locationId, boolean activeOnly) throws SQLException {
         String sql = """
                 SELECT id, name, labour_group, sort_order, target_labour_percentage, active
                 FROM labour_positions
+                WHERE location_id = ?
                 """;
         if (activeOnly) {
-            sql += " WHERE active = 1";
+            sql += " AND active = 1";
         }
         sql += " ORDER BY sort_order, name";
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet resultSet = statement.executeQuery()) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
             StringBuilder json = new StringBuilder("[");
             boolean first = true;
             while (resultSet.next()) {
@@ -40,23 +42,24 @@ class LabourRepository {
                 first = false;
             }
             return json.append(']').toString();
+            }
         }
     }
 
-    String savePositionJson(Map<String, Object> body) throws SQLException {
+    String savePositionJson(int locationId, Map<String, Object> body) throws SQLException {
         int id = intValue(body.get("id"));
         String sql = id > 0
                 ? """
                 UPDATE labour_positions
                 SET name = ?, labour_group = ?, sort_order = ?,
                     target_labour_percentage = ?, active = ?
-                WHERE id = ?
+                WHERE id = ? AND location_id = ?
                 """
                 : """
                 INSERT INTO labour_positions (
-                    name, labour_group, sort_order, target_labour_percentage, active
+                    name, labour_group, sort_order, target_labour_percentage, active, location_id
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
@@ -71,8 +74,13 @@ class LabourRepository {
             statement.setInt(5, booleanValue(body.get("active")) ? 1 : 0);
             if (id > 0) {
                 statement.setInt(6, id);
+                statement.setInt(7, locationId);
+            } else {
+                statement.setInt(6, locationId);
             }
-            statement.executeUpdate();
+            if (statement.executeUpdate() == 0 && id > 0) {
+                throw new IllegalArgumentException("Labour position was not found for this location.");
+            }
             if (id <= 0) {
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     if (keys.next()) {
@@ -80,15 +88,15 @@ class LabourRepository {
                     }
                 }
             }
-            return positionByIdJson(connection, id);
+            return positionByIdJson(connection, locationId, id);
         }
     }
 
-    boolean deactivatePosition(int id) throws SQLException {
-        return deactivate("labour_positions", id);
+    boolean deactivatePosition(int locationId, int id) throws SQLException {
+        return deactivate("labour_positions", locationId, id);
     }
 
-    String findEmployeesJson() throws SQLException {
+    String findEmployeesJson(int locationId) throws SQLException {
         String sql = """
                 SELECT
                     le.id, le.name, le.position_id, lp.name AS position_name,
@@ -96,12 +104,14 @@ class LabourRepository {
                     le.uniform_deduction_applicable, le.active
                 FROM labour_employees le
                 LEFT JOIN labour_positions lp ON le.position_id = lp.id
+                WHERE le.location_id = ?
                 ORDER BY lp.sort_order, le.name
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet resultSet = statement.executeQuery()) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
             StringBuilder json = new StringBuilder("[");
             boolean first = true;
             while (resultSet.next()) {
@@ -112,10 +122,11 @@ class LabourRepository {
                 first = false;
             }
             return json.append(']').toString();
+            }
         }
     }
 
-    String saveEmployeeJson(Map<String, Object> body) throws SQLException {
+    String saveEmployeeJson(int locationId, Map<String, Object> body) throws SQLException {
         int id = intValue(body.get("id"));
         String sql = id > 0
                 ? """
@@ -123,14 +134,14 @@ class LabourRepository {
                 SET name = ?, position_id = ?, hourly_wage = ?,
                     tip_pool_eligible = ?, uniform_deduction_applicable = ?,
                     active = ?
-                WHERE id = ?
+                WHERE id = ? AND location_id = ?
                 """
                 : """
                 INSERT INTO labour_employees (
                     name, position_id, hourly_wage, tip_pool_eligible,
-                    uniform_deduction_applicable, active
+                    uniform_deduction_applicable, active, location_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
@@ -154,8 +165,13 @@ class LabourRepository {
             statement.setInt(6, booleanValue(body.get("active")) ? 1 : 0);
             if (id > 0) {
                 statement.setInt(7, id);
+                statement.setInt(8, locationId);
+            } else {
+                statement.setInt(7, locationId);
             }
-            statement.executeUpdate();
+            if (statement.executeUpdate() == 0 && id > 0) {
+                throw new IllegalArgumentException("Labour employee was not found for this location.");
+            }
             if (id <= 0) {
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     if (keys.next()) {
@@ -163,12 +179,12 @@ class LabourRepository {
                     }
                 }
             }
-            return employeeByIdJson(connection, id);
+            return employeeByIdJson(connection, locationId, id);
         }
     }
 
-    boolean deactivateEmployee(int id) throws SQLException {
-        return deactivate("labour_employees", id);
+    boolean deactivateEmployee(int locationId, int id) throws SQLException {
+        return deactivate("labour_employees", locationId, id);
     }
 
     String settingsJson() throws SQLException {
@@ -196,7 +212,7 @@ class LabourRepository {
         }
     }
 
-    String weeklyLabourJson(String weekStart) throws SQLException {
+    String weeklyLabourJson(int locationId, String weekStart) throws SQLException {
         LocalDate weekStartDate = LocalDate.parse(weekStart);
         LocalDate weekEndDate = weekStartDate.plusDays(6);
         StringBuilder rows = new StringBuilder();
@@ -212,25 +228,29 @@ class LabourRepository {
                         lp.target_labour_percentage
                     FROM labour_employees le
                     LEFT JOIN labour_positions lp ON le.position_id = lp.id
-                    WHERE le.active = 1
-                    ORDER BY lp.sort_order, lp.name, le.name
-                    """);
-                 ResultSet resultSet = statement.executeQuery()) {
+                     WHERE le.active = 1
+                       AND le.location_id = ?
+                     ORDER BY lp.sort_order, lp.name, le.name
+                     """);
+                 ) {
+                statement.setInt(1, locationId);
+                try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     int employeeId = resultSet.getInt("employee_id");
-                    if (hasWeeklyEntries(connection, employeeId, weekStartDate, weekEndDate)) {
+                    if (hasWeeklyEntries(connection, locationId, employeeId, weekStartDate, weekEndDate)) {
                         appendRow(
                                 rows,
                                 first,
-                                historicalRowJson(connection, employeeId, weekStartDate, weekEndDate)
+                                historicalRowJson(connection, locationId, employeeId, weekStartDate, weekEndDate)
                         );
                     } else {
                         appendRow(
                                 rows,
                                 first,
-                                currentRowJson(connection, resultSet, weekStartDate, weekEndDate)
+                                currentRowJson(locationId, connection, resultSet, weekStartDate, weekEndDate)
                         );
                     }
+                }
                 }
             }
 
@@ -238,12 +258,14 @@ class LabourRepository {
                     SELECT DISTINCT lde.employee_id
                     FROM labour_daily_entries lde
                     LEFT JOIN labour_employees le ON lde.employee_id = le.id
-                    WHERE lde.work_date BETWEEN ? AND ?
-                      AND COALESCE(le.active, 0) <> 1
-                    ORDER BY lde.employee_id
-                    """)) {
+                     WHERE lde.work_date BETWEEN ? AND ?
+                       AND lde.location_id = ?
+                       AND COALESCE(le.active, 0) <> 1
+                     ORDER BY lde.employee_id
+                     """)) {
                 statement.setString(1, weekStartDate.toString());
                 statement.setString(2, weekEndDate.toString());
+                statement.setInt(3, locationId);
                 try (ResultSet resultSet = statement.executeQuery()) {
                     while (resultSet.next()) {
                         appendRow(
@@ -251,6 +273,7 @@ class LabourRepository {
                                 first,
                                 historicalRowJson(
                                         connection,
+                                        locationId,
                                         resultSet.getInt("employee_id"),
                                         weekStartDate,
                                         weekEndDate
@@ -267,18 +290,22 @@ class LabourRepository {
                 + "}";
     }
 
-    String savedLabourWeeksJson() throws SQLException {
+    String savedLabourWeeksJson(int locationId) throws SQLException {
         Set<LocalDate> weeks = new LinkedHashSet<>();
         try (Connection connection = PostgresConnectionProvider.getConnection();
              PreparedStatement statement = connection.prepareStatement("""
-                     SELECT DISTINCT work_date
-                     FROM labour_daily_entries
-                     ORDER BY work_date DESC
-                     """);
-             ResultSet resultSet = statement.executeQuery()) {
+                      SELECT DISTINCT work_date
+                      FROM labour_daily_entries
+                      WHERE location_id = ?
+                      ORDER BY work_date DESC
+                      """);
+             ) {
+            statement.setInt(1, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
             while (resultSet.next()) {
                 weeks.add(LocalDate.parse(resultSet.getString("work_date"))
                         .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
+            }
             }
         }
 
@@ -298,7 +325,7 @@ class LabourRepository {
     }
 
     @SuppressWarnings("unchecked")
-    void saveWeeklyLabour(Map<String, Object> body) throws SQLException {
+    void saveWeeklyLabour(int locationId, Map<String, Object> body) throws SQLException {
         LocalDate weekStartDate = LocalDate.parse(requireString(body, "weekStartDate"));
         Object rowsValue = body.get("rows");
         if (!(rowsValue instanceof List<?> rows)) {
@@ -309,14 +336,14 @@ class LabourRepository {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement("""
-                    INSERT INTO labour_daily_entries (
-                        work_date, employee_id, position_id, hourly_wage,
-                        shift_1_hours, shift_2_hours, employee_name_snapshot,
-                        position_name_snapshot, labour_group_snapshot, finalized
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(work_date, employee_id)
-                    DO UPDATE SET
+                     INSERT INTO labour_daily_entries (
+                         work_date, employee_id, position_id, hourly_wage,
+                         shift_1_hours, shift_2_hours, employee_name_snapshot,
+                         position_name_snapshot, labour_group_snapshot, finalized, location_id
+                     )
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(location_id, work_date, employee_id)
+                     DO UPDATE SET
                         position_id = excluded.position_id,
                         hourly_wage = excluded.hourly_wage,
                         shift_1_hours = excluded.shift_1_hours,
@@ -336,7 +363,7 @@ class LabourRepository {
                     }
                     for (Object entryValue : entries) {
                         if (entryValue instanceof Map<?, ?> rawEntry) {
-                            applyWeeklyEntry(statement, (Map<String, Object>) rawEntry, weekStartDate);
+                            applyWeeklyEntry(statement, locationId, (Map<String, Object>) rawEntry, weekStartDate);
                             statement.addBatch();
                         }
                     }
@@ -352,7 +379,7 @@ class LabourRepository {
         }
     }
 
-    String dailyLabourJson(String workDateText) throws SQLException {
+    String dailyLabourJson(int locationId, String workDateText) throws SQLException {
         LocalDate workDate = LocalDate.parse(workDateText);
         StringBuilder rows = new StringBuilder();
         boolean[] first = {true};
@@ -367,18 +394,22 @@ class LabourRepository {
                         lp.target_labour_percentage
                     FROM labour_employees le
                     LEFT JOIN labour_positions lp ON le.position_id = lp.id
-                    WHERE le.active = 1
-                    ORDER BY lp.sort_order, lp.name, le.name
-                    """);
-                 ResultSet resultSet = statement.executeQuery()) {
+                     WHERE le.active = 1
+                       AND le.location_id = ?
+                     ORDER BY lp.sort_order, lp.name, le.name
+                     """);
+                 ) {
+                statement.setInt(1, locationId);
+                try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     appendRow(
                             rows,
                             first,
-                            hasDailyEntry(connection, resultSet.getInt("employee_id"), workDate)
-                                    ? historicalRowJson(connection, resultSet.getInt("employee_id"), workDate, workDate)
-                                    : currentRowJson(connection, resultSet, workDate, workDate)
+                            hasDailyEntry(connection, locationId, resultSet.getInt("employee_id"), workDate)
+                                    ? historicalRowJson(connection, locationId, resultSet.getInt("employee_id"), workDate, workDate)
+                                    : currentRowJson(locationId, connection, resultSet, workDate, workDate)
                     );
+                }
                 }
             }
 
@@ -386,17 +417,19 @@ class LabourRepository {
                     SELECT DISTINCT lde.employee_id
                     FROM labour_daily_entries lde
                     LEFT JOIN labour_employees le ON lde.employee_id = le.id
-                    WHERE lde.work_date = ?
-                      AND COALESCE(le.active, 0) <> 1
+                     WHERE lde.work_date = ?
+                       AND lde.location_id = ?
+                       AND COALESCE(le.active, 0) <> 1
                     ORDER BY lde.employee_id
                     """)) {
                 statement.setString(1, workDate.toString());
+                statement.setInt(2, locationId);
                 try (ResultSet resultSet = statement.executeQuery()) {
                     while (resultSet.next()) {
                         appendRow(
                                 rows,
                                 first,
-                                historicalRowJson(connection, resultSet.getInt("employee_id"), workDate, workDate)
+                                historicalRowJson(connection, locationId, resultSet.getInt("employee_id"), workDate, workDate)
                         );
                     }
                 }
@@ -404,14 +437,14 @@ class LabourRepository {
 
             return "{"
                     + "\"workDate\":" + Json.nullableString(workDate.toString()) + ","
-                    + "\"sales\":" + dailySalesJson(connection, workDate) + ","
+                    + "\"sales\":" + dailySalesJson(connection, locationId, workDate) + ","
                     + "\"rows\":[" + rows + "]"
                     + "}";
         }
     }
 
     @SuppressWarnings("unchecked")
-    void saveDailyLabour(Map<String, Object> body) throws SQLException {
+    void saveDailyLabour(int locationId, Map<String, Object> body) throws SQLException {
         LocalDate workDate = LocalDate.parse(requireString(body, "workDate"));
         Object salesValue = body.get("sales");
         if (!(salesValue instanceof Map<?, ?> sales)) {
@@ -426,11 +459,11 @@ class LabourRepository {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement salesStatement = connection.prepareStatement("""
-                    INSERT INTO labour_daily_sales (
-                        sales_date, net_sales, tip_out_pool, finalized
-                    )
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(sales_date)
+                     INSERT INTO labour_daily_sales (
+                         sales_date, net_sales, tip_out_pool, finalized, location_id
+                     )
+                     VALUES (?, ?, ?, ?, ?)
+                     ON CONFLICT(location_id, sales_date)
                     DO UPDATE SET
                         net_sales = excluded.net_sales,
                         tip_out_pool = excluded.tip_out_pool,
@@ -438,12 +471,12 @@ class LabourRepository {
                     """);
                  PreparedStatement entryStatement = connection.prepareStatement("""
                     INSERT INTO labour_daily_entries (
-                        work_date, employee_id, position_id, hourly_wage,
-                        shift_1_hours, shift_2_hours, employee_name_snapshot,
-                        position_name_snapshot, labour_group_snapshot, finalized
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(work_date, employee_id)
+                         work_date, employee_id, position_id, hourly_wage,
+                         shift_1_hours, shift_2_hours, employee_name_snapshot,
+                         position_name_snapshot, labour_group_snapshot, finalized, location_id
+                     )
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(location_id, work_date, employee_id)
                     DO UPDATE SET
                         position_id = excluded.position_id,
                         hourly_wage = excluded.hourly_wage,
@@ -454,7 +487,7 @@ class LabourRepository {
                         labour_group_snapshot = excluded.labour_group_snapshot,
                         finalized = excluded.finalized
                     """)) {
-                applyDailySales(salesStatement, (Map<String, Object>) sales, workDate);
+                applyDailySales(salesStatement, locationId, (Map<String, Object>) sales, workDate);
                 salesStatement.executeUpdate();
 
                 for (Object rowValue : rows) {
@@ -467,7 +500,7 @@ class LabourRepository {
                     }
                     for (Object entryValue : entries) {
                         if (entryValue instanceof Map<?, ?> rawEntry) {
-                            applyDailyEntry(entryStatement, (Map<String, Object>) rawEntry, workDate);
+                            applyDailyEntry(entryStatement, locationId, (Map<String, Object>) rawEntry, workDate);
                             entryStatement.addBatch();
                         }
                     }
@@ -498,20 +531,21 @@ class LabourRepository {
         return BigDecimal.ZERO;
     }
 
-    private String positionByIdJson(Connection connection, int id) throws SQLException {
+    private String positionByIdJson(Connection connection, int locationId, int id) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT id, name, labour_group, sort_order, target_labour_percentage, active
                 FROM labour_positions
-                WHERE id = ?
+                WHERE id = ? AND location_id = ?
                 """)) {
             statement.setInt(1, id);
+            statement.setInt(2, locationId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? positionJson(resultSet) : "";
             }
         }
     }
 
-    private String employeeByIdJson(Connection connection, int id) throws SQLException {
+    private String employeeByIdJson(Connection connection, int locationId, int id) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT
                     le.id, le.name, le.position_id, lp.name AS position_name,
@@ -519,9 +553,10 @@ class LabourRepository {
                     le.uniform_deduction_applicable, le.active
                 FROM labour_employees le
                 LEFT JOIN labour_positions lp ON le.position_id = lp.id
-                WHERE le.id = ?
+                WHERE le.id = ? AND le.location_id = ?
                 """)) {
             statement.setInt(1, id);
+            statement.setInt(2, locationId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? employeeJson(resultSet) : "";
             }
@@ -529,6 +564,7 @@ class LabourRepository {
     }
 
     private String currentRowJson(
+            int locationId,
             Connection connection,
             ResultSet resultSet,
             LocalDate weekStartDate,
@@ -548,12 +584,13 @@ class LabourRepository {
                 resultSet.getInt("employee_active") == 1,
                 resultSet.getInt("tip_pool_eligible") == 1,
                 resultSet.getInt("uniform_deduction_applicable") == 1,
-                entriesJson(connection, employeeId, weekStartDate, weekEndDate)
+                entriesJson(connection, locationId, employeeId, weekStartDate, weekEndDate)
         );
     }
 
     private boolean hasWeeklyEntries(
             Connection connection,
+            int locationId,
             int employeeId,
             LocalDate weekStartDate,
             LocalDate weekEndDate
@@ -562,12 +599,14 @@ class LabourRepository {
                 SELECT 1
                 FROM labour_daily_entries
                 WHERE employee_id = ?
+                  AND location_id = ?
                   AND work_date BETWEEN ? AND ?
                 LIMIT 1
                 """)) {
             statement.setInt(1, employeeId);
-            statement.setString(2, weekStartDate.toString());
-            statement.setString(3, weekEndDate.toString());
+            statement.setInt(2, locationId);
+            statement.setString(3, weekStartDate.toString());
+            statement.setString(4, weekEndDate.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next();
             }
@@ -576,6 +615,7 @@ class LabourRepository {
 
     private boolean hasDailyEntry(
             Connection connection,
+            int locationId,
             int employeeId,
             LocalDate workDate
     ) throws SQLException {
@@ -583,11 +623,13 @@ class LabourRepository {
                 SELECT 1
                 FROM labour_daily_entries
                 WHERE employee_id = ?
+                  AND location_id = ?
                   AND work_date = ?
                 LIMIT 1
                 """)) {
             statement.setInt(1, employeeId);
-            statement.setString(2, workDate.toString());
+            statement.setInt(2, locationId);
+            statement.setString(3, workDate.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next();
             }
@@ -596,6 +638,7 @@ class LabourRepository {
 
     private String historicalRowJson(
             Connection connection,
+            int locationId,
             int employeeId,
             LocalDate weekStartDate,
             LocalDate weekEndDate
@@ -615,13 +658,15 @@ class LabourRepository {
                 LEFT JOIN labour_employees le ON lde.employee_id = le.id
                 LEFT JOIN labour_positions lp ON lde.position_id = lp.id
                 WHERE lde.employee_id = ?
+                  AND lde.location_id = ?
                   AND lde.work_date BETWEEN ? AND ?
                 ORDER BY lde.work_date
                 LIMIT 1
                 """)) {
             statement.setInt(1, employeeId);
-            statement.setString(2, weekStartDate.toString());
-            statement.setString(3, weekEndDate.toString());
+            statement.setInt(2, locationId);
+            statement.setString(3, weekStartDate.toString());
+            statement.setString(4, weekEndDate.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (!resultSet.next()) {
                     return "";
@@ -648,7 +693,7 @@ class LabourRepository {
                         resultSet.getInt("employee_active") == 1,
                         resultSet.getInt("current_tip_pool_eligible") == 1,
                         resultSet.getInt("current_uniform_deduction_applicable") == 1,
-                        entriesJson(connection, employeeId, weekStartDate, weekEndDate)
+                        entriesJson(connection, locationId, employeeId, weekStartDate, weekEndDate)
                 );
             }
         }
@@ -687,6 +732,7 @@ class LabourRepository {
 
     private String entriesJson(
             Connection connection,
+            int locationId,
             int employeeId,
             LocalDate weekStartDate,
             LocalDate weekEndDate
@@ -700,12 +746,14 @@ class LabourRepository {
                     position_name_snapshot, labour_group_snapshot, finalized
                 FROM labour_daily_entries
                 WHERE employee_id = ?
+                  AND location_id = ?
                   AND work_date BETWEEN ? AND ?
                 ORDER BY work_date
                 """)) {
             statement.setInt(1, employeeId);
-            statement.setString(2, weekStartDate.toString());
-            statement.setString(3, weekEndDate.toString());
+            statement.setInt(2, locationId);
+            statement.setString(3, weekStartDate.toString());
+            statement.setString(4, weekEndDate.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     if (!first) {
@@ -752,13 +800,14 @@ class LabourRepository {
                 + "}";
     }
 
-    private String dailySalesJson(Connection connection, LocalDate workDate) throws SQLException {
+    private String dailySalesJson(Connection connection, int locationId, LocalDate workDate) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT id, sales_date, net_sales, tip_out_pool, finalized
                 FROM labour_daily_sales
-                WHERE sales_date = ?
+                WHERE sales_date = ? AND location_id = ?
                 """)) {
             statement.setString(1, workDate.toString());
+            statement.setInt(2, locationId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
                     BigDecimal netSales = resultSet.getBigDecimal("net_sales");
@@ -785,6 +834,7 @@ class LabourRepository {
 
     private void applyDailySales(
             PreparedStatement statement,
+            int locationId,
             Map<String, Object> sales,
             LocalDate workDate
     ) throws SQLException {
@@ -802,10 +852,12 @@ class LabourRepository {
         statement.setBigDecimal(2, netSales);
         statement.setBigDecimal(3, tipOutPool);
         statement.setInt(4, booleanFalseValue(sales.get("finalized")) ? 1 : 0);
+        statement.setInt(5, locationId);
     }
 
     private void applyWeeklyEntry(
             PreparedStatement statement,
+            int locationId,
             Map<String, Object> entry,
             LocalDate weekStartDate
     ) throws SQLException {
@@ -842,10 +894,12 @@ class LabourRepository {
         statement.setString(8, requireString(entry, "positionNameSnapshot"));
         statement.setString(9, requireString(entry, "labourGroupSnapshot"));
         statement.setInt(10, booleanFalseValue(entry.get("finalized")) ? 1 : 0);
+        statement.setInt(11, locationId);
     }
 
     private void applyDailyEntry(
             PreparedStatement statement,
+            int locationId,
             Map<String, Object> entry,
             LocalDate expectedWorkDate
     ) throws SQLException {
@@ -882,14 +936,16 @@ class LabourRepository {
         statement.setString(8, requireString(entry, "positionNameSnapshot"));
         statement.setString(9, requireString(entry, "labourGroupSnapshot"));
         statement.setInt(10, booleanFalseValue(entry.get("finalized")) ? 1 : 0);
+        statement.setInt(11, locationId);
     }
 
-    private boolean deactivate(String tableName, int id) throws SQLException {
+    private boolean deactivate(String tableName, int locationId, int id) throws SQLException {
         try (Connection connection = PostgresConnectionProvider.getConnection();
              PreparedStatement statement = connection.prepareStatement(
-                     "UPDATE " + tableName + " SET active = 0 WHERE id = ?"
+                     "UPDATE " + tableName + " SET active = 0 WHERE id = ? AND location_id = ?"
              )) {
             statement.setInt(1, id);
+            statement.setInt(2, locationId);
             return statement.executeUpdate() > 0;
         }
     }

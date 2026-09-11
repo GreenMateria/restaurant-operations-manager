@@ -126,6 +126,15 @@ function Get-ReleaseApiUrl {
     return $DefaultApiUrl
 }
 
+function Get-ReleaseLocationLoginRequired {
+    $envValue = [Environment]::GetEnvironmentVariable("FOOD_INVENTORY_LOCATION_LOGIN_REQUIRED")
+    if (![string]::IsNullOrWhiteSpace($envValue)) {
+        return $envValue.Trim()
+    }
+
+    return "true"
+}
+
 function Write-ReleaseDatabaseConfig {
     param(
         [string]$ApiUrl,
@@ -145,6 +154,7 @@ function Write-ReleaseDatabaseConfig {
         "mode=api"
         "api.url=$ApiUrl"
         "api.key=$ApiKey"
+        "location.login.required=$(Get-ReleaseLocationLoginRequired)"
     ) | Set-Content -Path $ReleaseDatabaseConfigPath -Encoding UTF8
 }
 

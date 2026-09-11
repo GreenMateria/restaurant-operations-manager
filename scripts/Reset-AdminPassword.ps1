@@ -39,7 +39,12 @@ function ConvertTo-Properties([string[]]$Lines) {
 function New-PasswordHash([string]$Password) {
     $iterations = 310000
     $salt = New-Object byte[] 16
-    [Security.Cryptography.RandomNumberGenerator]::Fill($salt)
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($salt)
+    } finally {
+        $rng.Dispose()
+    }
 
     $deriveBytes = [Security.Cryptography.Rfc2898DeriveBytes]::new(
         $Password,

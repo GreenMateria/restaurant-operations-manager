@@ -64,6 +64,7 @@ ApiKey
 LambdaSubnetIds
 LambdaSecurityGroupIds
 ReservedConcurrency
+LocationAuthRequired
 ```
 
 `DbPassword` and `ApiKey` are marked `NoEcho`, but they are still provided as deployment parameters. A future hardening step should move secret values into AWS Secrets Manager or SSM Parameter Store SecureString.
@@ -89,6 +90,7 @@ FOOD_INVENTORY_API_DB_USER
 FOOD_INVENTORY_API_DB_PASSWORD
 FOOD_INVENTORY_API_KEY
 FOOD_INVENTORY_API_ERROR_DETAILS
+FOOD_INVENTORY_LOCATION_AUTH_REQUIRED
 ```
 
 Do not print full Lambda environment variables in shared notes because they include secrets.
@@ -116,7 +118,7 @@ Imported into stack: Sunday, September 6, 2026
 Stack status after import/update: UPDATE_COMPLETE
 Verified retention after import/update: 30 days
 Drift status after import/update: IN_SYNC
-API health after later version deployment: 3.1.2
+API location auth after v4.0.0 deployment: required
 Labour API routes deployed: Sunday, September 6, 2026
 Labour API route updates for `/labour/weeks`, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support fields deployed: Monday, September 7, 2026
 ```
@@ -236,16 +238,16 @@ These are still manual or external today:
 - Store provisioning.
 - Database backups/snapshot policy.
 - API custom domain, DNS, and certificate.
-- Per-store or per-user authentication.
+- Per-user authentication beyond the current per-store Store Login model.
 
 ## Recommended Next IaC Steps
 
-Do these after the multi-location rollout model is designed, so IaC reflects the target operating shape instead of locking in the current single-location assumptions:
+Do these after the first multi-location rollout has enough real operating feedback, so IaC reflects the target operating shape instead of guessing too early:
 
 1. Define dev/test/prod and per-location environment boundaries.
 2. Move API key and database password handling toward Secrets Manager or SSM SecureString.
 3. Create a dedicated RDS security group and document the direct PostgreSQL fallback decision.
 4. Decide whether to import existing RDS/network resources into CloudFormation or document them as external dependencies.
-5. Add database backup/snapshot policy, cost alarms, API custom domain, DNS, certificate, and per-location/user authentication once rollout requirements are known.
+5. Add database backup/snapshot policy, cost alarms, API custom domain, DNS, certificate, and per-user authentication once rollout requirements are known.
 
 Avoid adding a second RDS instance, NAT Gateway, Multi-AZ RDS, or RDS Proxy until there is a clear reason and the budget impact is accepted.

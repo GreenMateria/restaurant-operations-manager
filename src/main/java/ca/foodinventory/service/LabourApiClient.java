@@ -190,10 +190,15 @@ public class LabourApiClient {
         if (baseUrl.isBlank() || apiKey.isBlank()) {
             throw new IllegalStateException("API mode requires api.url and api.key configuration.");
         }
-        return HttpRequest.newBuilder(endpoint(baseUrl, path))
+        HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint(baseUrl, path))
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/json")
                 .header("x-api-key", apiKey);
+        String locationToken = DatabaseManager.getLocationSessionToken();
+        if (locationToken != null && !locationToken.isBlank()) {
+            builder.header("x-location-token", locationToken);
+        }
+        return builder;
     }
 
     private HttpResponse<String> send(HttpRequest request, String action) {

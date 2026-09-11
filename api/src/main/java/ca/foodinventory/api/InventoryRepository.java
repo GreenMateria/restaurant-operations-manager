@@ -10,18 +10,20 @@ import java.util.Map;
 
 class InventoryRepository {
 
-    String findActiveTemplatesJson(String department) throws SQLException {
+    String findActiveTemplatesJson(int locationId, String department) throws SQLException {
         String sql = """
                 SELECT id, name, active
                 FROM inventory_count_templates
                 WHERE active = 1
+                  AND location_id = ?
                   AND UPPER(name) LIKE ?
                 ORDER BY name
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, departmentPattern(department));
+            statement.setInt(1, locationId);
+            statement.setString(2, departmentPattern(department));
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 StringBuilder json = new StringBuilder("[");
@@ -40,11 +42,11 @@ class InventoryRepository {
         }
     }
 
-    String addTemplateJson(Map<String, Object> body) throws SQLException {
+    String addTemplateJson(int locationId, Map<String, Object> body) throws SQLException {
         String name = requireString(body, "name");
         String sql = """
-                INSERT INTO inventory_count_templates (name, active)
-                VALUES (?, 1)
+                INSERT INTO inventory_count_templates (name, active, location_id)
+                VALUES (?, 1, ?)
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
@@ -53,6 +55,7 @@ class InventoryRepository {
                      Statement.RETURN_GENERATED_KEYS
              )) {
             statement.setString(1, name);
+            statement.setInt(2, locationId);
             statement.executeUpdate();
 
             try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -60,26 +63,28 @@ class InventoryRepository {
                     throw new SQLException("Failed to retrieve template ID.");
                 }
 
-                return templateByIdJson(connection, keys.getInt(1));
+                return templateByIdJson(connection, locationId, keys.getInt(1));
             }
         }
     }
 
-    boolean deactivateTemplate(int templateId) throws SQLException {
+    boolean deactivateTemplate(int locationId, int templateId) throws SQLException {
         String sql = """
                 UPDATE inventory_count_templates
                 SET active = 0
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, templateId);
+            statement.setInt(2, locationId);
             return statement.executeUpdate() > 0;
         }
     }
 
-    String findTemplateLinesJson(int templateId) throws SQLException {
+    String findTemplateLinesJson(int locationId, int templateId) throws SQLException {
         String sql = """
                 SELECT
                     l.*,
@@ -88,14 +93,17 @@ class InventoryRepository {
                 FROM inventory_count_template_lines l
                 JOIN products p
                     ON l.product_id = p.id
+                    AND p.location_id = l.location_id
                 WHERE l.template_id = ?
+                  AND l.location_id = ?
                   AND l.active = 1
                 ORDER BY l.sort_order, p.description
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, templateId);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 StringBuilder json = new StringBuilder("[");
@@ -114,7 +122,7 @@ class InventoryRepository {
         }
     }
 
-    void addTemplateLine(int templateId, Map<String, Object> body) throws SQLException {
+    void addTemplateLine(int locationId, int templateId, Map<String, Object> body) throws SQLException {
         String sql = """
                 INSERT INTO inventory_count_template_lines (
                     template_id,
@@ -124,9 +132,10 @@ class InventoryRepository {
                     count_unit,
                     conversion_factor_to_base,
                     display_name,
+                    location_id,
                     active
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
@@ -138,11 +147,12 @@ class InventoryRepository {
             statement.setString(5, stringValue(body.get("countUnit")));
             statement.setDouble(6, requireDouble(body, "conversionFactorToBase"));
             statement.setString(7, stringValue(body.get("displayName")));
+            statement.setInt(8, locationId);
             statement.executeUpdate();
         }
     }
 
-    boolean updateTemplateLine(int lineId, Map<String, Object> body) throws SQLException {
+    boolean updateTemplateLine(int locationId, int lineId, Map<String, Object> body) throws SQLException {
         String sql = """
                 UPDATE inventory_count_template_lines
                 SET section_name = ?,
@@ -151,6 +161,7 @@ class InventoryRepository {
                     conversion_factor_to_base = ?,
                     display_name = ?
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
@@ -161,25 +172,28 @@ class InventoryRepository {
             statement.setDouble(4, requireDouble(body, "conversionFactorToBase"));
             statement.setString(5, stringValue(body.get("displayName")));
             statement.setInt(6, lineId);
+            statement.setInt(7, locationId);
             return statement.executeUpdate() > 0;
         }
     }
 
-    boolean deactivateTemplateLine(int lineId) throws SQLException {
+    boolean deactivateTemplateLine(int locationId, int lineId) throws SQLException {
         String sql = """
                 UPDATE inventory_count_template_lines
                 SET active = 0
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, lineId);
+            statement.setInt(2, locationId);
             return statement.executeUpdate() > 0;
         }
     }
 
-    void updateTemplateLineSortOrders(List<Map<String, Object>> lines)
+    void updateTemplateLineSortOrders(int locationId, List<Map<String, Object>> lines)
             throws SQLException {
         if (lines == null || lines.isEmpty()) {
             return;
@@ -189,6 +203,7 @@ class InventoryRepository {
                 UPDATE inventory_count_template_lines
                 SET sort_order = ?
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
@@ -199,6 +214,7 @@ class InventoryRepository {
                 for (int i = 0; i < lines.size(); i++) {
                     statement.setInt(1, i + 1);
                     statement.setInt(2, requireInt(lines.get(i), "id"));
+                    statement.setInt(3, locationId);
                     statement.addBatch();
                 }
 
@@ -213,12 +229,12 @@ class InventoryRepository {
         }
     }
 
-    String duplicateTemplateJson(int sourceTemplateId, Map<String, Object> body)
+    String duplicateTemplateJson(int locationId, int sourceTemplateId, Map<String, Object> body)
             throws SQLException {
         String newName = requireString(body, "name");
         String insertTemplateSql = """
-                INSERT INTO inventory_count_templates (name, active)
-                VALUES (?, 1)
+                INSERT INTO inventory_count_templates (name, active, location_id)
+                VALUES (?, 1, ?)
                 """;
         String copyLinesSql = """
                 INSERT INTO inventory_count_template_lines (
@@ -229,6 +245,7 @@ class InventoryRepository {
                     count_unit,
                     conversion_factor_to_base,
                     display_name,
+                    location_id,
                     active
                 )
                 SELECT
@@ -239,9 +256,11 @@ class InventoryRepository {
                     count_unit,
                     conversion_factor_to_base,
                     display_name,
+                    location_id,
                     active
                 FROM inventory_count_template_lines
                 WHERE template_id = ?
+                  AND location_id = ?
                   AND active = 1
                 ORDER BY sort_order
                 """;
@@ -256,6 +275,7 @@ class InventoryRepository {
             );
                  PreparedStatement copyLines = connection.prepareStatement(copyLinesSql)) {
                 insertTemplate.setString(1, newName);
+                insertTemplate.setInt(2, locationId);
                 insertTemplate.executeUpdate();
 
                 int newTemplateId;
@@ -268,10 +288,11 @@ class InventoryRepository {
 
                 copyLines.setInt(1, newTemplateId);
                 copyLines.setInt(2, sourceTemplateId);
+                copyLines.setInt(3, locationId);
                 copyLines.executeUpdate();
                 connection.commit();
 
-                return templateByIdJson(connection, newTemplateId);
+                return templateByIdJson(connection, locationId, newTemplateId);
             } catch (SQLException e) {
                 connection.rollback();
                 throw e;
@@ -281,14 +302,16 @@ class InventoryRepository {
         }
     }
 
-    String findCountsJson(String department, boolean completedOnly) throws SQLException {
+    String findCountsJson(int locationId, String department, boolean completedOnly) throws SQLException {
         String sql = """
                 SELECT c.*,
                        t.name AS template_name
                 FROM inventory_counts c
                 JOIN inventory_count_templates t
                     ON c.template_id = t.id
+                    AND t.location_id = c.location_id
                 WHERE UPPER(t.name) LIKE ?
+                  AND c.location_id = ?
                 """;
         if (completedOnly) {
             sql += " AND c.completed = 1";
@@ -296,8 +319,9 @@ class InventoryRepository {
         sql += " ORDER BY c.count_date DESC, c.id DESC";
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, departmentPattern(department));
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 StringBuilder json = new StringBuilder("[");
@@ -316,7 +340,7 @@ class InventoryRepository {
         }
     }
 
-    String createCountJson(Map<String, Object> body) throws SQLException {
+    String createCountJson(int locationId, Map<String, Object> body) throws SQLException {
         int templateId = requireInt(body, "templateId");
         String countDate = requireString(body, "countDate");
         String periodStartDate = requireString(body, "periodStartDate");
@@ -329,9 +353,10 @@ class InventoryRepository {
                     period_start_date,
                     period_end_date,
                     notes,
+                    location_id,
                     completed
                 )
-                VALUES (?, ?, ?, ?, ?, 0)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
                 """;
         String insertLinesSql = """
                 INSERT INTO inventory_count_lines (
@@ -340,7 +365,8 @@ class InventoryRepository {
                     quantity,
                     count_unit,
                     converted_quantity,
-                    conversion_factor
+                    conversion_factor,
+                    location_id
                 )
                 SELECT
                     ?,
@@ -348,9 +374,11 @@ class InventoryRepository {
                     0,
                     count_unit,
                     0,
-                    conversion_factor_to_base
+                    conversion_factor_to_base,
+                    location_id
                 FROM inventory_count_template_lines
                 WHERE template_id = ?
+                  AND location_id = ?
                   AND active = 1
                 ORDER BY section_name, sort_order
                 """;
@@ -369,6 +397,7 @@ class InventoryRepository {
                 insertCount.setString(3, periodStartDate);
                 insertCount.setString(4, periodEndDate);
                 insertCount.setString(5, notes);
+                insertCount.setInt(6, locationId);
                 insertCount.executeUpdate();
 
                 int countId;
@@ -381,10 +410,11 @@ class InventoryRepository {
 
                 insertLines.setInt(1, countId);
                 insertLines.setInt(2, templateId);
+                insertLines.setInt(3, locationId);
                 insertLines.executeUpdate();
                 connection.commit();
 
-                return countByIdJson(connection, countId);
+                return countByIdJson(connection, locationId, countId);
             } catch (SQLException e) {
                 connection.rollback();
                 throw e;
@@ -394,9 +424,9 @@ class InventoryRepository {
         }
     }
 
-    boolean deleteCount(int countId) throws SQLException {
-        String deleteLinesSql = "DELETE FROM inventory_count_lines WHERE count_id = ?";
-        String deleteCountSql = "DELETE FROM inventory_counts WHERE id = ?";
+    boolean deleteCount(int locationId, int countId) throws SQLException {
+        String deleteLinesSql = "DELETE FROM inventory_count_lines WHERE count_id = ? AND location_id = ?";
+        String deleteCountSql = "DELETE FROM inventory_counts WHERE id = ? AND location_id = ?";
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -405,9 +435,11 @@ class InventoryRepository {
             try (PreparedStatement deleteLines = connection.prepareStatement(deleteLinesSql);
                  PreparedStatement deleteCount = connection.prepareStatement(deleteCountSql)) {
                 deleteLines.setInt(1, countId);
+                deleteLines.setInt(2, locationId);
                 deleteLines.executeUpdate();
 
                 deleteCount.setInt(1, countId);
+                deleteCount.setInt(2, locationId);
                 boolean deleted = deleteCount.executeUpdate() > 0;
                 connection.commit();
                 return deleted;
@@ -420,7 +452,7 @@ class InventoryRepository {
         }
     }
 
-    String findCountLinesJson(int countId) throws SQLException {
+    String findCountLinesJson(int locationId, int countId) throws SQLException {
         String sql = """
                 SELECT
                     l.*,
@@ -432,19 +464,24 @@ class InventoryRepository {
                 FROM inventory_count_lines l
                 JOIN products p
                     ON l.product_id = p.id
+                    AND p.location_id = l.location_id
                 JOIN inventory_counts c
                     ON l.count_id = c.id
+                    AND c.location_id = l.location_id
                 JOIN inventory_count_template_lines tl
                     ON c.template_id = tl.template_id
                     AND l.product_id = tl.product_id
+                    AND tl.location_id = l.location_id
                     AND tl.active = 1
                 WHERE l.count_id = ?
+                  AND l.location_id = ?
                 ORDER BY tl.sort_order
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, countId);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 StringBuilder json = new StringBuilder("[");
@@ -463,7 +500,7 @@ class InventoryRepository {
         }
     }
 
-    void updateCountLines(List<Map<String, Object>> lines) throws SQLException {
+    void updateCountLines(int locationId, List<Map<String, Object>> lines) throws SQLException {
         if (lines == null || lines.isEmpty()) {
             return;
         }
@@ -473,6 +510,7 @@ class InventoryRepository {
                 SET quantity = ?,
                     converted_quantity = ?
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
@@ -484,6 +522,7 @@ class InventoryRepository {
                     statement.setDouble(1, requireDouble(line, "quantity"));
                     statement.setDouble(2, requireDouble(line, "convertedQuantity"));
                     statement.setInt(3, requireInt(line, "id"));
+                    statement.setInt(4, locationId);
                     statement.addBatch();
                 }
 
@@ -498,24 +537,26 @@ class InventoryRepository {
         }
     }
 
-    void completeCount(int countId, List<Map<String, Object>> lines) throws SQLException {
+    void completeCount(int locationId, int countId, List<Map<String, Object>> lines) throws SQLException {
         String updateCountSql = """
                 UPDATE inventory_counts
                 SET completed = 1
                 WHERE id = ?
+                  AND location_id = ?
                 """;
-        updateCountLines(lines);
+        updateCountLines(locationId, lines);
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(updateCountSql)) {
+            PreparedStatement statement = connection.prepareStatement(updateCountSql)) {
             statement.setInt(1, countId);
+            statement.setInt(2, locationId);
             statement.executeUpdate();
         }
     }
 
-    String generateOrderGuideJson(int openingCountId, int closingCountId)
+    String generateOrderGuideJson(int locationId, int openingCountId, int closingCountId)
             throws SQLException {
-        CountPeriod period = countPeriod(closingCountId);
+        CountPeriod period = countPeriod(locationId, closingCountId);
         String sql = """
                 SELECT
                     tl.id AS template_line_id,
@@ -532,6 +573,7 @@ class InventoryRepository {
                 FROM inventory_count_template_lines tl
                 JOIN products p
                     ON tl.product_id = p.id
+                    AND p.location_id = tl.location_id
                 LEFT JOIN inventory_count_lines closing
                     ON closing.count_id = ?
                     AND closing.product_id = tl.product_id
@@ -546,10 +588,13 @@ class InventoryRepository {
                     JOIN invoices i
                         ON i.id = il.invoice_id
                     WHERE i.invoice_date BETWEEN ? AND ?
+                      AND i.location_id = ?
+                      AND il.location_id = ?
                     GROUP BY il.product_id
                 ) purchases
                     ON purchases.product_id = tl.product_id
                 WHERE tl.template_id = ?
+                  AND tl.location_id = ?
                   AND tl.active = 1
                 ORDER BY COALESCE(tl.sort_order, 9999), p.description
                 """;
@@ -560,7 +605,10 @@ class InventoryRepository {
             statement.setInt(2, openingCountId);
             statement.setString(3, period.periodStartDate());
             statement.setString(4, period.periodEndDate());
-            statement.setInt(5, period.templateId());
+            statement.setInt(5, locationId);
+            statement.setInt(6, locationId);
+            statement.setInt(7, period.templateId());
+            statement.setInt(8, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 StringBuilder json = new StringBuilder("[");
@@ -579,49 +627,56 @@ class InventoryRepository {
         }
     }
 
-    boolean updateOrderGuideCaseSize(int templateLineId, Map<String, Object> body)
+    boolean updateOrderGuideCaseSize(int locationId, int templateLineId, Map<String, Object> body)
             throws SQLException {
         String sql = """
                 UPDATE inventory_count_template_lines
                 SET order_guide_case_size = ?
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, stringValue(body.get("caseSize")));
             statement.setInt(2, templateLineId);
+            statement.setInt(3, locationId);
             return statement.executeUpdate() > 0;
         }
     }
 
-    private String templateByIdJson(Connection connection, int templateId) throws SQLException {
+    private String templateByIdJson(Connection connection, int locationId, int templateId) throws SQLException {
         String sql = """
                 SELECT id, name, active
                 FROM inventory_count_templates
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, templateId);
+            statement.setInt(2, locationId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? templateJson(resultSet) : "";
             }
         }
     }
 
-    private String countByIdJson(Connection connection, int countId) throws SQLException {
+    private String countByIdJson(Connection connection, int locationId, int countId) throws SQLException {
         String sql = """
                 SELECT c.*,
                        t.name AS template_name
                 FROM inventory_counts c
                 JOIN inventory_count_templates t
                     ON c.template_id = t.id
+                    AND t.location_id = c.location_id
                 WHERE c.id = ?
+                  AND c.location_id = ?
                 """;
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, countId);
+            statement.setInt(2, locationId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? countJson(resultSet) : "";
             }
@@ -707,16 +762,18 @@ class InventoryRepository {
                 .toString();
     }
 
-    private CountPeriod countPeriod(int countId) throws SQLException {
+    private CountPeriod countPeriod(int locationId, int countId) throws SQLException {
         String sql = """
                 SELECT template_id, period_start_date, period_end_date
                 FROM inventory_counts
                 WHERE id = ?
+                  AND location_id = ?
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, countId);
+            statement.setInt(2, locationId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
