@@ -8,7 +8,7 @@ Current deployed proof:
 https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod
 ```
 
-Initially verified on Tuesday, September 1, 2026. For v4.0.0, the deployed API requires a valid store location session token on the main location-scoped business routes.
+Initially verified on Tuesday, September 1, 2026. For v4.2.0, the deployed API requires a valid store location session token on the main location-scoped business routes.
 
 ```text
 GET /health -> 200 OK
@@ -153,7 +153,7 @@ Current desktop API-mode coverage:
 - Admin sync routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026; missing-key checks passed and authenticated read-only download returned 24 tables and 11,417 rows.
 - Labour Setup and Labour Hours routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026. Daily Labour Cost, Tip Pool support fields, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Smoke checks confirmed `/labour/weeks` responds and `/labour/daily/{workDate}` returns tip-pool/uniform context. The live AWS RDS Labour schema was advanced to version 17 with the secure prompt-based `scripts/Apply-LabourSchemaMigration.ps1` helper.
 - Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
-- Multi-location API scoping and `LocationAuthRequired=true` were deployed for v4.0.0. Smoke checks confirmed `/products` rejects requests without a location token and a TEST store token returns isolated data.
+- Multi-location API scoping and `LocationAuthRequired=true` were deployed for v4.0.0 and remain current for v4.2.0. Smoke checks confirmed `/products` rejects requests without a location token and a TEST store token returns isolated data.
 
 Intentional remaining gaps:
 

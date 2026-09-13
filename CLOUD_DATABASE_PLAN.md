@@ -38,7 +38,7 @@ An API layer proof now exists for the next credential-protection step:
 Desktop app -> API Gateway HTTP API -> AWS Lambda -> AWS RDS PostgreSQL
 ```
 
-The API stack is deployed as `esm-operations-api` in `ca-central-1`. As of the v4.0.0 release target, the desktop app can use API mode for normal Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot workflows. Store Login is enabled in release packaging, and the API scopes normal store-owned workflows to the signed-in location. Current work PCs should use Cloud API mode for daily operation.
+The API stack is deployed as `esm-operations-api` in `ca-central-1`. As of the v4.2.0 release target, the desktop app can use API mode for normal Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot workflows. Store Login is enabled in release packaging, the API scopes normal store-owned workflows to the signed-in location, and the desktop shell can switch stores without restarting. Current work PCs should use Cloud API mode for daily operation.
 
 The local SQLite file is retained as the backup/snapshot target:
 

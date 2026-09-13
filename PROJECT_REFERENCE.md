@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Friday, September 11, 2026_
+_Last Updated: Sunday, September 13, 2026_
 
 This document is the primary reference for the **StoreOps Manager** project.
 
@@ -91,13 +91,13 @@ Important:
 - Cloud snapshot download is an administrator backup/recovery tool, not routine daily sync.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
-- Current development version is v4.0.0; latest stable release is v3.1.2.
+- Current release target is v4.2.0. `pom.xml` may remain at the prior version until `Release.ps1` performs the release-version update during packaging.
 - Current database schema version in code is 21.
 - API layer stack `esm-operations-api` is deployed in AWS and the desktop app uses API mode for normal workflows.
 - Store Login is enabled by release packaging with `location.login.required=true`.
 - Desktop API clients include the store session token with normal business requests, and the deployed API scopes store-owned reads/writes to the resolved location.
 - Current API-mode migrated areas are Food Department workflows, Alcohol Department workflows, Supplies Department workflows, Production workflows, Reporting/Sales workflows, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot download.
-- Current API-mode gaps are deferred variance reporting and local backup/export polish.
+- Current API-mode gaps are future rollup/reporting enhancements and local backup/export polish.
 - v3.1.1 completed the desktop API migration so normal users no longer need to configure direct client database connections.
 - v3.1.1 added a database status indicator for clearer runtime mode/connection visibility.
 
@@ -185,19 +185,29 @@ The startup update check does not block the main UI.
 
 # 6. Main Modules
 
+The dashboard and section menus use a polished card-based navigation layout. The main application window launches maximized, and the home dashboard remains scrollable for smaller screens. Dense work screens such as invoices, inventory tables, weekly labour, production grids, and reporting tables remain task-focused rather than card-based.
+
 The dashboard is organized around these operational areas:
+
+- Inventory & Purchasing
+- Operations Planning
+- Labour
+- Administration
+
+Main cards include:
 
 - Food Department
 - Alcohol Department
 - Supplies Department
-- Purchasing
-- Reports
-- Sales
 - Production
+- Reporting
 - Labour Management
 - System
+- About
 
-The Labour Management module is complete and accepted as working as intended in the v4.0.0 development build. It includes an administrator-protected Labour Setup screen, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown. Labour Hours uses an inventory-count-style list of saved weeks and opens a separate spreadsheet-style pop-out window for manual Shift 1 / Shift 2 hour entry. Daily Labour Cost uses a weekly start/end date range with Monday-Sunday rows, editable daily net sales, BOH labour dollars, FOH labour dollars, labour percentages, and a total row. Tip Pool uses editable daily tip-out pool amounts, tip-pool eligible employee hours from Labour Hours, calculated employee tip allocation by day, and weekly totals. Tip Pool Breakdown allocates saved tip pool amounts over a selected date range, subtracts configured uniform deductions per worked day for applicable employees only, rounds net payouts to the nearest nickel, and supports compact black-and-white printing.
+The sidebar includes Home, Back, and Switch Store when Store Login is required. Switch Store confirms the action, clears the saved location session, and returns to Store Login without closing the app.
+
+The Labour Management module is complete and accepted as working as intended in the current v4.2.0 release target. It includes an administrator-protected Labour Setup screen, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown. Labour Hours uses an inventory-count-style list of saved weeks and opens a separate spreadsheet-style pop-out window for manual Shift 1 / Shift 2 hour entry. Daily Labour Cost uses a weekly start/end date range with Monday-Sunday rows, editable daily net sales, BOH labour dollars, FOH labour dollars, labour percentages, and a total row. Tip Pool uses editable daily tip-out pool amounts, tip-pool eligible employee hours from Labour Hours, calculated employee tip allocation by day, and weekly totals. Tip Pool Breakdown allocates saved tip pool amounts over a selected date range, subtracts configured uniform deductions per worked day for applicable employees only, rounds net payouts to the nearest nickel, and supports compact black-and-white printing.
 
 All module views should remain reachable through the main navigation/back controls. Do not add redundant in-section return buttons where the left navigation already provides the route.
 
@@ -1033,7 +1043,7 @@ Important:
 The application currently has a stable foundation for:
 
 - Product management
-- Purchasing
+- Department invoice workflows and purchasing history
 - Invoice importing and reconciliation
 - Inventory templates
 - Food inventory counting
@@ -1048,6 +1058,10 @@ The application currently has a stable foundation for:
 - Backup and restore
 - Release automation
 - Automatic updating
+- Neutral StoreOps Manager branding and app icon
+- Maximized app launch and polished card-based navigation
+- About panel with version, database mode, signed-in store, and application scope
+- Switch Store support from the sidebar when Store Login is required
 - Installer checksum generation, GitHub Release checksum upload, and in-app checksum verification before installer launch
 - Cloud API operating mode with local SQLite backup snapshot support
 - Password-protected cloud upload/download tools
@@ -1067,9 +1081,9 @@ The application currently has a stable foundation for:
 - Complete Labour Management module: top-level navigation, administrator-protected Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, schema/API/model foundation, and shared labour daily records
 - Multi-location rollout implementation includes location credentials, `locations`, `location_sessions`, API `POST /auth/login`, development-machine credential scripts, release-enabled desktop Store Login, desktop store-session request headers, Labour `location_id` scoping, store-owned operational `location_id` columns, location-scoped API reads/writes for the main business workflows, PostgreSQL location-aware uniqueness for duplicate-sensitive store data, and admin setup-copy tooling for products/templates/production setup between stores
 - Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
-- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working on the latest stable version
+- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target
 
-All implemented features through version 4.0.0 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case. Labour Management and multi-location Store Login/location scoping are accepted as complete in the v4.0.0 development build; remaining work is focused on post-release fixes and future enhancements.
+All implemented features through version 4.2.0 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case. Labour Management, multi-location Store Login/location scoping, and the StoreOps Manager navigation shell are accepted as complete; remaining work is focused on post-release fixes and future enhancements.
 
 Primary unfinished areas:
 

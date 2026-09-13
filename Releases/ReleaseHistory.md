@@ -1,5 +1,13 @@
 # Release History
 
+## v4.2.0
+Date: 2026-09-13
+
+- Rebranded the desktop application as StoreOps Manager with neutral app/window/update wording and a generic operations icon.
+- Updated release packaging metadata so new installers use StoreOps Manager naming and a neutral vendor value.
+- Added a maximized launch experience, polished card-based dashboard navigation, card-based section menus, an About panel, and Switch Store support.
+- Removed old branded installer assets from GitHub Releases while preserving required POS/import report normalization.
+
 ## v4.0.0
 Date: 2026-09-11
 
@@ -236,12 +244,8 @@ Date: 2026-09-11 17:08
 
 - Multi Store mode activated. User name and password login requred.
 
-## v4.0.0
-Date: 2026-09-13 12:46
 
-- Fixed window resizing, and log in screen
+## v4.1.0
+Date: 2026-09-13 14:11
 
-## v4.0.1
-Date: 2026-09-13 12:48
-
-- Fixed login, fixed window resize
+- UI change. Store Change button added. App launches maximised

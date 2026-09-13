@@ -2,15 +2,15 @@
 
 ## Current Version
 
-**Current Stable Release Target:** v4.0.0
+**Current Stable Release Target:** v4.2.0
 
 Current database schema version: **21**
 
 Application compiles successfully.
 
-The latest stable release being prepared is v4.0.0.
+The latest stable release being prepared is v4.2.0.
 
-All implemented features through v4.0.0 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
+All implemented features through v4.2.0 are considered working as intended unless a future issue is reported with a specific workflow, error, or data case.
 
 # Completed This Session
 
@@ -34,6 +34,11 @@ Completed:
 -   `scripts/Apply-StoreLocationSchemaMigration.ps1`, `scripts/Apply-LocationUniqueConstraintsMigration.ps1`, and `scripts/Copy-LocationSetup.ps1` were added for RDS multi-location schema upgrades and controlled setup/master-data copying between stores.
 -   `scripts/Manage-Locations.ps1` now lists stores, creates/resets store credentials, renames stores, applies location schema migrations, applies location-aware uniqueness, and copies setup data between stores.
 -   Release packaging now bundles `location.login.required=true` by default so updated client PCs require Store Login without manual per-machine configuration.
+-   v4.2.0 rebrands the desktop application as StoreOps Manager with a neutral app logo, installer naming, update-dialog text, and release metadata.
+-   v4.2.0 adds a polished card-based navigation UI for the home dashboard and main section menus while preserving dense task-focused table/spreadsheet screens.
+-   v4.2.0 launches the main application window maximized for manager workstations.
+-   v4.2.0 adds an About panel with version, database mode, signed-in store, and application scope.
+-   v4.2.0 adds a Switch Store action in the sidebar so a user can clear the current store session and return to Store Login without restarting the application.
 -   Labour Management Phase 1 foundation added on Sunday, September 6, 2026.
 -   Labour Management is now a top-level dashboard module with submenu entries for Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Setup.
 -   Labour Management Phase 2 Labour Hours foundation added on Sunday, September 6, 2026 and reshaped on Monday, September 7, 2026.
@@ -59,7 +64,7 @@ Completed:
 -   Labour Hours department headers now use a clearer styled band in the pop-out entry window, and the Labour Hours pop-out scene loads the shared application stylesheet.
 -   Tip Pool Breakdown net payout amounts now round to the nearest nickel for Canadian cash payout handling.
 -   Tip Pool Breakdown now supports printing a compact black-and-white payout report with employee rows and totals.
--   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working on the latest stable version.
+-   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target.
 -   Inventory Count Sheet printing was fixed after the v3.1.1 stable release: print layout is now created after printer selection, pages are scaled to the selected printer's printable area, failures show a clear error alert, and alcohol count sheet printing uses the API-backed alcohol profile client in API mode.
 -   Direct desktop Cloud PostgreSQL mode was retired on Monday, September 7, 2026; release desktops now use the shared Cloud API as the normal operating path.
 -   The System screen no longer exposes direct PostgreSQL mode switching, direct cloud connection testing, or upload-this-PC-to-cloud controls.
@@ -133,7 +138,7 @@ Completed:
 -   Alcohol Sales Mapping add/edit now reuses the existing Production POS Menu Items catalog through a searchable POS item picker, then fills POS SKU/PLU and POS Item Name automatically
 -   Alcohol Sales Mapping schema preparation now checks whether `alcohol_sales_mappings` already exists before attempting PostgreSQL create/index SQL, so lower-access cloud app users can open the screen after the table has been applied by a schema-capable user
 -   Alcohol Variance Report now generates actual-vs-sold usage rows from opening/closing alcohol counts, period purchases, imported POS usage, and active Sales Mappings; bottle and keg products convert mapped ounce/mL portions into inventory-equivalent usage before variance is calculated
--   Alcohol Variance Report includes red/green variance quantity and variance-dollar columns and is accepted as complete for the v4.0.0 release target.
+-   Alcohol Variance Report includes red/green variance quantity and variance-dollar columns and is accepted as complete for the v4.2.0 release target.
 -   Menu open errors now show the root cause and expandable stack trace details instead of clipping long exception text
 -   Shared searchable combo boxes now cap live popup matches to reduce JavaFX VirtualFlow warnings and improve large-list picker responsiveness
 -   v3.0.6 fixed shared combo box support after the AWS RDS database release.
@@ -220,13 +225,15 @@ Current behaviour:
 -   Alcohol invoice history breakdown now shows saved adjustments such as HST and Bottle Deposit.
 -   Inventory valuation still uses purchase history first, then the product fallback cost.
 -   Freezer Pull is an independent manual workflow and does not require POS usage report import.
--   Alcohol Variance Report is complete and accepted as working as intended in the v4.0.0 development build.
+-   Alcohol Variance Report is complete and accepted as working as intended in the v4.2.0 development build.
 -   After an update download completes, the user sees a readable install-now / install-later prompt.
 -   Installers built from the updated release script use the same `--win-upgrade-uuid` on every release.
 -   Release packaging now generates and uploads a `.sha256` checksum asset beside the Windows installer.
 -   In-app update downloads verify the installer against the published SHA-256 checksum before offering to launch it when a checksum asset is available.
 -   The System screen now includes a manual Check for Updates action that bypasses the startup cooldown.
 -   The release script now guards the stable Windows upgrade UUID so future installers continue upgrading the existing installed app entry.
+-   App-facing old restaurant branding has been removed from the current code, assets, and release downloads. POS/import normalization keeps the required legacy report suffix handling.
+-   GitHub Release assets with old branded installer names were removed from published releases.
 -   The v2.1.5-to-v2.1.6 update-ready prompt may still appear blank because that prompt is rendered by the already-installed v2.1.5 code; pressing Enter activates the default install action.
 
 # Future Enhancement
@@ -237,6 +244,6 @@ Current behaviour:
 
 # Next Development Priorities
 
-1.  Prepare and validate the v4.0.0 release package.
+1.  Prepare and validate the v4.2.0 release package.
 2.  Monitor multi-location rollout on the first updated workstations.
 3.  Convert cloud infrastructure to IaC based on the multi-location design.

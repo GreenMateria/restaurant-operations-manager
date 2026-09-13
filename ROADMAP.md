@@ -5,11 +5,12 @@
 ### Status
 
 -   Cloud database setup is complete for the current work PCs.
--   v4.0.0 is the current stable release target.
+-   v4.2.0 is the current stable release target.
 -   v3.0.6 includes the completed controlled hybrid database release path, AWS RDS cutover, cloud-mode save/import responsiveness fixes, POS sales import fix, alcohol manual invoice FOOD-item fix, alcohol Sales Mappings, initial Alcohol Variance entry points, and shared combo box support fixes.
 -   v3.1.1 completed the desktop API migration, removed the need for normal users to configure direct client database connections, and added a database status indicator.
 -   Cloud API mode is now the normal desktop startup mode when API settings are configured.
--   v4.0.0 adds multi-location Store Login, location-scoped API reads/writes, location-aware uniqueness in PostgreSQL, and setup-copy tooling between stores.
+-   v4.0.0 added multi-location Store Login, location-scoped API reads/writes, location-aware uniqueness in PostgreSQL, and setup-copy tooling between stores.
+-   v4.2.0 is the cleaned presentation release: StoreOps Manager branding, neutral logo, polished card-based navigation, maximized launch, About panel, and Switch Store support.
 -   SQLite remains only as a local cloud-snapshot/backup target and development fallback.
 -   Configured work PCs should run in Cloud API mode for daily shared-data operation, with AWS RDS PostgreSQL as the backend data store.
 -   Direct desktop AWS RDS PostgreSQL mode has been retired from the System module.
@@ -64,7 +65,7 @@
 -   Reporting/Sales and product support routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026; smoke checks passed for Invoice History, invoice line/breakdown loading, Sales Periods, Inventory Valuation, Weekly Cost Report, product purchase history, and missing-key `401` behavior.
 -   Administrative upload/download sync routes were deployed on Saturday, September 5, 2026; smoke checks passed for missing-key `401` behavior and authenticated read-only cloud snapshot download.
 -   Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown API support is implemented in the development build for positions, employees, default uniform deduction settings, weekly employee hour entry, manual daily net sales, daily tip pool amounts, labour cost percentages, tip allocation, and uniform-deduction payout reporting.
--   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working on the latest stable version.
+-   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target.
 -   Store Login and location token enforcement are deployed for the main store-owned API workflows; TEST-store validation confirmed store data isolation.
 
 ### Future
@@ -156,7 +157,7 @@ Desktop app
 -   Alcohol Sales Mappings is unlocked for POS SKU/PLU to alcohol inventory product setup.
 -   Alcohol Sales Mapping add/edit reuses the existing Production POS Menu Items catalog so managers select imported POS items instead of retyping SKU/name details.
 -   Alcohol Variance Report now calculates actual-vs-sold usage from opening/closing alcohol counts, period purchases, imported POS usage, and active Sales Mappings, including bottle/keg portion conversion and red/green variance quantity and dollar columns.
--   Alcohol Variance Report is accepted as complete for the v4.0.0 release target.
+-   Alcohol Variance Report is accepted as complete for the v4.2.0 release target.
 -   Alcohol workflow changes should be driven by specific live-data issues when they appear.
 -   Freezer Pull is working as intended and is not an active roadmap item.
 
@@ -170,7 +171,7 @@ Desktop app
 
 ### Status
 
--   Labour Management is complete and accepted as working as intended for the v4.0.0 release target.
+-   Labour Management is complete and accepted as working as intended for the v4.2.0 release target.
 -   Labour Management is a top-level dashboard module.
 -   Labour Setup is administrator-protected and supports configurable positions, employees, hourly wages, tip-pool eligibility, uniform-deduction applicability, active/inactive state, target labour percentages, and default uniform deduction settings.
 -   Labour Hours replaced the old Weekly Labour screen name. It uses an inventory-count-style saved-week list and opens a separate spreadsheet-style pop-out editor for Monday-Sunday Shift 1 / Shift 2 manual hour entry.

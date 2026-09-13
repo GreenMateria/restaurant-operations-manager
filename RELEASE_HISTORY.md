@@ -1,5 +1,25 @@
 # Release History
 
+## v4.2.0
+
+Date: 2026-09-13
+
+### Branding And Presentation
+
+- Rebranded the desktop application as StoreOps Manager with neutral app/window/update wording.
+- Replaced the bundled restaurant logo and Windows icon with a generic operations icon.
+- Updated release packaging metadata so new installers use StoreOps Manager naming and a neutral vendor value.
+- Removed old branded installer assets from GitHub Releases while preserving required POS/import report normalization.
+
+### UI Shell
+
+- Added a maximized launch experience for manager workstations.
+- Added a polished card-based home dashboard with version, database mode, and signed-in store status.
+- Applied the same card-based navigation layout to Food, Alcohol, Supplies, Production, Labour, and Reporting menus.
+- Added an About panel with version, database, store, and app-scope details.
+- Added Switch Store in the sidebar so users can return to Store Login without restarting the app.
+- Fixed standard dialog text visibility when dark app styles are loaded.
+
 ## v4.0.0
 
 Date: 2026-09-11

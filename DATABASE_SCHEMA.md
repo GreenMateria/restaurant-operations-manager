@@ -395,7 +395,7 @@ Notes:
 
 # Location Authentication Tables
 
-Migrations 18 through 21 provide the multi-location Store Login, row ownership, and location-aware uniqueness foundation used by v4.0.0.
+Migrations 18 through 21 provide the multi-location Store Login, row ownership, and location-aware uniqueness foundation used by v4.0.0 and later releases.
 
 ## locations
 

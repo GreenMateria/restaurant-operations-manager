@@ -16,9 +16,9 @@ Screenshot placeholders are included throughout the guide. Add cropped screensho
 2. Search for **StoreOps Manager**.
 3. Open the program.
 4. If the Store Login window appears, enter the store username and password for this location.
-5. Wait until the main dashboard appears.
+5. Wait until the maximized main dashboard appears.
 
-You should see the main dashboard with buttons for the main areas of the program.
+You should see the main dashboard with grouped cards for the main areas of the program.
 
 ![Main dashboard](docs/images/dashboard.png)
 
@@ -29,10 +29,10 @@ The most common manager workflows are:
 - **Food Department** - food count sheets, food counts, food valuation, and food order guide.
 - **Alcohol Department** - alcohol count sheets, alcohol counts, alcohol invoices, alcohol order guide, and alcohol variance workflows.
 - **Supplies Department** - supplies count sheets, supplies counts, supplies valuation, and supplies order guide.
-- **Purchasing** - supplier invoices and purchase history.
-- **Reports** - weekly cost reports and inventory valuation.
+- **Reporting** - invoice history, sales entry, and inventory valuation.
 - **Production** - weekly production and prep sheets.
 - **System** - backup, restore, API connection checks, and administrator tools.
+- **About** - version, database mode, signed-in store, and application scope.
 
 ## Important Safety Rules
 
@@ -185,7 +185,7 @@ The count is now ready for valuation, cost reporting, and order guide generation
 
 Use this to see the dollar value of a completed food inventory count.
 
-1. Open **Reports** or the food valuation screen.
+1. From the dashboard, open **Reporting**.
 2. Choose **Inventory Valuation**.
 3. Select the completed food count.
 4. Click **Generate**.
@@ -354,8 +354,8 @@ The count is now ready for alcohol valuation, weekly cost reporting, and order g
 
 Alcohol invoices can include non-inventory charges such as HST, bottle deposits, keg deposits, and freight.
 
-1. Open **Purchasing**.
-2. Choose the alcohol manual invoice option.
+1. From the dashboard, open **Alcohol Department**.
+2. Choose **Manual Invoice**.
 3. Enter the supplier.
 4. Enter the invoice number.
 5. Enter the invoice date.
@@ -508,13 +508,13 @@ Supplies are usually compared against total revenue in reporting.
 
 ---
 
-# Purchasing Section
+# Purchasing Workflows
 
-Use purchasing for food, alcohol, and supplies invoices. Invoices keep product costs current.
+Use the department menus for food, alcohol, and supplies invoices. Invoices keep product costs current.
 
 ## PURCHASING 1 - Import A GFS Invoice
 
-1. From the dashboard, click **Purchasing**.
+1. From the dashboard, click **Food Department**.
 2. Click **Import Invoice**.
 3. Select the GFS invoice CSV file.
 4. Wait for the invoice preview to load.
@@ -543,7 +543,7 @@ If there are unknown SKUs:
 
 ## PURCHASING 2 - Enter A Manual Invoice
 
-1. From the dashboard, click **Purchasing**.
+1. From the dashboard, click the matching department: **Food Department**, **Alcohol Department**, or **Supplies Department**.
 2. Choose **Manual Invoice**.
 3. Enter the supplier.
 4. Enter the invoice number.
@@ -563,7 +563,7 @@ If there are unknown SKUs:
 
 ## PURCHASING 3 - Check Invoice History
 
-1. Open **Purchasing**.
+1. From the dashboard, open **Reporting**.
 2. Click **Invoice History**.
 3. Search by invoice number, supplier, or date.
 4. Select the invoice.
@@ -582,7 +582,7 @@ Use this after counts, invoices, and sales are entered.
 
 ## REPORT 1 - Generate A Weekly Cost Report
 
-1. From the dashboard, open **Reports**.
+1. From the dashboard, open **Reporting**.
 2. Choose **Weekly Cost Report**.
 3. Select the department:
    - Food
@@ -819,7 +819,9 @@ Most managers will not use this often, but they should understand the basics.
 
 For normal daily use on the configured work PCs, the program should run in **Cloud API mode**. Normal saves go through the API to the shared AWS RDS PostgreSQL database, so separate PCs use the same current data without storing PostgreSQL credentials on the workstations.
 
-When Store Login is enabled, each location signs in before the dashboard opens. This keeps normal Food, Alcohol, Supplies, Production, Reporting/Sales, Purchasing, and Labour data scoped to the signed-in store.
+When Store Login is enabled, each location signs in before the dashboard opens. This keeps normal Food, Alcohol, Supplies, Production, Reporting/Sales, purchasing, and Labour data scoped to the signed-in store.
+
+To switch stores without closing the program, click **Switch Store** in the left sidebar, confirm the prompt, and sign in with the other store credentials.
 
 ## Local Backup
 

@@ -278,7 +278,7 @@ Remaining:
 
 ## Current Recommendation
 
-Keep the Java Lambda/API Gateway API against the existing AWS RDS PostgreSQL database. As of the v4.0.0 release target, Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot download are API-backed for normal desktop use. Store Login scopes normal store-owned workflows to the signed-in location. Direct PostgreSQL mode is retired from desktop clients.
+Keep the Java Lambda/API Gateway API against the existing AWS RDS PostgreSQL database. As of the v4.2.0 release target, Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot download are API-backed for normal desktop use. Store Login scopes normal store-owned workflows to the signed-in location, and the desktop shell includes Switch Store for changing store sessions without restarting. Direct PostgreSQL mode is retired from desktop clients.
 
 ## Implementation Status
 
@@ -411,7 +411,7 @@ Deployment status:
 - Labour Setup and Labour Hours routes were deployed on Sunday, September 6, 2026; Labour Hours initially returned 404 until the Lambda update was deployed, then required the Labour schema to be applied to AWS RDS. Daily Labour Cost, Tip Pool support fields, and `/labour/weeks` were deployed on Monday, September 7, 2026. Smoke checks confirmed `/labour/weeks` responds and `/labour/daily/{workDate}` returns tip-pool/uniform context.
 - Labour Management was accepted as complete after manager workflow testing on Tuesday, September 8, 2026.
 - Multi-location Store Login, location token enforcement, and TEST-store isolation were deployed and validated on Friday, September 11, 2026.
-- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase history, Labour, and store-scoped operation are confirmed working for the v4.0.0 release target.
+- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase history, Labour, and store-scoped operation are confirmed working for the v4.2.0 release target.
 
 Next implementation step:
 
