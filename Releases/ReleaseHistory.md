@@ -240,3 +240,8 @@ Date: 2026-09-11 17:08
 Date: 2026-09-13 12:46
 
 - Fixed window resizing, and log in screen
+
+## v4.0.1
+Date: 2026-09-13 12:48
+
+- Fixed login, fixed window resize
