@@ -83,7 +83,7 @@ public class MainApp extends Application {
                         + AppVersionService.getDisplayVersion()
         );
         stage.setScene(scene);
-        WindowSizing.centerOnVisibleScreen(stage);
+        stage.setMaximized(true);
     }
 
     private void initializeApplication() {
@@ -267,9 +267,14 @@ public class MainApp extends Application {
     }
 
     private void showMainApplication() {
-        MainView mainView = new MainView();
+        MainView mainView = new MainView(this::switchStore);
         primaryStage.getScene().setRoot(mainView.getView());
         checkForUpdates();
+    }
+
+    private void switchStore() {
+        DatabaseManager.clearLocationSession();
+        showStoreLoginScreen();
     }
 
     private void showStartupFailure(Throwable exception) {

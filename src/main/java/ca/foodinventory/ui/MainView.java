@@ -16,6 +16,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Circle;
 import ca.foodinventory.dao.SettingsDao;
@@ -36,11 +37,20 @@ public class MainView {
     private final BorderPane root = new BorderPane();
     private final SettingsDao settingsDao = new SettingsDao();
     private final ProductApiClient productApiClient = new ProductApiClient();
+    private final Runnable switchStoreAction;
 
     private final Deque<Node> navigationHistory = new ArrayDeque<>();
     private final Circle databaseStatusDot = new Circle(6);
     private final Label databaseStatusLabel = new Label("Database: Checking...");
     private Button backButton;
+
+    public MainView() {
+        this(null);
+    }
+
+    public MainView(Runnable switchStoreAction) {
+        this.switchStoreAction = switchStoreAction;
+    }
 
     public BorderPane getView() {
         root.getStyleClass().add("root-dark");
@@ -164,11 +174,21 @@ public class MainView {
         backButton = createMenuButton("Back", this::goBack);
         backButton.setDisable(true);
 
+        Region spacer = new Region();
+        VBox.setVgrow(spacer, Priority.ALWAYS);
+
         menu.getChildren().addAll(
                 logoBox,
                 homeButton,
-                backButton
+                backButton,
+                spacer
         );
+
+        if (switchStoreAction != null && DatabaseManager.isLocationLoginRequired()) {
+            Button switchStoreButton = createMenuButton("Switch Store", this::confirmSwitchStore);
+            switchStoreButton.getStyleClass().add("menu-secondary-button");
+            menu.getChildren().add(switchStoreButton);
+        }
 
         return menu;
     }
@@ -177,60 +197,148 @@ public class MainView {
         navigationHistory.clear();
 
         VBox page = buildHomeScreen();
-        showView(page, false);
+        showView(createDashboardScrollPane(page), false);
     }
 
     private VBox buildHomeScreen() {
 
-        VBox page = new VBox(25);
-        page.setPadding(new Insets(40));
-        page.setAlignment(Pos.TOP_CENTER);
+        VBox page = new VBox(24);
+        page.getStyleClass().add("dashboard-home");
+        page.setPadding(new Insets(34, 42, 34, 42));
+        page.setAlignment(Pos.TOP_LEFT);
 
         Label title = new Label("StoreOps Manager");
         title.getStyleClass().add("page-title");
 
-        GridPane dashboard = new GridPane();
-        dashboard.setHgap(20);
-        dashboard.setVgap(20);
-        dashboard.setAlignment(Pos.CENTER);
+        Label subtitle = new Label(
+                "Back-office workflows for inventory, purchasing, production, reporting, and labour."
+        );
+        subtitle.getStyleClass().add("dashboard-subtitle");
+        subtitle.setWrapText(true);
 
-        Button foodButton =
-                createDashboardButton("Food Department", this::showFoodMenu);
+        HBox statusRow = new HBox(
+                10,
+                createStatusPill("Version " + AppVersionService.getDisplayVersion()),
+                createStatusPill(DatabaseManager.getActiveDatabaseModeLabel()),
+                createStatusPill(getLocationStatusText())
+        );
+        statusRow.getStyleClass().add("dashboard-status-row");
+        statusRow.setAlignment(Pos.CENTER_LEFT);
 
-        Button alcoholButton =
-                createDashboardButton("Alcohol Department", this::showAlcoholMenu);
-
-        Button suppliesButton =
-                createDashboardButton("Supplies Department", this::showSuppliesMenu);
-
-        createDashboardButton(
-                "Production Stations",
-                () -> showView(new ProductionStationsView())
+        page.getChildren().addAll(
+                title,
+                subtitle,
+                statusRow,
+                createDashboardSection(
+                        "Inventory & Purchasing",
+                        createDashboardCard(
+                                "Food Department",
+                                "Products, invoices, counts, valuation, and order guides.",
+                                this::showFoodMenu
+                        ),
+                        createDashboardCard(
+                                "Alcohol Department",
+                                "Inventory, invoices, profiles, sales mappings, and variance.",
+                                this::showAlcoholMenu
+                        ),
+                        createDashboardCard(
+                                "Supplies Department",
+                                "Supplies products, purchasing, counts, and ordering.",
+                                this::showSuppliesMenu
+                        )
+                ),
+                createDashboardSection(
+                        "Operations Planning",
+                        createDashboardCard(
+                                "Production",
+                                "Prep planning, POS usage imports, freezer pull, and setup.",
+                                this::showProductionMenu
+                        ),
+                        createDashboardCard(
+                                "Reporting",
+                                "Sales entry, invoice history, valuation, and weekly cost reports.",
+                                this::showReportingMenu
+                        )
+                ),
+                createDashboardSection(
+                        "Labour",
+                        createDashboardCard(
+                                "Labour Management",
+                                "Hours, daily labour cost, tip pool, and payout breakdowns.",
+                                this::showLabourMenu
+                        )
+                ),
+                createDashboardSection(
+                        "Administration",
+                        createDashboardCard(
+                                "System",
+                                "Backup, restore, update checks, and administrator tools.",
+                                this::showSystemMenu
+                        ),
+                        createDashboardCard(
+                                "About",
+                                "Version, database mode, and signed-in store details.",
+                                this::showAboutDialog
+                        )
+                )
         );
 
-        Button productionButton =
-                createDashboardButton("Production", this::showProductionMenu);
-
-        Button labourButton =
-                createDashboardButton("Labour Management", this::showLabourMenu);
-
-        Button reportingButton =
-                createDashboardButton("Reporting", this::showReportingMenu);
-
-        Button systemButton =
-                createDashboardButton("System", this::showSystemMenu);
-
-        dashboard.add(foodButton, 0, 0);
-        dashboard.add(alcoholButton, 1, 0);
-        dashboard.add(suppliesButton, 0, 1);
-        dashboard.add(productionButton, 1, 1);
-        dashboard.add(labourButton, 0, 2);
-        dashboard.add(reportingButton, 1, 2);
-        dashboard.add(systemButton, 0, 3);
-
-        page.getChildren().addAll(title, dashboard);
-
         return page;
+    }
+
+    private Label createStatusPill(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("dashboard-status-pill");
+        return label;
+    }
+
+    private VBox createDashboardSection(String titleText, Button... cards) {
+        Label title = new Label(titleText);
+        title.getStyleClass().add("dashboard-section-title");
+
+        TilePane tilePane = new TilePane();
+        tilePane.getStyleClass().add("dashboard-card-grid");
+        tilePane.setHgap(14);
+        tilePane.setVgap(14);
+        tilePane.setPrefColumns(3);
+        tilePane.getChildren().addAll(cards);
+
+        VBox section = new VBox(10, title, tilePane);
+        section.getStyleClass().add("dashboard-section");
+        section.setMaxWidth(Double.MAX_VALUE);
+        return section;
+    }
+
+    private Button createDashboardCard(String titleText, String descriptionText, Runnable action) {
+        Label title = new Label(titleText);
+        title.getStyleClass().add("dashboard-card-title");
+        title.setWrapText(true);
+
+        Label description = new Label(descriptionText);
+        description.getStyleClass().add("dashboard-card-description");
+        description.setWrapText(true);
+
+        VBox content = new VBox(8, title, description);
+        content.setAlignment(Pos.TOP_LEFT);
+        content.setMouseTransparent(true);
+
+        Button button = new Button();
+        button.getStyleClass().add("dashboard-card");
+        button.setGraphic(content);
+        button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        button.setPrefSize(280, 118);
+        button.setMinSize(260, 112);
+        button.setMaxSize(Double.MAX_VALUE, 126);
+        button.setOnAction(e -> runUiAction(titleText, action));
+        return button;
+    }
+
+    private String getLocationStatusText() {
+        String locationName = DatabaseManager.getConfiguredLocationName();
+        if (locationName == null || locationName.isBlank()) {
+            return "Store not signed in";
+        }
+        return "Store: " + locationName;
     }
 
     private void showFoodMenu() {
@@ -238,33 +346,39 @@ public class MainView {
         showSectionMenu(
                 "Food Department",
 
-                createDashboardButton(
+                createDashboardCard(
                         "Products",
+                        "Maintain active products, pack sizes, units, categories, and costs.",
                         () -> showView(new ProductsView("FOOD").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Import Invoice",
+                        "Import supplier invoices, review lines, and update product costs.",
                         () -> showView(new ImportInvoiceView().getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Manual Invoice",
+                        "Enter purchases manually when an import file is not available.",
                         () -> showView(new ManualInvoiceView("FOOD").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Count Templates",
+                        "Build and maintain count sheets by section and product order.",
                         () -> showView(new InventoryCountTemplatesView("FOOD").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Inventory Counts",
+                        "Start counts, enter quantities, complete counts, and print sheets.",
                         () -> showView(new InventoryCountsView("FOOD").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Order Guide",
+                        "Generate ordering needs from the current inventory cycle.",
                         () -> showView(new OrderGuideView("FOOD").getView())
                 )
         );
@@ -275,38 +389,45 @@ public class MainView {
         showSectionMenu(
                 "Alcohol Department",
 
-                createDashboardButton(
+                createDashboardCard(
                         "Manual Invoice",
+                        "Enter alcohol invoices with HST, deposits, and adjustments.",
                         () -> showView(new AlcoholManualInvoiceView().getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Products",
+                        "Maintain alcohol products, profiles, costs, and count settings.",
                         () -> showView(new ProductsView("ALCOHOL").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Count Templates",
+                        "Organize alcohol count sheets by area, shelf, and product.",
                         () -> showView(new InventoryCountTemplatesView("ALCOHOL").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Inventory Counts",
+                        "Enter bottle, keg, weighted, and standard alcohol counts.",
                         () -> showView(new InventoryCountsView("ALCOHOL").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Order Guide",
+                        "Build alcohol order guides from completed inventory counts.",
                         () -> showView(new OrderGuideView("ALCOHOL").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Sales Mappings",
+                        "Map POS sales items to inventory usage for variance reporting.",
                         () -> showView(new AlcoholSalesMappingsView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Variance Report",
+                        "Compare actual alcohol usage against mapped POS sales usage.",
                         () -> showView(new AlcoholVarianceReportView().getView())
                 )
         );
@@ -317,28 +438,33 @@ public class MainView {
         showSectionMenu(
                 "Supplies Department",
 
-                createDashboardButton(
+                createDashboardCard(
                         "Manual Invoice",
+                        "Enter supplies invoices and update product purchase costs.",
                         () -> showView(new ManualInvoiceView("SUPPLIES").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Products",
+                        "Maintain supplies products, categories, units, and costs.",
                         () -> showView(new ProductsView("SUPPLIES").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Count Templates",
+                        "Build reusable count sheets for supplies categories.",
                         () -> showView(new InventoryCountTemplatesView("SUPPLIES").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Inventory Counts",
+                        "Enter supplies counts and complete count periods.",
                         () -> showView(new InventoryCountsView("SUPPLIES").getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Order Guide",
+                        "Generate supplies ordering needs from current counts.",
                         () -> showView(new OrderGuideView("SUPPLIES").getView())
                 )
         );
@@ -349,38 +475,45 @@ public class MainView {
         showSectionMenu(
                 "Production",
 
-                createDashboardButton(
+                createDashboardCard(
                         "Production Items",
+                        "Maintain prep items, units, stations, and yield factors.",
                         () -> showView(new ProductionItemsView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Production Stations",
+                        "Organize prep work by station for clearer production sheets.",
                         () -> showView(new ProductionStationsView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "POS Menu Items",
+                        "Import and maintain POS items used for production planning.",
                         () -> showView(new PosMenuItemsView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Production Profiles",
+                        "Map sold items to prep requirements and quantities.",
                         () -> showView(new ProductionProfilesView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Product Mappings",
+                        "Connect production items to inventory products for usage reporting.",
                         () -> showView(new ProductionItemProductMappingsView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Weekly Production",
+                        "Generate and review weekly prep from imported POS usage.",
                         () -> showView(new WeeklyProductionView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Freezer Pull",
+                        "Plan freezer pull quantities across the operating week.",
                         () -> showView(new FreezerPullView())
                 )
         );
@@ -391,28 +524,33 @@ public class MainView {
         showSectionMenu(
                 "Labour Management",
 
-                createDashboardButton(
+                createDashboardCard(
                         "Labour Hours",
+                        "Open saved weeks and enter shift hours in a spreadsheet layout.",
                         () -> showView(new LabourHoursView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Daily Labour Cost",
+                        "Track daily net sales, labour dollars, and labour percentages.",
                         () -> showView(new DailyLabourView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Tip Pool",
+                        "Allocate daily tip pool amounts from eligible employee hours.",
                         () -> showView(new TipPoolView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Tip Pool Breakdown",
+                        "Calculate payout totals, deductions, and printable summaries.",
                         () -> showView(new TipPoolBreakdownView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Labour Setup",
+                        "Configure positions, employees, wages, targets, and deductions.",
                         () -> showAdminProtectedView(
                                 "Labour Setup",
                                 () -> new LabourSetupView()
@@ -426,18 +564,21 @@ public class MainView {
         showSectionMenu(
                 "Reporting",
 
-                createDashboardButton(
+                createDashboardCard(
                         "Invoice History",
+                        "Review saved invoices, category breakdowns, and purchase history.",
                         () -> showView(new InvoiceHistoryView().getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Inventory Valuation",
+                        "Value completed counts by department, category, and period.",
                         () -> showView(new InventoryValuationView().getView())
                 ),
 
-                createDashboardButton(
+                createDashboardCard(
                         "Sales",
+                        "Import POS sales reports and maintain reporting-period totals.",
                         () -> showView(new SalesEntryView().getView())
                 )
         );
@@ -445,36 +586,49 @@ public class MainView {
 
     private void showSectionMenu(String titleText, Button... buttons) {
 
-        VBox page = new VBox(25);
-        page.setPadding(new Insets(40));
-        page.setAlignment(Pos.TOP_CENTER);
+        VBox page = new VBox(20);
+        page.getStyleClass().add("dashboard-home");
+        page.setPadding(new Insets(34, 42, 34, 42));
+        page.setAlignment(Pos.TOP_LEFT);
 
         Label title = new Label(titleText);
         title.getStyleClass().add("page-title");
 
-        GridPane grid = new GridPane();
-        grid.setHgap(20);
-        grid.setVgap(20);
-        grid.setAlignment(Pos.CENTER);
+        Label subtitle = new Label(sectionSubtitle(titleText));
+        subtitle.getStyleClass().add("dashboard-subtitle");
+        subtitle.setWrapText(true);
 
-        int row = 0;
-        int col = 0;
+        TilePane grid = new TilePane();
+        grid.getStyleClass().add("dashboard-card-grid");
+        grid.setHgap(14);
+        grid.setVgap(14);
+        grid.setPrefColumns(3);
+        grid.getChildren().addAll(buttons);
 
-        for (Button button : buttons) {
+        page.getChildren().addAll(title, subtitle, grid);
 
-            grid.add(button, col, row);
+        showView(createDashboardScrollPane(page));
+    }
 
-            col++;
+    private ScrollPane createDashboardScrollPane(Node content) {
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.getStyleClass().add("dashboard-home-scroll");
+        scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        return scrollPane;
+    }
 
-            if (col > 1) {
-                col = 0;
-                row++;
-            }
-        }
-
-        page.getChildren().addAll(title, grid);
-
-        showView(page);
+    private String sectionSubtitle(String titleText) {
+        return switch (titleText) {
+            case "Food Department" -> "Manage food products, invoices, inventory counts, valuation, and ordering.";
+            case "Alcohol Department" -> "Manage alcohol purchasing, inventory, profiles, order guides, and variance.";
+            case "Supplies Department" -> "Manage supplies purchasing, counts, products, and order guides.";
+            case "Production" -> "Maintain production setup and generate prep planning from POS usage.";
+            case "Labour Management" -> "Track hours, labour cost, tip pool allocation, and payout breakdowns.";
+            case "Reporting" -> "Review invoices, import sales, and produce cost-control reporting.";
+            default -> "Choose a workflow to continue.";
+        };
     }
 
     private Button createMenuButton(String text, Runnable action) {
@@ -563,6 +717,82 @@ public class MainView {
         alert.setHeaderText(featureName);
         alert.setContentText(featureName + " will be added in a future " + areaName + " update.");
         alert.showAndWait();
+    }
+
+    private void showAboutDialog() {
+        Dialog<Void> dialog = new Dialog<>();
+        if (root.getScene() != null && root.getScene().getWindow() != null) {
+            dialog.initOwner(root.getScene().getWindow());
+        }
+        dialog.setTitle("About StoreOps Manager");
+        applyDialogStyles(dialog.getDialogPane());
+        dialog.setHeaderText("StoreOps Manager");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        GridPane details = new GridPane();
+        details.setHgap(16);
+        details.setVgap(10);
+        details.setPadding(new Insets(8, 0, 0, 0));
+
+        addAboutRow(details, 0, "Version", AppVersionService.getDisplayVersion());
+        addAboutRow(details, 1, "Database", DatabaseManager.getActiveDatabaseModeLabel());
+        addAboutRow(details, 2, "Store", getLocationStatusText().replace("Store: ", ""));
+        addAboutRow(details, 3, "Scope", "Inventory, purchasing, production, reporting, and labour operations");
+
+        Label note = new Label(
+                "Built to standardize recurring back-office workflows and reduce manual spreadsheet work."
+        );
+        note.setWrapText(true);
+        note.setMaxWidth(420);
+        note.setStyle("-fx-text-fill: #202020;");
+
+        VBox content = new VBox(14, details, note);
+        content.setPrefWidth(WindowSizing.width(460));
+        dialog.getDialogPane().setContent(content);
+        dialog.showAndWait();
+    }
+
+    private void confirmSwitchStore() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        if (root.getScene() != null && root.getScene().getWindow() != null) {
+            alert.initOwner(root.getScene().getWindow());
+        }
+        alert.setTitle("Switch Store");
+        applyDialogStyles(alert.getDialogPane());
+        alert.setHeaderText("Switch to a different store?");
+        alert.setContentText("You will return to Store Login. Unsaved work on the current screen should be saved first.");
+
+        ButtonType switchButton = new ButtonType("Switch Store", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(switchButton, cancelButton);
+
+        if (alert.showAndWait().orElse(cancelButton) == switchButton) {
+            switchStoreAction.run();
+        }
+    }
+
+    private void applyDialogStyles(DialogPane pane) {
+        String stylesheet = getClass().getResource("/style.css") == null
+                ? null
+                : getClass().getResource("/style.css").toExternalForm();
+        if (stylesheet != null && !pane.getStylesheets().contains(stylesheet)) {
+            pane.getStylesheets().add(stylesheet);
+        }
+        if (!pane.getStyleClass().contains("standard-dialog")) {
+            pane.getStyleClass().add("standard-dialog");
+        }
+    }
+
+    private void addAboutRow(GridPane details, int row, String labelText, String valueText) {
+        Label label = new Label(labelText + ":");
+        label.setStyle("-fx-text-fill: #202020; -fx-font-weight: bold;");
+
+        Label value = new Label(valueText == null || valueText.isBlank() ? "Not configured" : valueText);
+        value.setWrapText(true);
+        value.setStyle("-fx-text-fill: #202020;");
+
+        details.add(label, 0, row);
+        details.add(value, 1, row);
     }
 
     private void showSystemMenu() {

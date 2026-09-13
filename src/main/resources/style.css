@@ -36,6 +36,10 @@
     -fx-border-width: 1 0 0 0;
 }
 
+.standard-dialog .label {
+    -fx-text-fill: #202020;
+}
+
 .database-status-label {
     -fx-text-fill: #d8d8d8;
     -fx-font-size: 12px;
@@ -138,6 +142,15 @@
 .menu-button:hover {
     -fx-background-color: #3a3a3a;
 }
+
+.menu-secondary-button {
+    -fx-border-color: #3c474f;
+    -fx-border-width: 1;
+}
+
+.menu-secondary-button:hover {
+    -fx-border-color: #f0c14b;
+}
 .dashboard-button {
     -fx-background-color: #2b2b2b;
     -fx-text-fill: white;
@@ -154,6 +167,78 @@
 .dashboard-button:hover {
     -fx-background-color: #3a3a3a;
     -fx-border-color: #2d89ef;
+}
+
+.dashboard-home {
+    -fx-background-color: #1e1e1e;
+}
+
+.dashboard-home-scroll,
+.dashboard-home-scroll > .viewport {
+    -fx-background-color: #1e1e1e;
+    -fx-background: #1e1e1e;
+}
+
+.dashboard-subtitle {
+    -fx-text-fill: #b9c7d3;
+    -fx-font-size: 14px;
+}
+
+.dashboard-status-row {
+    -fx-padding: 0 0 4 0;
+}
+
+.dashboard-status-pill {
+    -fx-background-color: #252d33;
+    -fx-border-color: #3a4650;
+    -fx-border-width: 1;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 6 10 6 10;
+    -fx-text-fill: #dbe7ef;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.dashboard-section {
+    -fx-padding: 6 0 0 0;
+}
+
+.dashboard-section-title {
+    -fx-text-fill: #f0c14b;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.dashboard-card-grid {
+    -fx-alignment: top-left;
+}
+
+.dashboard-card {
+    -fx-background-color: #272d32;
+    -fx-border-color: #3c474f;
+    -fx-border-width: 1;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-padding: 14 16 14 16;
+    -fx-alignment: top-left;
+}
+
+.dashboard-card:hover {
+    -fx-background-color: #303941;
+    -fx-border-color: #2d89ef;
+}
+
+.dashboard-card-title {
+    -fx-text-fill: white;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.dashboard-card-description {
+    -fx-text-fill: #c0ccd5;
+    -fx-font-size: 12px;
+    -fx-line-spacing: 2;
 }
 
 .weekly-labour-grid {
