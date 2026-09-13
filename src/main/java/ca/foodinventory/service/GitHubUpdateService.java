@@ -93,7 +93,7 @@ public final class GitHubUpdateService {
                 .uri(URI.create(LATEST_RELEASE_API))
                 .timeout(Duration.ofSeconds(12))
                 .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "ESM-Operations-Manager")
+                .header("User-Agent", "StoreOps-Manager")
                 .GET()
                 .build();
 
@@ -131,7 +131,7 @@ public final class GitHubUpdateService {
 
             Path updatesDirectory = getUpdatesDirectory();
             Path finalPath = updatesDirectory.resolve(
-                    "ESM Operations Manager-"
+                    "StoreOps Manager-"
                             + safeFileVersion(updateInfo.latestVersion())
                             + ".exe"
             );
@@ -148,7 +148,7 @@ public final class GitHubUpdateService {
                         .uri(URI.create(updateInfo.downloadUrl()))
                         .timeout(Duration.ofMinutes(10))
                         .header("Accept", "application/octet-stream")
-                        .header("User-Agent", "ESM-Operations-Manager")
+                        .header("User-Agent", "StoreOps-Manager")
                         .GET()
                         .build();
 
@@ -339,7 +339,7 @@ public final class GitHubUpdateService {
                 .uri(URI.create(updateInfo.sha256Url()))
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "text/plain")
-                .header("User-Agent", "ESM-Operations-Manager")
+                .header("User-Agent", "StoreOps-Manager")
                 .GET()
                 .build();
 

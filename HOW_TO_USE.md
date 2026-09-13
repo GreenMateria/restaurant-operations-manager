@@ -1,8 +1,8 @@
-# ESM Operations Manager - Step By Step Manager Guide
+# StoreOps Manager - Step By Step Manager Guide
 
 _Training guide for new managers_
 
-This guide is written for someone who has not used ESM Operations Manager before. Follow the steps in order. Do not skip ahead unless you already know that part of the workflow.
+This guide is written for someone who has not used StoreOps Manager before. Follow the steps in order. Do not skip ahead unless you already know that part of the workflow.
 
 Screenshot placeholders are included throughout the guide. Add cropped screenshots under `docs/images/` using the filenames shown in each image link.
 
@@ -13,7 +13,7 @@ Screenshot placeholders are included throughout the guide. Add cropped screensho
 ## Open The Program
 
 1. Click the Windows **Start** menu.
-2. Search for **ESM Operations Manager**.
+2. Search for **StoreOps Manager**.
 3. Open the program.
 4. If the Store Login window appears, enter the store username and password for this location.
 5. Wait until the main dashboard appears.

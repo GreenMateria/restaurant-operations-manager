@@ -136,8 +136,11 @@ public class LabourHoursView extends BorderPane {
     private void openWeek(LocalDate weekStartDate) {
         WeeklyLabourView editor = new WeeklyLabourView(weekStartDate);
         Stage stage = new Stage();
+        if (getScene() != null && getScene().getWindow() != null) {
+            stage.initOwner(getScene().getWindow());
+        }
         stage.setTitle("Labour Hours - " + DATE_FORMAT.format(weekStartDate));
-        Scene scene = new Scene(editor, 1250, 780);
+        Scene scene = WindowSizing.scene(editor, 1250, 780, stage.getOwner());
         String stylesheet = getClass().getResource("/style.css") == null
                 ? null
                 : getClass().getResource("/style.css").toExternalForm();
@@ -145,6 +148,7 @@ public class LabourHoursView extends BorderPane {
             scene.getStylesheets().add(stylesheet);
         }
         stage.setScene(scene);
+        WindowSizing.fitAndCenter(stage, 1250, 780);
         stage.setOnHidden(event -> refreshTable());
         stage.show();
     }

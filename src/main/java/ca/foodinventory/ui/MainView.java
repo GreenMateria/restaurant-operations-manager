@@ -186,7 +186,7 @@ public class MainView {
         page.setPadding(new Insets(40));
         page.setAlignment(Pos.TOP_CENTER);
 
-        Label title = new Label("East Side Marios Operations Manager");
+        Label title = new Label("StoreOps Manager");
         title.getStyleClass().add("page-title");
 
         GridPane dashboard = new GridPane();

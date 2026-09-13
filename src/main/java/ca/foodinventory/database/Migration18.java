@@ -30,7 +30,7 @@ public class Migration18 implements Migration {
 
             stmt.execute("""
                     INSERT INTO locations (id, code, name, username, active)
-                    SELECT 1, 'ESM', 'Existing Store', 'esm', 1
+                    SELECT 1, 'STORE', 'Existing Store', 'store', 1
                     WHERE NOT EXISTS (SELECT 1 FROM locations WHERE id = 1)
                     """);
 

@@ -87,7 +87,7 @@ $properties["admin.password_initialized"] = "true"
 $properties.Remove("admin.password")
 
 $lines = New-Object System.Collections.Generic.List[string]
-$lines.Add("# ESM Operations Manager database settings")
+$lines.Add("# StoreOps Manager database settings")
 
 foreach ($key in $properties.Keys) {
     $lines.Add("$key=$($properties[$key])")

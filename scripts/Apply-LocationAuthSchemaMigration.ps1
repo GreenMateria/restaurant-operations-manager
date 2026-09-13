@@ -2,9 +2,9 @@ param(
     [string]$StackName = "esm-operations-api",
     [string]$Region = "ca-central-1",
     [string]$AdminUser = "postgres_admin",
-    [string]$LocationCode = "ESM",
+    [string]$LocationCode = "STORE",
     [string]$LocationName = "Existing Store",
-    [string]$LocationUsername = "esm",
+    [string]$LocationUsername = "store",
     [string]$PsqlPath = "C:\Program Files\PostgreSQL\18\bin\psql.exe",
     [string]$AwsPath = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
 )

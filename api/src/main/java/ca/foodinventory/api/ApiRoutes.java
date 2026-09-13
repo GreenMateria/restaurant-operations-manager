@@ -1478,7 +1478,7 @@ class ApiRoutes {
             Map<String, List<String>> headers
     ) throws SQLException {
         if (!ApiConfig.locationAuthRequired()) {
-            return new LocationContext(1, "ESM", "Existing Store", "esm");
+            return new LocationContext(1, "STORE", "Existing Store", "store");
         }
 
         return locationAuthRepository.resolveSession(headerValue(headers, "x-location-token"));

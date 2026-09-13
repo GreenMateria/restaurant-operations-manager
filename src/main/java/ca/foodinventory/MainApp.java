@@ -1,25 +1,34 @@
 package ca.foodinventory;
 
 import ca.foodinventory.database.DatabaseManager;
+import ca.foodinventory.model.LocationLoginSession;
 import ca.foodinventory.service.AppVersionService;
 import ca.foodinventory.service.GitHubUpdateService;
 import ca.foodinventory.service.GitHubUpdateService.UpdateInfo;
-import ca.foodinventory.ui.LocationLoginDialog;
+import ca.foodinventory.service.LocationAuthApiClient;
 import ca.foodinventory.ui.MainView;
+import ca.foodinventory.ui.WindowSizing;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.net.ConnectException;
+import java.net.http.HttpTimeoutException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
@@ -28,30 +37,36 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class MainApp extends Application {
 
+    private static final String APP_NAME = "StoreOps Manager";
+
     private final GitHubUpdateService updateService =
             new GitHubUpdateService();
+    private final LocationAuthApiClient locationAuthClient =
+            new LocationAuthApiClient();
 
     private Stage primaryStage;
 
     @Override
     public void start(Stage stage) {
         primaryStage = stage;
-        DatabaseManager.initializeDatabase();
 
-        if (DatabaseManager.isApiDatabase()
-                && DatabaseManager.isLocationLoginRequired()
-                && !new LocationLoginDialog(stage).showAndLogin()) {
-            Platform.exit();
-            return;
-        }
-
-        MainView mainView = new MainView();
-        Scene scene = new Scene(mainView.getView(), 1200, 700);
+        Scene scene = WindowSizing.scene(
+                buildStartupView("Starting " + APP_NAME + "..."),
+                1200,
+                700
+        );
 
         scene.getStylesheets().add(
                 getClass().getResource("/style.css").toExternalForm()
         );
 
+        configurePrimaryStage(stage, scene);
+        stage.show();
+
+        initializeApplication();
+    }
+
+    private void configurePrimaryStage(Stage stage, Scene scene) {
         InputStream iconStream =
                 getClass().getResourceAsStream("/images/logo.png");
 
@@ -64,13 +79,226 @@ public class MainApp extends Application {
         }
 
         stage.setTitle(
-                "ESM Operations Manager "
+                APP_NAME + " "
                         + AppVersionService.getDisplayVersion()
         );
         stage.setScene(scene);
-        stage.show();
+        WindowSizing.centerOnVisibleScreen(stage);
+    }
 
+    private void initializeApplication() {
+        Task<Void> startupTask = new Task<>() {
+            @Override
+            protected Void call() {
+                DatabaseManager.initializeDatabase();
+                return null;
+            }
+        };
+
+        startupTask.setOnSucceeded(event -> {
+            if (DatabaseManager.isApiDatabase()
+                    && DatabaseManager.isLocationLoginRequired()) {
+                showStoreLoginScreen();
+                return;
+            }
+
+            showMainApplication();
+        });
+
+        startupTask.setOnFailed(event -> showStartupFailure(startupTask.getException()));
+
+        Thread thread = new Thread(startupTask, "app-startup");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private BorderPane buildStartupView(String message) {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-dark");
+
+        ProgressIndicator progress = new ProgressIndicator();
+        progress.setMaxSize(72, 72);
+
+        Label title = new Label(APP_NAME);
+        title.getStyleClass().add("page-title");
+
+        Label status = new Label(message);
+        status.getStyleClass().add("section-title");
+
+        VBox content = new VBox(18, title, progress, status);
+        content.setAlignment(Pos.CENTER);
+        content.setPadding(new Insets(40));
+
+        root.setCenter(content);
+        return root;
+    }
+
+    private void showStoreLoginScreen() {
+        primaryStage.getScene().setRoot(buildStoreLoginView());
+    }
+
+    private BorderPane buildStoreLoginView() {
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-dark");
+
+        Label title = new Label("Store Login");
+        title.getStyleClass().add("page-title");
+
+        Label subtitle = new Label("Sign in to this location to continue.");
+        subtitle.getStyleClass().add("section-title");
+
+        TextField usernameField = new TextField();
+        usernameField.setPromptText("Store username");
+        usernameField.setMaxWidth(340);
+
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Store password");
+        passwordField.setMaxWidth(340);
+
+        Label statusLabel = new Label("");
+        statusLabel.setWrapText(true);
+        statusLabel.setMaxWidth(430);
+
+        Button loginButton = new Button("Log In");
+        loginButton.getStyleClass().add("primary-button");
+        Runnable updateLoginButton = () -> loginButton.setDisable(
+                usernameField.getText().trim().isEmpty()
+                        || passwordField.getText().isEmpty()
+        );
+        usernameField.textProperty().addListener((obs, oldText, newText) -> updateLoginButton.run());
+        passwordField.textProperty().addListener((obs, oldText, newText) -> updateLoginButton.run());
+        updateLoginButton.run();
+
+        Button closeButton = new Button("Close");
+        closeButton.setOnAction(event -> Platform.exit());
+
+        HBox buttons = new HBox(10, closeButton, loginButton);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox panel = new VBox(
+                14,
+                title,
+                subtitle,
+                new Label("Username"),
+                usernameField,
+                new Label("Password"),
+                passwordField,
+                statusLabel,
+                buttons
+        );
+        panel.setPadding(new Insets(28));
+        panel.setMaxWidth(480);
+        panel.setStyle(
+                "-fx-background-color: #252525;"
+                        + "-fx-border-color: #404040;"
+                        + "-fx-border-width: 1;"
+                        + "-fx-background-radius: 8;"
+                        + "-fx-border-radius: 8;"
+        );
+
+        VBox wrapper = new VBox(panel);
+        wrapper.setAlignment(Pos.CENTER);
+        wrapper.setPadding(new Insets(40));
+        root.setCenter(wrapper);
+
+        loginButton.setOnAction(event -> attemptStoreLogin(
+                usernameField,
+                passwordField,
+                loginButton,
+                closeButton,
+                statusLabel
+        ));
+        passwordField.setOnAction(event -> {
+            if (!loginButton.isDisabled()) {
+                loginButton.fire();
+            }
+        });
+
+        Platform.runLater(usernameField::requestFocus);
+        return root;
+    }
+
+    private void attemptStoreLogin(
+            TextField usernameField,
+            PasswordField passwordField,
+            Button loginButton,
+            Button closeButton,
+            Label statusLabel
+    ) {
+        String username = usernameField.getText().trim();
+        String password = passwordField.getText();
+
+        statusLabel.setText("Signing in...");
+        usernameField.setDisable(true);
+        passwordField.setDisable(true);
+        loginButton.setDisable(true);
+        closeButton.setDisable(true);
+
+        Task<LocationLoginSession> loginTask = new Task<>() {
+            @Override
+            protected LocationLoginSession call() {
+                return locationAuthClient.login(username, password);
+            }
+        };
+
+        loginTask.setOnSucceeded(event -> {
+            LocationLoginSession session = loginTask.getValue();
+            DatabaseManager.saveLocationSession(
+                    session.token(),
+                    session.locationCode(),
+                    session.locationName()
+            );
+            showMainApplication();
+        });
+
+        loginTask.setOnFailed(event -> {
+            statusLabel.setText(storeLoginFailureMessage(loginTask.getException()));
+            usernameField.setDisable(false);
+            passwordField.setDisable(false);
+            loginButton.setDisable(false);
+            closeButton.setDisable(false);
+            passwordField.clear();
+            passwordField.requestFocus();
+        });
+
+        Thread thread = new Thread(loginTask, "store-login");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void showMainApplication() {
+        MainView mainView = new MainView();
+        primaryStage.getScene().setRoot(mainView.getView());
         checkForUpdates();
+    }
+
+    private void showStartupFailure(Throwable exception) {
+        primaryStage.getScene().setRoot(buildStartupView("Startup failed."));
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.initOwner(primaryStage);
+        alert.setTitle("Startup Failed");
+        alert.setHeaderText(APP_NAME + " could not start.");
+        alert.setContentText(safeMessage(rootCause(exception)));
+        alert.showAndWait();
+        Platform.exit();
+    }
+
+    private String storeLoginFailureMessage(Throwable throwable) {
+        Throwable current = rootCause(throwable);
+
+        if (current instanceof IllegalArgumentException) {
+            return current.getMessage();
+        }
+
+        if (current instanceof HttpTimeoutException || current instanceof ConnectException) {
+            return "The login server did not respond. Check the internet connection and try again.";
+        }
+
+        if (current instanceof IOException) {
+            return "The app could not reach the login server. Check the internet connection and try again.";
+        }
+
+        return safeMessage(current) + "\n\nIf this keeps happening, contact the administrator.";
     }
 
     private void checkForUpdates() {
@@ -147,7 +375,7 @@ public class MainApp extends Application {
         VBox content = new VBox(
                 12,
                 createDialogHeading(
-                        "ESM Operations Manager "
+                        APP_NAME + " "
                                 + updateInfo.latestVersion()
                                 + " is available."
                 ),
@@ -156,8 +384,8 @@ public class MainApp extends Application {
                 releaseNotes
         );
         content.setPadding(new Insets(8));
-        content.setPrefWidth(560);
-        content.setMinWidth(520);
+        content.setPrefWidth(WindowSizing.width(560));
+        content.setMinWidth(Math.min(520, WindowSizing.width(560)));
 
         pane.setContent(content);
         configureDialogPane(pane, 620);
@@ -202,14 +430,14 @@ public class MainApp extends Application {
         VBox content = new VBox(
                 12,
                 createDialogHeading(
-                        "Downloading ESM Operations Manager v"
+                        "Downloading " + APP_NAME + " v"
                                 + updateInfo.latestVersion()
                 ),
                 progressBar,
                 progressLabel
         );
         content.setPadding(new Insets(10));
-        content.setPrefWidth(480);
+        content.setPrefWidth(WindowSizing.width(480));
         DialogPane pane = dialog.getDialogPane();
         pane.setContent(content);
         configureDialogPane(pane, 540);
@@ -318,7 +546,7 @@ public class MainApp extends Application {
         VBox content = new VBox(
                 12,
                 createDialogHeading(
-                        "ESM Operations Manager "
+                        APP_NAME + " "
                                 + updateInfo.latestVersion()
                                 + " is ready to install."
                 ),
@@ -326,8 +554,8 @@ public class MainApp extends Application {
                 messageLabel
         );
         content.setPadding(new Insets(10));
-        content.setPrefWidth(470);
-        content.setMinWidth(430);
+        content.setPrefWidth(WindowSizing.width(470));
+        content.setMinWidth(Math.min(430, WindowSizing.width(470)));
 
         pane.setContent(content);
         configureDialogPane(pane, 540);
@@ -403,8 +631,9 @@ public class MainApp extends Application {
             pane.getStyleClass().add("update-dialog");
         }
 
-        pane.setPrefWidth(preferredWidth);
-        pane.setMinWidth(preferredWidth);
+        double width = WindowSizing.width(preferredWidth);
+        pane.setPrefWidth(width);
+        pane.setMinWidth(width);
         pane.setMinHeight(Region.USE_PREF_SIZE);
     }
 

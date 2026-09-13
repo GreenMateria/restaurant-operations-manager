@@ -884,7 +884,7 @@ public class PostgresSchemaInitializer {
 
         statement.execute("""
                 INSERT INTO locations (id, code, name, username, active)
-                VALUES (1, 'ESM', 'Existing Store', 'esm', 1)
+                VALUES (1, 'STORE', 'Existing Store', 'store', 1)
                 ON CONFLICT(id) DO NOTHING
                 """);
 

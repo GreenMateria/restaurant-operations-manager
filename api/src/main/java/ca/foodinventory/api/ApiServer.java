@@ -29,7 +29,7 @@ public class ApiServer {
         server.setExecutor(Executors.newFixedThreadPool(4));
         server.start();
 
-        System.out.println("ESM Operations Manager API listening on http://localhost:" + port);
+        System.out.println("StoreOps Manager API listening on http://localhost:" + port);
     }
 
     private static void writeResult(

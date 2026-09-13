@@ -3,7 +3,7 @@
 _Created: Saturday, August 1, 2026_
 _Last Updated: Friday, September 11, 2026_
 
-This document records the completed cloud database transition for ESM Operations Manager.
+This document records the completed cloud database transition for StoreOps Manager.
 
 ## Goal
 
@@ -310,9 +310,9 @@ ca.foodinventory.database.DatabaseConnectionCheck
 Local IntelliJ run configurations have been added:
 
 ```text
-ESM Operations Manager - SQLite
+StoreOps Manager - SQLite
 Aiven Connection Check
-ESM Operations Manager - PostgreSQL Dev
+StoreOps Manager - PostgreSQL Dev
 ```
 
 The PostgreSQL configurations should use the lower-access application database user, not the Aiven admin user.

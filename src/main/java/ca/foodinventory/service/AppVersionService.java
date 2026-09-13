@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 public final class AppVersionService {
 
-    private static final String VERSION_PROPERTY = "esm.app.version";
+    private static final String VERSION_PROPERTY = "storeops.app.version";
     private static final String DEVELOPMENT_FALLBACK = "Development";
 
     private static final Pattern PROJECT_VERSION_PATTERN = Pattern.compile(

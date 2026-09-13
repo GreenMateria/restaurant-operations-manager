@@ -57,7 +57,7 @@ function Invoke-LocationScript {
 
 function Show-Menu {
     Clear-Host
-    Write-Host "ESM Location Manager"
+    Write-Host "StoreOps Location Manager"
     Write-Host ""
     Write-Host "1. List stores"
     Write-Host "2. Add store or reset store password"

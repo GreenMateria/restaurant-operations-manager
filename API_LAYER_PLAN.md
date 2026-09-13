@@ -3,7 +3,7 @@
 _Created: Tuesday, September 1, 2026_
 _Last Updated: Friday, September 11, 2026_
 
-This document plans the next architecture step for ESM Operations Manager: moving database credentials off client PCs by putting an authenticated API layer between the desktop application and AWS RDS PostgreSQL.
+This document plans the next architecture step for StoreOps Manager: moving database credentials off client PCs by putting an authenticated API layer between the desktop application and AWS RDS PostgreSQL.
 
 ## Goal
 

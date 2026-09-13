@@ -235,3 +235,8 @@ Date: 2026-09-08 18:44
 Date: 2026-09-11 17:08
 
 - Multi Store mode activated. User name and password login requred.
+
+## v4.0.0
+Date: 2026-09-13 12:46
+
+- Fixed window resizing, and log in screen

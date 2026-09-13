@@ -26,7 +26,7 @@ function Invoke-AwsJson {
     }
 }
 
-Write-Host "ESM Operations Manager AWS infrastructure snapshot" -ForegroundColor Cyan
+Write-Host "StoreOps Manager AWS infrastructure snapshot" -ForegroundColor Cyan
 Write-Host "Region: $Region"
 Write-Host "Stack:  $StackName"
 Write-Host ""

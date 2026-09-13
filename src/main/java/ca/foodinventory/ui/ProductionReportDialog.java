@@ -27,7 +27,7 @@ public class ProductionReportDialog extends Dialog<Void> {
 
         Label summaryLabel = new Label(buildSummaryText());
         VBox content = new VBox(10, summaryLabel, table);
-        content.setPrefSize(1000, 600);
+        content.setPrefSize(WindowSizing.width(1000), WindowSizing.height(600));
 
         getDialogPane().setContent(content);
         getDialogPane().getButtonTypes().add(ButtonType.CLOSE);

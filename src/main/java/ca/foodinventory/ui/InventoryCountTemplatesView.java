@@ -172,15 +172,20 @@ public class InventoryCountTemplatesView {
                 new InventoryCountTemplateEditorView(selected);
 
         Stage stage = new Stage();
+        if (table.getScene() != null && table.getScene().getWindow() != null) {
+            stage.initOwner(table.getScene().getWindow());
+        }
         stage.setTitle("Template Editor - " + selected.getName());
 
-        Scene scene = new Scene(
+        Scene scene = WindowSizing.scene(
                 editor.getView(),
                 1000,
-                700
+                700,
+                stage.getOwner()
         );
 
         stage.setScene(scene);
+        WindowSizing.fitAndCenter(stage, 1000, 700);
         stage.show();
     }
 

@@ -745,7 +745,7 @@ public class WeeklyProductionView extends BorderPane {
 
         ScrollPane scrollPane = new ScrollPane(pages);
         scrollPane.setFitToWidth(true);
-        scrollPane.setPrefSize(900, 700);
+        scrollPane.setPrefSize(WindowSizing.width(900), WindowSizing.height(700));
 
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Daily Production Preview");

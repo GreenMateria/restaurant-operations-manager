@@ -2,7 +2,7 @@
 
 _Created: Sunday, September 6, 2026_
 
-This document records the current Infrastructure-as-Code state for ESM Operations Manager and the next practical steps for making the cloud deployment easier to manage and restore.
+This document records the current Infrastructure-as-Code state for StoreOps Manager and the next practical steps for making the cloud deployment easier to manage and restore.
 
 ## Current AWS Account
 

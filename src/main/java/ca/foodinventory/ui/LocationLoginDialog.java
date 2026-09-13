@@ -18,6 +18,9 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.http.HttpTimeoutException;
 import java.util.Optional;
 
 public class LocationLoginDialog {
@@ -89,6 +92,7 @@ public class LocationLoginDialog {
         content.getStyleClass().add("root-dark");
 
         dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().setPrefWidth(WindowSizing.width(430));
         String stylesheet = getClass().getResource("/style.css") == null
                 ? null
                 : getClass().getResource("/style.css").toExternalForm();
@@ -121,7 +125,7 @@ public class LocationLoginDialog {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         initOwnerIfReady(alert);
         alert.setTitle("Store Login Failed");
-        alert.setHeaderText(null);
+        alert.setHeaderText("The store could not be signed in.");
         alert.setContentText(message);
         alert.showAndWait();
     }
@@ -137,9 +141,23 @@ public class LocationLoginDialog {
         while (current != null && current.getCause() != null) {
             current = current.getCause();
         }
-        return current == null || current.getMessage() == null || current.getMessage().isBlank()
+
+        if (current instanceof IllegalArgumentException) {
+            return current.getMessage();
+        }
+
+        if (current instanceof HttpTimeoutException || current instanceof ConnectException) {
+            return "The login server did not respond. Please check the internet connection and try again.";
+        }
+
+        if (current instanceof IOException) {
+            return "The app could not reach the login server. Please check the internet connection and try again.";
+        }
+
+        String detail = current == null || current.getMessage() == null || current.getMessage().isBlank()
                 ? "Store login failed."
                 : current.getMessage();
+        return detail + "\n\nIf this keeps happening, contact the administrator.";
     }
 
     private record LoginInput(String username, String password) {

@@ -2,7 +2,7 @@
 
 _Last Updated: Friday, September 11, 2026_
 
-This document is the primary reference for the **ESM Operations Manager** project.
+This document is the primary reference for the **StoreOps Manager** project.
 
 Read this first when starting a new development session, using Codex in IntelliJ, or making changes that affect multiple modules.
 
@@ -10,7 +10,7 @@ Read this first when starting a new development session, using Codex in IntelliJ
 
 # 1. Project Overview
 
-**Application name:** ESM Operations Manager  
+**Application name:** StoreOps Manager  
 **Previous name:** Food Inventory Manager  
 **Primary package:** `ca.foodinventory`
 
@@ -1012,7 +1012,7 @@ Typical release process:
 Installer format:
 
 ```text
-ESM Operations Manager-<version>.exe
+StoreOps Manager-<version>.exe
 ```
 
 Important:

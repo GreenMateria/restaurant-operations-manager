@@ -291,19 +291,24 @@ public class InventoryCountsView {
                 new InventoryCountEntryView(selected, department);
 
         Stage stage = new Stage();
+        if (table.getScene() != null && table.getScene().getWindow() != null) {
+            stage.initOwner(table.getScene().getWindow());
+        }
 
         stage.setTitle(
                 "Inventory Count - " +
                         selected.getTemplateName()
         );
 
-        Scene scene = new Scene(
+        Scene scene = WindowSizing.scene(
                 view.getView(),
                 1200,
-                800
+                800,
+                stage.getOwner()
         );
 
         stage.setScene(scene);
+        WindowSizing.fitAndCenter(stage, 1200, 800);
         stage.show();
     }
 

@@ -2,7 +2,7 @@
 
 _Last Updated: Friday, September 11, 2026_
 
-This file documents the current database structure for the Food Inventory / ESM Operations Manager application.
+This file documents the current database structure for the Food Inventory / StoreOps Manager application.
 
 Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting, inventory, or production features.
 
@@ -133,7 +133,7 @@ Migration responsibilities:
 - `Migration18`
   - Added `locations` for one username/password credential per store/location.
   - Added `location_sessions` for hashed API session tokens.
-  - Seeded the current restaurant as location `1` with code `ESM` and username `esm`.
+  - Seeded the current store as location `1` with code `STORE` and username `store`.
 - `Migration19`
   - Added `location_id` to Labour Management tables:
     `labour_positions`, `labour_employees`, `labour_daily_sales`, and `labour_daily_entries`.
@@ -416,7 +416,7 @@ Important fields:
 Notes:
 
 - Passwords are stored as salted PBKDF2 hashes, not plain text.
-- The initial current-store row is location `1`, code `ESM`, username `esm`.
+- The initial current-store row is location `1`, code `STORE`, username `store`.
 - This is location identity, not employee/user identity.
 
 ## location_sessions

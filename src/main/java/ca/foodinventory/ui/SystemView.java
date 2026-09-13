@@ -14,6 +14,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+import javafx.stage.Window;
 
 import java.io.File;
 import java.util.Optional;
@@ -116,7 +117,7 @@ public class SystemView {
 
             chooser.setTitle("Select Backup Folder");
 
-            File folder = chooser.showDialog(null);
+            File folder = chooser.showDialog(ownerWindow());
 
             if (folder == null) {
                 return;
@@ -130,10 +131,14 @@ public class SystemView {
 
             alert.setTitle("Backup Complete");
 
-            alert.setHeaderText("Database backed up successfully");
+            alert.setHeaderText("Backup file created successfully.");
 
             alert.setContentText(
-                    backupFile.getAbsolutePath()
+                    (DatabaseManager.isApiDatabase()
+                            ? "A fresh cloud snapshot was downloaded first.\n\n"
+                            : "")
+                            + "Backup file:\n"
+                            + backupFile.getAbsolutePath()
             );
 
             alert.showAndWait();
@@ -145,9 +150,12 @@ public class SystemView {
             Alert alert =
                     new Alert(Alert.AlertType.ERROR);
 
-            alert.setHeaderText("Backup Failed");
+            alert.setHeaderText("Backup failed.");
 
-            alert.setContentText(ex.getMessage());
+            alert.setContentText(userFriendlyFailure(
+                    "The backup file could not be created.",
+                    ex
+            ));
 
             alert.showAndWait();
         }
@@ -169,7 +177,7 @@ public class SystemView {
             );
 
             File backupFile =
-                    chooser.showOpenDialog(null);
+                    chooser.showOpenDialog(ownerWindow());
 
             if (backupFile == null) {
                 return;
@@ -187,7 +195,8 @@ public class SystemView {
             );
 
             confirm.setContentText(
-                    "This will overwrite the current database."
+                    "This restores the local SQLite backup snapshot on this PC.\n\n"
+                            + "Cloud data is not replaced by this action."
             );
 
             if (confirm.showAndWait().orElse(ButtonType.CANCEL)
@@ -204,7 +213,7 @@ public class SystemView {
             success.setTitle("Restore Complete");
 
             success.setHeaderText(
-                    "Database restored successfully"
+                    "Local SQLite backup restored successfully."
             );
 
             success.setContentText(
@@ -220,9 +229,12 @@ public class SystemView {
             Alert alert =
                     new Alert(Alert.AlertType.ERROR);
 
-            alert.setHeaderText("Restore Failed");
+            alert.setHeaderText("Restore failed.");
 
-            alert.setContentText(ex.getMessage());
+            alert.setContentText(userFriendlyFailure(
+                    "The local SQLite backup could not be restored.",
+                    ex
+            ));
 
             alert.showAndWait();
         }
@@ -231,8 +243,8 @@ public class SystemView {
     private void testApiConnection() {
         runBackgroundAction(
                 "Testing API connection...",
-                "API connection successful.",
-                "API connection failed. Please contact the administrator.",
+                "API connection successful. Cloud-backed screens should be able to load data.",
+                "API connection failed. Please check the internet connection and contact the administrator if it continues.",
                 () -> {
                     apiHealthClient.testConnection();
                     return null;
@@ -250,9 +262,9 @@ public class SystemView {
         }
 
         runBackgroundAction(
-                "Migrating data...",
-                "Data migration complete. Please restart the application.",
-                "Data migration failed. Please contact the administrator.",
+                "Downloading cloud snapshot...",
+                "Cloud snapshot downloaded. Please restart the application before using the local backup snapshot.",
+                "Cloud snapshot download failed. Please check the internet connection and contact the administrator if it continues.",
                 () -> syncService.downloadCloudToSqlite()
         );
     }
@@ -266,6 +278,10 @@ public class SystemView {
         dialog.setTitle(title);
         dialog.setHeaderText(message);
         dialog.setContentText("Type " + confirmationText + " to continue:");
+        Window owner = ownerWindow();
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
 
         Optional<String> result = dialog.showAndWait();
         return result
@@ -282,19 +298,19 @@ public class SystemView {
         syncStatusLabel.setText(workingMessage);
         setDatabaseButtonsDisabled(true);
 
-        Task<Void> task = new Task<>() {
+        Task<Object> task = new Task<>() {
             @Override
-            protected Void call() {
-                action.run();
-                return null;
+            protected Object call() {
+                return action.run();
             }
         };
 
         task.setOnSucceeded(event -> {
             setDatabaseButtonsDisabled(false);
-            syncStatusLabel.setText(successMessage);
+            String fullSuccessMessage = appendResultDetails(successMessage, task.getValue());
+            syncStatusLabel.setText(fullSuccessMessage);
             refreshDatabaseInfo();
-            showAlert(Alert.AlertType.INFORMATION, "Complete", successMessage);
+            showAlert(Alert.AlertType.INFORMATION, "Complete", fullSuccessMessage);
         });
 
         task.setOnFailed(event -> {
@@ -336,6 +352,26 @@ public class SystemView {
         }
 
         return "\n\nDetails: " + message;
+    }
+
+    private String appendResultDetails(String message, Object result) {
+        if (result instanceof DatabaseSyncService.MigrationResult migrationResult) {
+            StringBuilder details = new StringBuilder(message)
+                    .append("\n\nRows copied: ")
+                    .append(migrationResult.totalRows());
+            if (migrationResult.localBackupFile() != null) {
+                details.append("\nPrevious local snapshot backup:\n")
+                        .append(migrationResult.localBackupFile().getAbsolutePath());
+            }
+            return details.toString();
+        }
+
+        return message;
+    }
+
+    private String userFriendlyFailure(String message, Exception exception) {
+        String details = formatFailureDetails(exception);
+        return details.isBlank() ? message : message + details;
     }
 
     private void setDatabaseButtonsDisabled(boolean disabled) {
@@ -418,10 +454,21 @@ public class SystemView {
 
     private void showAlert(Alert.AlertType type, String title, String message) {
         Alert alert = new Alert(type);
+        Window owner = ownerWindow();
+        if (owner != null) {
+            alert.initOwner(owner);
+        }
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    private Window ownerWindow() {
+        if (backupButton != null && backupButton.getScene() != null) {
+            return backupButton.getScene().getWindow();
+        }
+        return null;
     }
 
     @FunctionalInterface

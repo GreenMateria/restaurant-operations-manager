@@ -1,4 +1,4 @@
-# ESM Operations Manager API Proof
+# StoreOps Manager API Proof
 
 This is the first local API proof for moving PostgreSQL credentials off desktop client PCs.
 

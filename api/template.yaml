@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: ESM Operations Manager API proof for API Gateway HTTP API, Lambda, and AWS RDS PostgreSQL.
+Description: StoreOps Manager API proof for API Gateway HTTP API, Lambda, and AWS RDS PostgreSQL.
 
 Parameters:
   ApiStageName:

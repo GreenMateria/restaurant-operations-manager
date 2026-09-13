@@ -682,7 +682,7 @@ public class DatabaseManager {
             try (OutputStream outputStream = Files.newOutputStream(configFile.toPath())) {
                 properties.store(
                         outputStream,
-                        "ESM Operations Manager database settings"
+                        "StoreOps Manager database settings"
                 );
             }
         } catch (IOException e) {

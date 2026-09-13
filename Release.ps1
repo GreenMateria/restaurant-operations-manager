@@ -2,7 +2,7 @@
 Set-StrictMode -Version Latest
 
 $ProjectDir = "C:\Food Inventory"
-$AppName = "ESM Operations Manager"
+$AppName = "StoreOps Manager"
 $MainJar = "FoodInventory.jar"
 $MainClass = "ca.foodinventory.Launcher"
 $Icon = "FoodInventory.ico"
@@ -188,7 +188,7 @@ try {
     Clear-Host
 
     Write-Host "===================================" -ForegroundColor Cyan
-    Write-Host " ESM Operations Manager Release Tool" -ForegroundColor Cyan
+    Write-Host " StoreOps Manager Release Tool" -ForegroundColor Cyan
     Write-Host "===================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -228,7 +228,7 @@ try {
     Write-Host "Closing possible locked app/installer processes..." -ForegroundColor Yellow
 
     Get-Process | Where-Object {
-        $_.ProcessName -like "ESM Operations Manager*" -or
+        $_.ProcessName -like "StoreOps Manager*" -or
         $_.ProcessName -eq "FoodInventory" -or
         $_.ProcessName -eq "java" -or
         $_.ProcessName -eq "javaw"
@@ -307,8 +307,8 @@ try {
             --type exe `
             --name "$AppName" `
             --app-version "$NewVersion" `
-            --java-options "-Desm.app.version=$NewVersion" `
-            --vendor "ESM" `
+            --java-options "-Dstoreops.app.version=$NewVersion" `
+            --vendor "Independent Operations Tools" `
             --input "$ProjectDir\target" `
             --main-jar "$MainJar" `
             --main-class "$MainClass" `

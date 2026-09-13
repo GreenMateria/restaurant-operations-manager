@@ -28,6 +28,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class UpdateDialogService {
 
+    private static final String APP_NAME = "StoreOps Manager";
+
     private final GitHubUpdateService updateService;
 
     public UpdateDialogService(GitHubUpdateService updateService) {
@@ -132,7 +134,7 @@ public class UpdateDialogService {
         VBox content = new VBox(
                 12,
                 createDialogHeading(
-                        "ESM Operations Manager "
+                        APP_NAME + " "
                                 + updateInfo.latestVersion()
                                 + " is available."
                 ),
@@ -141,8 +143,8 @@ public class UpdateDialogService {
                 releaseNotes
         );
         content.setPadding(new Insets(8));
-        content.setPrefWidth(560);
-        content.setMinWidth(520);
+        content.setPrefWidth(WindowSizing.width(560));
+        content.setMinWidth(Math.min(520, WindowSizing.width(560)));
 
         pane.setContent(content);
         configureDialogPane(pane, 620);
@@ -191,14 +193,14 @@ public class UpdateDialogService {
         VBox content = new VBox(
                 12,
                 createDialogHeading(
-                        "Downloading ESM Operations Manager v"
+                        "Downloading " + APP_NAME + " v"
                                 + updateInfo.latestVersion()
                 ),
                 progressBar,
                 progressLabel
         );
         content.setPadding(new Insets(10));
-        content.setPrefWidth(480);
+        content.setPrefWidth(WindowSizing.width(480));
         DialogPane pane = dialog.getDialogPane();
         pane.setContent(content);
         configureDialogPane(pane, 540);
@@ -318,7 +320,7 @@ public class UpdateDialogService {
         VBox content = new VBox(
                 12,
                 createDialogHeading(
-                        "ESM Operations Manager "
+                        APP_NAME + " "
                                 + updateInfo.latestVersion()
                                 + " is ready to install."
                 ),
@@ -327,8 +329,8 @@ public class UpdateDialogService {
                 messageLabel
         );
         content.setPadding(new Insets(10));
-        content.setPrefWidth(470);
-        content.setMinWidth(430);
+        content.setPrefWidth(WindowSizing.width(470));
+        content.setMinWidth(Math.min(430, WindowSizing.width(470)));
 
         pane.setContent(content);
         configureDialogPane(pane, 540);
@@ -413,8 +415,9 @@ public class UpdateDialogService {
             pane.getStyleClass().add("update-dialog");
         }
 
-        pane.setPrefWidth(preferredWidth);
-        pane.setMinWidth(preferredWidth);
+        double width = WindowSizing.width(preferredWidth);
+        pane.setPrefWidth(width);
+        pane.setMinWidth(width);
         pane.setMinHeight(Region.USE_PREF_SIZE);
     }
 

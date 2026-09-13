@@ -93,7 +93,7 @@ public class ProductEditorView {
 
         updateAlcoholSection();
 
-        Scene scene = new Scene(root, 860, 620);
+        Scene scene = WindowSizing.scene(root, 860, 620);
 
         String css = getClass().getResource("/style.css") == null
                 ? null
@@ -104,6 +104,7 @@ public class ProductEditorView {
         }
 
         stage.setScene(scene);
+        WindowSizing.fitAndCenter(stage, 860, 620);
         stage.showAndWait();
     }
 
