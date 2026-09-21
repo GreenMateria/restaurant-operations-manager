@@ -7,6 +7,8 @@ Date: 2026-09-13
 - Updated release packaging metadata so new installers use StoreOps Manager naming and a neutral vendor value.
 - Added a maximized launch experience, polished card-based dashboard navigation, card-based section menus, an About panel, and Switch Store support.
 - Removed old branded installer assets from GitHub Releases while preserving required POS/import report normalization.
+- Fixed API-mode imported GFS invoice saving so unknown supplier SKUs are validated against cloud products/aliases, supplier SKU aliases and missing products are saved through the API, and missing-product failures return clear validation details instead of a generic invoice-save `HTTP 500`.
+- Redeployed `esm-operations-api` in `ca-central-1` on Monday, September 21, 2026.
 
 ## v4.0.0
 Date: 2026-09-11
@@ -249,3 +251,8 @@ Date: 2026-09-11 17:08
 Date: 2026-09-13 14:11
 
 - UI change. Store Change button added. App launches maximised
+
+## v4.1.1
+Date: 2026-09-21 11:20
+
+- Fixed invoice save bug

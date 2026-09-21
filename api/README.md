@@ -51,6 +51,8 @@ GET /products
 POST /products
 PUT /products/{id}
 POST /products/{id}/deactivate
+POST /products/resolve-skus
+POST /products/aliases
 GET /pos-menu-items
 POST /pos-menu-items
 POST /invoices/exists
@@ -138,14 +140,14 @@ PUT /labour/daily
 
 Current desktop API-mode coverage:
 
-- Food Department: Products, Import Invoice, Manual Invoice, Count Templates, Inventory Counts, and Order Guide.
+- Food Department: Products, Import Invoice, Manual Invoice, Count Templates, Inventory Counts, and Order Guide. Imported GFS invoices use API-backed SKU/alias resolution, supplier SKU alias save, and product creation before invoice save in Cloud API mode.
 - Alcohol Department: Products with alcohol profile maintenance, Manual Invoice, Count Templates, Inventory Counts, Order Guide, Product Profiles for weighted counts, and Sales Mappings.
 - Supplies Department: Products, Manual Invoice, Count Templates, Inventory Counts, and Order Guide. The `/supplies-invoices` route was deployed on Saturday, September 5, 2026.
 - Production: Stations, Production Items, Production Profiles and lines, POS Menu Item maintenance/import/KDS cleanup, Product Mappings, Weekly Production generation/loading/refresh/override saves, and Freezer Pull manual quantities.
 - Reporting/Sales: Invoice History, invoice lines and breakdowns, invoice delete, Sales Period list/save, POS sales Excel import persistence, Inventory Valuation, and Weekly Cost Report generation.
 - Labour Management: Labour Setup positions/employees/settings, Labour Hours saved-week listing and pop-out Monday-Sunday Shift 1 / Shift 2 employee-hour entry, Daily Labour Cost weekly net-sales/labour percentage entry, Tip Pool allocation, and Tip Pool Breakdown payout reporting with nickel-rounded net payouts and printing.
 - Multi-location: `POST /auth/login` returns a store session token, desktop clients send `x-location-token`, and store-owned reads/writes are scoped to the resolved location.
-- Product support: GFS product guide CSV parsing stays in the desktop client, normalized products are upserted through `POST /products/import`, and product purchase history loads through `GET /products/{id}/purchase-history`.
+- Product support: GFS product guide CSV parsing stays in the desktop client, normalized products are upserted through `POST /products/import`, imported-invoice SKUs can be checked through `POST /products/resolve-skus`, supplier SKU aliases can be saved through `POST /products/aliases`, and product purchase history loads through `GET /products/{id}/purchase-history`.
 - Admin sync: `GET /admin/sync/download` returns a PostgreSQL table snapshot, and `POST /admin/sync/upload` replaces cloud data from a desktop-generated SQLite table snapshot. These remain administrator migration/recovery tools, not routine daily sync.
 - Production API routes were deployed to `esm-operations-api` in `ca-central-1` on Friday, September 4, 2026, and read-only smoke checks passed.
 - Live desktop validation confirmed Production CSV/report import and Weekly Production generation complete in API mode.
@@ -154,6 +156,7 @@ Current desktop API-mode coverage:
 - Labour Setup and Labour Hours routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026. Daily Labour Cost, Tip Pool support fields, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Smoke checks confirmed `/labour/weeks` responds and `/labour/daily/{workDate}` returns tip-pool/uniform context. The live AWS RDS Labour schema was advanced to version 17 with the secure prompt-based `scripts/Apply-LabourSchemaMigration.ps1` helper.
 - Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
 - Multi-location API scoping and `LocationAuthRequired=true` were deployed for v4.0.0 and remain current for v4.2.0. Smoke checks confirmed `/products` rejects requests without a location token and a TEST store token returns isolated data.
+- Imported-invoice SKU/alias support was fixed and deployed on Monday, September 21, 2026. The deployed `/health` endpoint returned `status=ok` after deployment.
 
 Intentional remaining gaps:
 

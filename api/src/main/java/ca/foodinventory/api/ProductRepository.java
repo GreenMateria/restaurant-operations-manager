@@ -5,8 +5,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 class ProductRepository {
 
@@ -167,6 +169,70 @@ class ProductRepository {
         }
     }
 
+    String resolveKnownSkusJson(int locationId, List<Map<String, Object>> records) throws SQLException {
+        Set<String> skus = new LinkedHashSet<>();
+        if (records != null) {
+            for (Map<String, Object> record : records) {
+                String sku = stringValue(record.get("sku"));
+                if (sku != null && !sku.isBlank()) {
+                    skus.add(sku.trim());
+                }
+            }
+        }
+
+        StringBuilder json = new StringBuilder("[");
+        boolean first = true;
+        for (String sku : skus) {
+            if (!first) {
+                json.append(',');
+            }
+            json.append("{")
+                    .append("\"sku\":").append(Json.nullableString(sku)).append(',')
+                    .append("\"known\":").append(findIdBySkuOrAlias(locationId, sku) != null)
+                    .append("}");
+            first = false;
+        }
+
+        return json.append(']').toString();
+    }
+
+    void addSkuAlias(int locationId, Map<String, Object> body) throws SQLException {
+        String sql = """
+                INSERT INTO product_sku_aliases (
+                    product_id,
+                    supplier,
+                    sku,
+                    description,
+                    pack_size,
+                    location_id,
+                    active
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+                ON CONFLICT(location_id, sku) DO UPDATE SET
+                    product_id = excluded.product_id,
+                    supplier = excluded.supplier,
+                    description = excluded.description,
+                    pack_size = excluded.pack_size,
+                    active = 1
+                """;
+
+        int productId = intValue(body.get("productId"));
+        if (productId <= 0 || !productExists(locationId, productId)) {
+            throw new IllegalArgumentException("Product was not found for this location.");
+        }
+
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, productId);
+            statement.setString(2, requireString(body, "supplier"));
+            statement.setString(3, requireString(body, "sku"));
+            statement.setString(4, stringValue(body.get("description")));
+            statement.setString(5, stringValue(body.get("packSize")));
+            statement.setInt(6, locationId);
+            statement.executeUpdate();
+        }
+    }
+
     int upsertImportedProducts(int locationId, List<Map<String, Object>> products) throws SQLException {
         if (products == null || products.isEmpty()) {
             return 0;
@@ -253,6 +319,68 @@ class ProductRepository {
                     throw new SQLException("Failed to retrieve product ID.");
                 }
                 return keys.getInt(1);
+            }
+        }
+    }
+
+    private Integer findIdBySkuOrAlias(int locationId, String sku) throws SQLException {
+        String productSql = """
+                SELECT id
+                FROM products
+                WHERE sku = ?
+                  AND location_id = ?
+                  AND active = 1
+                LIMIT 1
+                """;
+
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(productSql)) {
+            statement.setString(1, sku);
+            statement.setInt(2, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getInt("id");
+                }
+            }
+        }
+
+        String aliasSql = """
+                SELECT product_id
+                FROM product_sku_aliases
+                WHERE sku = ?
+                  AND location_id = ?
+                  AND active = 1
+                LIMIT 1
+                """;
+
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(aliasSql)) {
+            statement.setString(1, sku);
+            statement.setInt(2, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getInt("product_id");
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private boolean productExists(int locationId, int productId) throws SQLException {
+        String sql = """
+                SELECT COUNT(*)
+                FROM products
+                WHERE id = ?
+                  AND location_id = ?
+                """;
+
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, productId);
+            statement.setInt(2, locationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() && resultSet.getInt(1) > 0;
             }
         }
     }

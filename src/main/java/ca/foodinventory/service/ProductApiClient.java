@@ -12,8 +12,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ProductApiClient {
 
@@ -129,6 +131,80 @@ public class ProductApiClient {
         return end > start ? Integer.parseInt(body.substring(start, end)) : 0;
     }
 
+    public Set<String> resolveKnownSkus(List<String> skus) {
+        HttpRequest request = requestBuilder("/products/resolve-skus")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(skusJson(skus)))
+                .build();
+
+        HttpResponse<String> response = send(request, "resolve product SKUs");
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Product API returned HTTP " + response.statusCode());
+        }
+
+        Set<String> knownSkus = new HashSet<>();
+        for (Map<String, Object> object : new JsonObjectArrayParser().parse(response.body())) {
+            if (booleanValue(object.get("known"))) {
+                String sku = stringValue(object.get("sku"));
+                if (sku != null && !sku.isBlank()) {
+                    knownSkus.add(sku);
+                }
+            }
+        }
+        return knownSkus;
+    }
+
+    public void addSkuAlias(
+            int productId,
+            String supplier,
+            String sku,
+            String description,
+            String packSize
+    ) {
+        HttpRequest request = requestBuilder("/products/aliases")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(aliasJson(
+                        productId,
+                        supplier,
+                        sku,
+                        description,
+                        packSize
+                )))
+                .build();
+
+        HttpResponse<String> response = send(request, "save product SKU alias");
+        if (response.statusCode() != 201) {
+            throw new RuntimeException("Product API returned HTTP " + response.statusCode());
+        }
+    }
+
+    public Product createProductFromInvoiceLine(ca.foodinventory.model.InvoiceLine line) {
+        Product product = new Product(
+                0,
+                line.getSku(),
+                line.getDescription(),
+                "Uncategorized",
+                "OTHER",
+                "EA",
+                1.0,
+                line.getPackSize(),
+                "",
+                line.getCaseCost(),
+                null,
+                true
+        );
+
+        save(product);
+
+        return findAllActiveProducts()
+                .stream()
+                .filter(saved -> line.getSku().equals(saved.getSku()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException(
+                        "Failed to create product for SKU: " + line.getSku()
+                ));
+    }
+
     private HttpRequest.Builder requestBuilder(String path) {
         return ApiRequestSupport.requestBuilder(path);
     }
@@ -176,6 +252,41 @@ public class ProductApiClient {
             }
         }
         return json.append(']').toString();
+    }
+
+    private String skusJson(List<String> skus) {
+        StringBuilder json = new StringBuilder("[");
+        if (skus != null) {
+            boolean first = true;
+            for (String sku : skus) {
+                if (sku == null || sku.isBlank()) {
+                    continue;
+                }
+                if (!first) {
+                    json.append(',');
+                }
+                json.append("{\"sku\":").append(jsonString(sku.trim())).append('}');
+                first = false;
+            }
+        }
+        return json.append(']').toString();
+    }
+
+    private String aliasJson(
+            int productId,
+            String supplier,
+            String sku,
+            String description,
+            String packSize
+    ) {
+        return new StringBuilder("{")
+                .append("\"productId\":").append(productId).append(',')
+                .append("\"supplier\":").append(jsonString(supplier)).append(',')
+                .append("\"sku\":").append(jsonString(sku)).append(',')
+                .append("\"description\":").append(jsonString(description)).append(',')
+                .append("\"packSize\":").append(jsonString(packSize))
+                .append('}')
+                .toString();
     }
 
     private String alcoholProfileJson(AlcoholProductProfile profile) {

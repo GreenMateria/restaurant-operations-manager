@@ -186,6 +186,53 @@ class ApiRoutes {
             }
         }
 
+        if ("POST".equalsIgnoreCase(method) && "/products/resolve-skus".equals(normalizedPath)) {
+            ApiResult unauthorized = requireApiKey(headers);
+            if (unauthorized != null) {
+                return unauthorized;
+            }
+
+            try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                return ApiResult.json(
+                        200,
+                        productRepository.resolveKnownSkusJson(locationContext.id(), parseBodyArray(body))
+                );
+            } catch (IllegalArgumentException e) {
+                return badRequest(e);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return databaseError("Failed to resolve product SKUs.");
+            }
+        }
+
+        if ("POST".equalsIgnoreCase(method) && "/products/aliases".equals(normalizedPath)) {
+            ApiResult unauthorized = requireApiKey(headers);
+            if (unauthorized != null) {
+                return unauthorized;
+            }
+
+            try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+                productRepository.addSkuAlias(locationContext.id(), parseBody(body));
+                return ApiResult.json(201, Json.object(
+                        "status", "ok",
+                        "message", "Product SKU alias saved."
+                ));
+            } catch (IllegalArgumentException e) {
+                return badRequest(e);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return databaseError("Failed to save product SKU alias.");
+            }
+        }
+
         Integer productId = pathId(normalizedPath, "/products/");
         if (productId != null) {
             ApiResult unauthorized = requireApiKey(headers);

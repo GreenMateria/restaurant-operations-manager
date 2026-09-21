@@ -24,6 +24,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class ImportInvoiceView {
 
@@ -485,15 +486,7 @@ public class ImportInvoiceView {
 
             Product product = selectedProduct.get();
 
-            if (!product.getSku().equals(line.getSku())) {
-                productDao.addSkuAlias(
-                        product.getId(),
-                        "GFS",
-                        line.getSku(),
-                        line.getDescription(),
-                        line.getPackSize()
-                );
-            }
+            addSkuAliasIfNeeded(product, line);
 
             products = loadSortedProducts();
         }
@@ -586,7 +579,7 @@ public class ImportInvoiceView {
             }
 
             if (button == createButtonType) {
-                return productDao.createProductFromInvoiceLine(line);
+                return createProductFromInvoiceLine(line);
             }
 
             return null;
@@ -829,12 +822,51 @@ public class ImportInvoiceView {
 
     private List<InvoiceLine> findUnknownSkus() {
         if (isFoodApiMode()) {
-            return List.of();
+            Set<String> knownSkus = productApiClient.resolveKnownSkus(
+                    currentLines.stream()
+                            .map(InvoiceLine::getSku)
+                            .toList()
+            );
+
+            return currentLines.stream()
+                    .filter(line -> !knownSkus.contains(line.getSku()))
+                    .toList();
         }
 
         return currentLines.stream()
                 .filter(line -> productDao.findIdBySkuOrAlias(line.getSku()) == null)
                 .toList();
+    }
+
+    private void addSkuAliasIfNeeded(Product product, InvoiceLine line) {
+        if (product.getSku().equals(line.getSku())) {
+            return;
+        }
+
+        if (isFoodApiMode()) {
+            productApiClient.addSkuAlias(
+                    product.getId(),
+                    "GFS",
+                    line.getSku(),
+                    line.getDescription(),
+                    line.getPackSize()
+            );
+            return;
+        }
+
+        productDao.addSkuAlias(
+                product.getId(),
+                "GFS",
+                line.getSku(),
+                line.getDescription(),
+                line.getPackSize()
+        );
+    }
+
+    private Product createProductFromInvoiceLine(InvoiceLine line) {
+        return isFoodApiMode()
+                ? productApiClient.createProductFromInvoiceLine(line)
+                : productDao.createProductFromInvoiceLine(line);
     }
 
     private boolean invoiceExists(String invoiceNumber) {

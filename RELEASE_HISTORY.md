@@ -20,6 +20,13 @@ Date: 2026-09-13
 - Added Switch Store in the sidebar so users can return to Store Login without restarting the app.
 - Fixed standard dialog text visibility when dark app styles are loaded.
 
+### API Invoice Import
+
+- Fixed API-mode imported GFS invoice saving so unknown supplier SKUs are validated against cloud products and aliases before save.
+- Added API-backed supplier SKU alias saving and missing-product creation for the imported invoice mapping workflow.
+- Changed missing imported-invoice products to return clear validation details instead of a generic invoice-save `HTTP 500`.
+- Redeployed `esm-operations-api` in `ca-central-1` on Monday, September 21, 2026.
+
 ## v4.0.0
 
 Date: 2026-09-11

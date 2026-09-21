@@ -65,6 +65,8 @@ Completed:
 -   Tip Pool Breakdown net payout amounts now round to the nearest nickel for Canadian cash payout handling.
 -   Tip Pool Breakdown now supports printing a compact black-and-white payout report with employee rows and totals.
 -   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target.
+-   On Monday, September 21, 2026, the API and desktop imported-invoice path was fixed so API-mode GFS invoice imports validate unknown SKUs against cloud products/aliases, save new supplier SKU aliases through the API, create missing products through the API, and return clear validation details instead of a generic invoice-save `HTTP 500`.
+-   The `esm-operations-api` stack was redeployed in `ca-central-1` on Monday, September 21, 2026 with the imported-invoice SKU/alias fix; deployed `/health` returned `status=ok`.
 -   Inventory Count Sheet printing was fixed after the v3.1.1 stable release: print layout is now created after printer selection, pages are scaled to the selected printer's printable area, failures show a clear error alert, and alcohol count sheet printing uses the API-backed alcohol profile client in API mode.
 -   Direct desktop Cloud PostgreSQL mode was retired on Monday, September 7, 2026; release desktops now use the shared Cloud API as the normal operating path.
 -   The System screen no longer exposes direct PostgreSQL mode switching, direct cloud connection testing, or upload-this-PC-to-cloud controls.
@@ -209,6 +211,7 @@ Current behaviour:
 -   Direct Cloud PostgreSQL mode is no longer a normal desktop operating mode.
 -   SQLite is retained only as a local backup snapshot/recovery file, populated from the Cloud API download workflow.
 -   The desktop app supports API mode for Food Products, Food Import Invoice, Food Manual Invoice, Food Count Templates, Food Inventory Counts, Food Order Guide, Alcohol Products/Profile Maintenance, Alcohol Manual Invoice, Alcohol Count Templates, Alcohol Inventory Counts, Alcohol Order Guide, Alcohol Sales Mappings, Alcohol Variance Report, Supplies Products, Supplies Manual Invoice, Supplies Count Templates, Supplies Inventory Counts, Supplies Order Guide, Production workflows, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, Invoice History, Sales Entry/import, Inventory Valuation, Weekly Cost Report, GFS product guide import, and product purchase history.
+-   In API mode, Food Import Invoice now uses cloud SKU/alias resolution before save, writes supplier SKU alias mappings through the API, and creates missing products in the signed-in store scope instead of touching the local SQLite snapshot.
 -   POS Menu Items support API-mode load, add, edit, deactivate, setup import, usage-report import, and KDS cleanup in the development build.
 -   Inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports are expected to remain responsive in cloud mode because long writes/imports are now moved off the JavaFX thread.
 -   Inventory Count Sheet printing is expected to dispatch correctly after printer selection in Food, Alcohol, and Supplies count screens.

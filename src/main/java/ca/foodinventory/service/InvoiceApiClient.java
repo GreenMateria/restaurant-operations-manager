@@ -240,8 +240,11 @@ public class InvoiceApiClient {
             String apiName
     ) {
         if (response.statusCode() != expectedStatus) {
+            String detail = response.body() == null || response.body().isBlank()
+                    ? ""
+                    : ": " + response.body();
             throw new RuntimeException(
-                    apiName + " returned HTTP " + response.statusCode()
+                    apiName + " returned HTTP " + response.statusCode() + detail
             );
         }
     }

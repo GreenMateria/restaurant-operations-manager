@@ -175,7 +175,7 @@ class InvoiceRepository {
 
                     Integer productId = findIdBySkuOrAlias(connection, locationId, requireString(record, "sku"));
                     if (productId == null) {
-                        throw new SQLException("Product not found for SKU: " + record.get("sku"));
+                        throw new IllegalArgumentException("Product not found for SKU: " + record.get("sku"));
                     }
 
                     double conversionFactor = getConversionFactor(connection, productId);

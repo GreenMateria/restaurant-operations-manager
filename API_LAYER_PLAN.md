@@ -328,8 +328,8 @@ Started on Tuesday, September 1, 2026:
 
 Current Food implementation status:
 
-- Food Products: API-backed load, add/edit non-alcohol product fields, deactivate, product purchase history, and GFS product guide import persistence are implemented. GFS CSV parsing remains client-side.
-- Food Import Invoice and Manual Invoice: duplicate check, overwrite delete, and save are implemented locally through the API.
+- Food Products: API-backed load, add/edit non-alcohol product fields, deactivate, product purchase history, GFS product guide import persistence, supplier SKU alias save, and imported-invoice SKU/alias resolution are implemented. GFS CSV parsing remains client-side.
+- Food Import Invoice and Manual Invoice: duplicate check, overwrite delete, and save are implemented locally through the API. Food Import Invoice now validates unknown SKUs through the API in Cloud API mode, writes new supplier SKU aliases to the signed-in store, and creates missing products through the API before saving.
 - Food Count Templates: list, add, deactivate, duplicate, template-line load/add/edit/remove, and sort-order save are implemented locally through the API.
 - Food Inventory Counts: list, start count, load lines, save quantities, complete, delete, and print loaded count sheets are implemented locally through the API.
 - Food Order Guide: completed count list, guide generation, and case-size save are implemented locally through the API.
@@ -412,6 +412,7 @@ Deployment status:
 - Labour Management was accepted as complete after manager workflow testing on Tuesday, September 8, 2026.
 - Multi-location Store Login, location token enforcement, and TEST-store isolation were deployed and validated on Friday, September 11, 2026.
 - Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase history, Labour, and store-scoped operation are confirmed working for the v4.2.0 release target.
+- Imported-invoice SKU/alias support was fixed and deployed to `esm-operations-api` in `ca-central-1` on Monday, September 21, 2026. The desktop now uses API-backed SKU resolution, API-backed alias save, and API-backed product creation before saving imported GFS invoices; missing products now surface as validation errors instead of generic invoice-save `HTTP 500` failures.
 
 Next implementation step:
 
