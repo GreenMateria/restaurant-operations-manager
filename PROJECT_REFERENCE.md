@@ -92,7 +92,7 @@ Important:
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
 - Current release target is v4.2.0. `pom.xml` may remain at the prior version until `Release.ps1` performs the release-version update during packaging.
-- Current database schema version in code is 21.
+- Current database schema version in code is 22.
 - API layer stack `esm-operations-api` is deployed in AWS and the desktop app uses API mode for normal workflows.
 - Store Login is enabled by release packaging with `location.login.required=true`.
 - Desktop API clients include the store session token with normal business requests, and the deployed API scopes store-owned reads/writes to the resolved location.
@@ -808,14 +808,14 @@ Labour Management is a top-level operational module replacing the accepted manag
 Implemented Labour Management work includes:
 
 - Labour Management dashboard navigation.
-- Administrator-protected Labour Setup.
+- Labour Setup protected by its own configurable store-scoped password in Cloud API mode, separate from the System administrator password.
 - Labour Hours with an inventory-count-style saved-week list and a pop-out spreadsheet-style Monday-Sunday grid for separate Shift 1 / Shift 2 employee-hour entry.
 - Labour Hours department headers are styled as distinct bands in the pop-out entry window.
 - Configurable labour positions grouped as `FOH` or `BOH`.
 - Configurable labour employees with position, hourly wage, active status, tip-pool eligibility, and uniform-deduction applicability.
 - Configurable default uniform deduction amount stored in settings.
 - API-backed Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown reads/writes for Cloud API mode.
-- Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes, and the live RDS schema has been advanced through schema version 21 for multi-location operation.
+- Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes, and the live RDS schema has been advanced through schema version 22 for multi-location operation.
 - Schema foundations for future daily operational sales and daily employee labour entries by actual calendar date.
 - Wage, employee name, position name, and labour group snapshots on saved daily labour entries so historical weeks do not recalculate from later setup changes.
 
@@ -910,15 +910,21 @@ Important rules:
 
 # 20. Admin Password and Settings
 
-The application uses a local administrator password for protected system functions.
+The application uses protected passwords for System and Labour Setup functions.
 
 Current behavior:
 
-- The administrator password is stored locally in `%LOCALAPPDATA%\FoodInventory\database.properties`.
+- In Cloud API mode, the System administrator password and Labour Setup password are store-scoped and stored as salted PBKDF2 hashes on the signed-in `locations` row.
+- Local SQLite/development fallback still stores protected passwords in `%LOCALAPPDATA%\FoodInventory\database.properties`.
 - Passwords are stored as salted PBKDF2 hashes, not plain text.
 - Legacy plain-text local or SQLite passwords are migrated to hashed local storage after a successful login.
-- `scripts/Reset-AdminPassword.ps1` can reset the local administrator password when the System screen cannot be accessed.
+- `scripts/Reset-AdminPassword.ps1` can reset the local SQLite/development fallback administrator password when the System screen cannot be accessed.
 - This password protects local app administration. It is not the AWS API key, database password, or a per-user cloud identity.
+- Labour Setup uses a separate password from the System administrator password.
+- When no Labour Setup password exists for the signed-in store, the first Labour Setup login accepts the temporary password `LabourSetup!` and then immediately prompts for a new store-scoped Labour Setup password before opening the screen.
+- The Labour Setup password can be changed later from the password-protected System screen.
+- `scripts/Apply-LocationProtectedPasswordsMigration.ps1` adds the store-scoped protected-password columns to AWS RDS.
+- `scripts/Reset-LabourSetupPassword.ps1` removes only the local fallback Labour Setup password keys, returning a local SQLite/development PC to the temporary-password first-use flow.
 
 Passwords must not be stored in plain text.
 

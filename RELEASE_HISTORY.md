@@ -27,6 +27,15 @@ Date: 2026-09-13
 - Changed missing imported-invoice products to return clear validation details instead of a generic invoice-save `HTTP 500`.
 - Redeployed `esm-operations-api` in `ca-central-1` on Monday, September 21, 2026.
 
+### Store-Scoped Protected Passwords
+
+- Added store-scoped System administrator and Labour Setup protected passwords for Cloud API mode.
+- Stored protected passwords as salted PBKDF2 hashes on the signed-in `locations` row so protected access follows the store across workstations.
+- Added first-use Labour Setup handling: when a store has no Labour Setup password yet, the temporary password `LabourSetup!` opens a required create-new-password prompt.
+- Added schema migration 22 and `scripts/Apply-LocationProtectedPasswordsMigration.ps1` for applying the protected-password columns to AWS RDS.
+- Added `GET /protected-passwords/status`, `POST /protected-passwords/verify`, and `PUT /protected-passwords/{scope}` to the API and deployed them to `esm-operations-api` in `ca-central-1` on Thursday, September 24, 2026.
+- Verified the live RDS schema version is 22 and the deployed protected-password routes require a valid store location token.
+
 ## v4.0.0
 
 Date: 2026-09-11

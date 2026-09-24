@@ -304,7 +304,7 @@ Started on Tuesday, September 1, 2026:
 - API URL: `https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod`.
 - First deploy with `ReservedConcurrency=5` failed because the account could not reduce unreserved Lambda concurrency below AWS minimums.
 - Template now supports `ReservedConcurrency=0`, which leaves function-level reserved concurrency unset for small/free-tier accounts.
-- Verified deployed `GET /health` returns `{"status":"ok","version":"3.1.2"}` after the v3.1.2 API version update on Monday, September 7, 2026.
+- Verified deployed `GET /health` returns `{"status":"ok","version":"3.1.3"}` after the protected-password API deployment on Thursday, September 24, 2026.
 - Verified deployed `GET /products` returns `401 Unauthorized` without `x-api-key`.
 - Verified deployed `GET /products` returns `359` active products from AWS RDS when called with the configured `x-api-key`.
 - Current API key was generated during deployment and temporarily written to `%TEMP%\esm-api-key.txt` for verification. Do not commit it.
@@ -375,7 +375,7 @@ Current Labour implementation status:
 - Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
 - Labour Hours stores wage, employee name, position name, labour group, tip-pool eligibility, and uniform-deduction context on daily entries so historical weeks do not recalculate from later setup changes.
 - Labour routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026, and updated on Monday, September 7, 2026 for `/labour/weeks`, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support fields.
-- The live AWS RDS schema was advanced through schema version 21 using the Labour and multi-location migration scripts; the restricted `operations_app` runtime user remains unable to create tables by design.
+- The live AWS RDS schema was advanced through schema version 22 using the Labour, multi-location, and protected-password migration scripts; the restricted `operations_app` runtime user remains unable to create tables by design.
 
 Current multi-location implementation status:
 
@@ -383,7 +383,8 @@ Current multi-location implementation status:
 - `POST /auth/login` issues location session tokens; normal store-owned API routes require the location token when `LocationAuthRequired=true`.
 - Food, Alcohol, Supplies, Production, Reporting/Sales, Purchasing, and Labour API workflows scope reads and writes to the resolved `location_id`.
 - PostgreSQL uniqueness for duplicate-sensitive store-owned records is location-aware, so each store can have its own SKUs, POS SKUs, setup names, and production weeks.
-- Administrative scripts can create/rename stores, reset store passwords, apply schema migrations, apply location-aware uniqueness, and copy selected setup/master data between stores.
+- System administrator and Labour Setup protected passwords are store-scoped in Cloud API mode through `GET /protected-passwords/status`, `POST /protected-passwords/verify`, and `PUT /protected-passwords/{scope}`.
+- Administrative scripts can create/rename stores, reset store passwords, apply schema migrations, apply location-aware uniqueness, apply protected-password columns, and copy selected setup/master data between stores.
 - The live API was deployed with location auth required; smoke checks confirmed `/products` rejects requests without a location token and a TEST store token returns isolated data.
 
 Remaining API migration targets:
@@ -413,6 +414,7 @@ Deployment status:
 - Multi-location Store Login, location token enforcement, and TEST-store isolation were deployed and validated on Friday, September 11, 2026.
 - Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, product purchase history, Labour, and store-scoped operation are confirmed working for the v4.2.0 release target.
 - Imported-invoice SKU/alias support was fixed and deployed to `esm-operations-api` in `ca-central-1` on Monday, September 21, 2026. The desktop now uses API-backed SKU resolution, API-backed alias save, and API-backed product creation before saving imported GFS invoices; missing products now surface as validation errors instead of generic invoice-save `HTTP 500` failures.
+- Store-scoped protected-password routes were deployed to `esm-operations-api` in `ca-central-1` on Thursday, September 24, 2026, and the live RDS schema was advanced to version 22. Smoke checks confirmed `/health` returns `status=ok` and protected-password routes reject requests without a valid store location token.
 
 Next implementation step:
 

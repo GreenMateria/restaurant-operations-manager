@@ -121,6 +121,7 @@ Drift status after import/update: IN_SYNC
 API location auth after v4.0.0 deployment: required
 Labour API routes deployed: Sunday, September 6, 2026
 Labour API route updates for `/labour/weeks`, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support fields deployed: Monday, September 7, 2026
+Protected-password API routes deployed: Thursday, September 24, 2026
 ```
 
 ## Current Database
@@ -142,7 +143,7 @@ VPC security group: sg-056216eb5a750ccfa
 
 This RDS instance is not currently created by repo IaC. It was discovered as an existing manual/external resource.
 
-The live RDS application schema is currently at version 17. Labour Management schema setup was applied outside SAM because the restricted `operations_app` runtime user intentionally cannot create tables in the `public` schema. Use `scripts/Apply-LabourSchemaMigration.ps1` with the schema-capable RDS admin user for this Labour schema setup path; do not store the admin password in repo files or Lambda environment variables.
+The live RDS application schema is currently at version 22. Labour Management, multi-location, location-aware uniqueness, and protected-password schema setup paths are applied outside SAM because the restricted `operations_app` runtime user intentionally cannot create or alter schema-owned structures in the `public` schema. Use the secure prompt-based migration helpers with the schema-capable RDS admin user for these setup paths; do not store the admin password in repo files or Lambda environment variables.
 
 For the current budget, keep the database small and Single-AZ unless the budget is intentionally changed.
 

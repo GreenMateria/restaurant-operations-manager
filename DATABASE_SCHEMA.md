@@ -27,7 +27,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **21**.
+- Current migration version: **22**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -57,6 +57,7 @@ Current known migration files:
 - `Migration19`
 - `Migration20`
 - `Migration21`
+- `Migration22`
 
 PostgreSQL support:
 
@@ -147,6 +148,9 @@ Migration responsibilities:
   - PostgreSQL multi-location uniqueness migration.
   - Replaces global uniqueness for product SKUs, product alias SKUs, sales periods, alcohol sales mapping POS SKUs, production station/item/profile names, POS menu SKUs, and production weeks with location-aware composite uniqueness.
   - SQLite fallback keeps its original single-location uniqueness model.
+- `Migration22`
+  - Adds store-scoped protected-password columns to `locations` for System administrator and Labour Setup passwords.
+  - Cloud API mode stores these passwords as salted PBKDF2 hashes on the signed-in location so protected access follows the store across workstations.
 
 ---
 
@@ -410,6 +414,12 @@ Important fields:
 - `password_hash`
 - `password_salt`
 - `password_iterations`
+- `admin_password_hash`
+- `admin_password_salt`
+- `admin_password_iterations`
+- `labour_setup_password_hash`
+- `labour_setup_password_salt`
+- `labour_setup_password_iterations`
 - `active`
 - `created_at`
 
@@ -418,6 +428,8 @@ Notes:
 - Passwords are stored as salted PBKDF2 hashes, not plain text.
 - The initial current-store row is location `1`, code `STORE`, username `store`.
 - This is location identity, not employee/user identity.
+- In Cloud API mode, System administrator and Labour Setup passwords are also stored on this table as salted PBKDF2 hashes scoped to the location.
+- When `labour_setup_password_hash` is blank, the API accepts the temporary Labour Setup password `LabourSetup!` once and the desktop immediately requires the store to create a replacement password.
 
 ## location_sessions
 
@@ -450,10 +462,11 @@ Known setting use cases:
 
 - Labour default uniform deduction amount: `labour.default_uniform_deduction`.
 
-Admin password note:
+Protected password note:
 
-- The System administrator password is now a local machine setting in `%LOCALAPPDATA%\FoodInventory\database.properties`, stored as a salted PBKDF2 hash.
-- Legacy `admin_password` / `password_initialized` database settings may exist for old databases, but new desktop code should not use the shared database as the administrator password authority.
+- In Cloud API mode, System administrator and Labour Setup passwords live on the signed-in `locations` row, not in local machine settings.
+- Local SQLite/development fallback stores protected passwords in `%LOCALAPPDATA%\FoodInventory\database.properties` as salted PBKDF2 hashes.
+- Legacy `admin_password` / `password_initialized` database settings may exist for old databases, but new desktop code should not use the shared `settings` table as the administrator password authority.
 
 ---
 
@@ -581,7 +594,7 @@ Notes:
 - Labour Hours data is stored by actual calendar date, not by relative "this week" columns.
 - Daily Labour Cost and Tip Pool use `workDate` / `salesDate` in `YYYY-MM-DD` format and save daily sales plus employee daily entries in one request.
 - `tip_pool_eligible` and `uniform_deduction_applicable` are returned in labour row payloads so Tip Pool and Tip Pool Breakdown can calculate from the same API-loaded labour data.
-- The live AWS RDS Labour schema was applied on Sunday, September 6, 2026. Labour API route updates for Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026.
+- The live AWS RDS Labour schema was applied on Sunday, September 6, 2026. Labour API route updates for Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Later multi-location and protected-password migrations advanced the live RDS schema through version 22.
 
 ---
 

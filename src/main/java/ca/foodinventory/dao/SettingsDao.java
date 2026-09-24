@@ -20,9 +20,13 @@ import javax.crypto.spec.PBEKeySpec;
 
 public class SettingsDao {
 
+    public static final String DEFAULT_LABOUR_SETUP_PASSWORD = "LabourSetup!";
+
     private static final String API_ADMIN_PASSWORD_KEY = "admin.password";
     private static final String API_PASSWORD_INITIALIZED_KEY = "admin.password_initialized";
     private static final String ADMIN_PASSWORD_HASH_KEY = "admin.password.hash";
+    private static final String LABOUR_SETUP_PASSWORD_INITIALIZED_KEY = "labour.setup.password_initialized";
+    private static final String LABOUR_SETUP_PASSWORD_HASH_KEY = "labour.setup.password.hash";
     private static final String ADMIN_PASSWORD_HASH_PREFIX = "pbkdf2_sha256";
     private static final int HASH_ITERATIONS = 310_000;
     private static final int SALT_BYTES = 16;
@@ -36,6 +40,11 @@ public class SettingsDao {
         }
 
         return legacyDatabasePasswordInitialized();
+    }
+
+    public boolean isLabourSetupPasswordInitialized() {
+        Properties properties = loadLocalSettings();
+        return !properties.getProperty(LABOUR_SETUP_PASSWORD_HASH_KEY, "").isBlank();
     }
 
     public boolean verifyPassword(String password) {
@@ -64,6 +73,20 @@ public class SettingsDao {
         return false;
     }
 
+    public boolean verifyLabourSetupPassword(String password) {
+        if (password == null) {
+            return false;
+        }
+
+        Properties properties = loadLocalSettings();
+        String encodedHash = properties.getProperty(LABOUR_SETUP_PASSWORD_HASH_KEY, "");
+        return !encodedHash.isBlank() && verifyEncodedPassword(password, encodedHash);
+    }
+
+    public boolean verifyDefaultLabourSetupPassword(String password) {
+        return DEFAULT_LABOUR_SETUP_PASSWORD.equals(password);
+    }
+
     public void setPassword(String password) {
         if (password == null || password.isBlank()) {
             throw new IllegalArgumentException("Password cannot be blank.");
@@ -73,6 +96,17 @@ public class SettingsDao {
         properties.setProperty(ADMIN_PASSWORD_HASH_KEY, encodePassword(password));
         properties.setProperty(API_PASSWORD_INITIALIZED_KEY, "true");
         properties.remove(API_ADMIN_PASSWORD_KEY);
+        saveLocalSettings(properties);
+    }
+
+    public void setLabourSetupPassword(String password) {
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Password cannot be blank.");
+        }
+
+        Properties properties = loadLocalSettings();
+        properties.setProperty(LABOUR_SETUP_PASSWORD_HASH_KEY, encodePassword(password));
+        properties.setProperty(LABOUR_SETUP_PASSWORD_INITIALIZED_KEY, "true");
         saveLocalSettings(properties);
     }
 

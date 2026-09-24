@@ -131,6 +131,17 @@ class ApiRoutesTest {
         assertTrue(result.body().contains("\"error\":\"location_unauthorized\""));
     }
 
+    @Test
+    void protectedPasswordRoutesRejectMissingApiKeyBeforeDatabaseAccess() {
+        System.setProperty("foodinventory.api.key", "secret");
+
+        ApiRoutes.ApiResult result =
+                routesWithAuth(null).handle("GET", "/protected-passwords/status", Map.of(), "");
+
+        assertEquals(401, result.statusCode());
+        assertTrue(result.body().contains("\"error\":\"unauthorized\""));
+    }
+
     private ApiRoutes routesWithAuth(LocationSession session) {
         return new ApiRoutes(
                 new ProductRepository(),
@@ -143,7 +154,8 @@ class ApiRoutesTest {
                 new ReportingRepository(),
                 new AdminSyncRepository(),
                 new LabourRepository(),
-                new FakeLocationAuthRepository(session)
+                new FakeLocationAuthRepository(session),
+                new ProtectedPasswordRepository()
         );
     }
 

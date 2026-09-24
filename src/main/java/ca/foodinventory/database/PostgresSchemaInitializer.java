@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 21;
+    public static final int CURRENT_SCHEMA_VERSION = 22;
 
     private static final String[] STORE_OWNED_TABLES = {
             "products",
@@ -73,6 +73,8 @@ public class PostgresSchemaInitializer {
         requireTable(connection, "labour_daily_entries");
         requireTable(connection, "locations");
         requireTable(connection, "location_sessions");
+        requireColumn(connection, "locations", "admin_password_hash");
+        requireColumn(connection, "locations", "labour_setup_password_hash");
         requireTable(connection, "schema_version");
         for (String tableName : STORE_OWNED_TABLES) {
             requireColumn(connection, tableName, "location_id");
@@ -291,6 +293,12 @@ public class PostgresSchemaInitializer {
                     password_hash TEXT,
                     password_salt TEXT,
                     password_iterations INTEGER NOT NULL DEFAULT 600000,
+                    admin_password_hash TEXT,
+                    admin_password_salt TEXT,
+                    admin_password_iterations INTEGER NOT NULL DEFAULT 600000,
+                    labour_setup_password_hash TEXT,
+                    labour_setup_password_salt TEXT,
+                    labour_setup_password_iterations INTEGER NOT NULL DEFAULT 600000,
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
@@ -601,6 +609,12 @@ public class PostgresSchemaInitializer {
         addColumnIfMissing(connection, statement, "labour_employees", "location_id", "INTEGER NOT NULL DEFAULT 1");
         addColumnIfMissing(connection, statement, "labour_daily_sales", "location_id", "INTEGER NOT NULL DEFAULT 1");
         addColumnIfMissing(connection, statement, "labour_daily_entries", "location_id", "INTEGER NOT NULL DEFAULT 1");
+        addColumnIfMissing(connection, statement, "locations", "admin_password_hash", "TEXT");
+        addColumnIfMissing(connection, statement, "locations", "admin_password_salt", "TEXT");
+        addColumnIfMissing(connection, statement, "locations", "admin_password_iterations", "INTEGER NOT NULL DEFAULT 600000");
+        addColumnIfMissing(connection, statement, "locations", "labour_setup_password_hash", "TEXT");
+        addColumnIfMissing(connection, statement, "locations", "labour_setup_password_salt", "TEXT");
+        addColumnIfMissing(connection, statement, "locations", "labour_setup_password_iterations", "INTEGER NOT NULL DEFAULT 600000");
         for (String tableName : STORE_OWNED_TABLES) {
             addColumnIfMissing(connection, statement, tableName, "location_id", "INTEGER NOT NULL DEFAULT 1");
         }

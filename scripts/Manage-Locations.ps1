@@ -66,7 +66,8 @@ function Show-Menu {
     Write-Host "5. Apply store-owned location_id schema"
     Write-Host "6. Apply location-aware unique constraints"
     Write-Host "7. Copy setup data between stores"
-    Write-Host "8. Exit"
+    Write-Host "8. Apply store-scoped protected-password columns"
+    Write-Host "9. Exit"
     Write-Host ""
 }
 
@@ -156,10 +157,17 @@ do {
                     }
             }
             "8" {
+                Invoke-LocationScript `
+                    -ScriptName "Apply-LocationProtectedPasswordsMigration.ps1" `
+                    -Arguments @{
+                        AdminUser = $AdminUser
+                    }
+            }
+            "9" {
                 break
             }
             default {
-                Write-Host "Choose 1, 2, 3, 4, 5, 6, 7, or 8." -ForegroundColor Yellow
+                Write-Host "Choose 1, 2, 3, 4, 5, 6, 7, 8, or 9." -ForegroundColor Yellow
             }
         }
     } catch {
@@ -168,8 +176,8 @@ do {
         Write-Host $_.Exception.Message
     }
 
-    if ($choice -ne "8") {
+    if ($choice -ne "9") {
         Write-Host ""
         Read-Host "Press Enter to return to the menu"
     }
-} while ($choice -ne "8")
+} while ($choice -ne "9")

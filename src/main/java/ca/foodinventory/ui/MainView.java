@@ -3,6 +3,7 @@ package ca.foodinventory.ui;
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.service.AppVersionService;
 import ca.foodinventory.service.ProductApiClient;
+import ca.foodinventory.service.ProtectedPasswordApiClient;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -30,6 +31,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 public class MainView {
@@ -37,6 +39,8 @@ public class MainView {
     private final BorderPane root = new BorderPane();
     private final SettingsDao settingsDao = new SettingsDao();
     private final ProductApiClient productApiClient = new ProductApiClient();
+    private final ProtectedPasswordApiClient protectedPasswordApiClient =
+            new ProtectedPasswordApiClient();
     private final Runnable switchStoreAction;
 
     private final Deque<Node> navigationHistory = new ArrayDeque<>();
@@ -551,10 +555,7 @@ public class MainView {
                 createDashboardCard(
                         "Labour Setup",
                         "Configure positions, employees, wages, targets, and deductions.",
-                        () -> showAdminProtectedView(
-                                "Labour Setup",
-                                () -> new LabourSetupView()
-                        )
+                        () -> showLabourSetupProtectedView(() -> new LabourSetupView())
                 )
         );
     }
@@ -799,73 +800,142 @@ public class MainView {
         showAdminProtectedView("System", () -> new SystemView().getView());
     }
 
+    private void showLabourSetupProtectedView(Supplier<Node> protectedViewSupplier) {
+        if (isProtectedPasswordInitialized(ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE)) {
+            showAdminProtectedView(
+                    "Labour Setup",
+                    "Labour Setup",
+                    () -> isProtectedPasswordInitialized(ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE),
+                    password -> setProtectedPassword(ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE, password),
+                    password -> verifyProtectedPassword(ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE, password),
+                    protectedViewSupplier
+            );
+            return;
+        }
+
+        Optional<String> temporaryPassword = promptPassword(
+                "Labour Setup Login",
+                "Enter the temporary Labour Setup password."
+        );
+        if (temporaryPassword.isEmpty()) {
+            return;
+        }
+
+        if (!verifyProtectedPassword(
+                ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE,
+                temporaryPassword.get()
+        )) {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setHeaderText("Invalid Password");
+            alert.showAndWait();
+            return;
+        }
+
+        Optional<String> newPassword = promptNewPassword(
+                "Create Labour Setup Password",
+                DatabaseManager.isApiDatabase()
+                        ? "Create a new Labour Setup password for this signed-in store."
+                        : "Create a new Labour Setup password for this PC."
+        );
+        if (newPassword.isEmpty()) {
+            return;
+        }
+
+        setProtectedPassword(ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE, newPassword.get());
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setHeaderText("Password Created");
+        alert.showAndWait();
+
+        showView(protectedViewSupplier.get());
+    }
+
     private void showAdminProtectedView(String viewName, Supplier<Node> protectedViewSupplier) {
+        showAdminProtectedView(
+                viewName,
+                "Administrator",
+                () -> isProtectedPasswordInitialized(ProtectedPasswordApiClient.ADMIN_SCOPE),
+                password -> setProtectedPassword(ProtectedPasswordApiClient.ADMIN_SCOPE, password),
+                password -> verifyProtectedPassword(ProtectedPasswordApiClient.ADMIN_SCOPE, password),
+                protectedViewSupplier
+        );
+    }
 
-        if (!settingsDao.isPasswordInitialized()) {
+    private boolean isProtectedPasswordInitialized(String scope) {
+        if (DatabaseManager.isApiDatabase()) {
+            return protectedPasswordApiClient.isPasswordInitialized(scope);
+        }
 
-            TextInputDialog dialog = new TextInputDialog();
+        if (ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE.equals(scope)) {
+            return settingsDao.isLabourSetupPasswordInitialized();
+        }
 
-            dialog.setTitle("Create Administrator Password");
-            dialog.setHeaderText("First Time Setup");
-            dialog.setContentText("Create Password:");
+        return settingsDao.isPasswordInitialized();
+    }
 
-            dialog.showAndWait().ifPresent(password -> {
+    private boolean verifyProtectedPassword(String scope, String password) {
+        if (DatabaseManager.isApiDatabase()) {
+            return protectedPasswordApiClient.verifyPassword(scope, password);
+        }
 
-                if (password.isBlank()) {
+        if (ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE.equals(scope)) {
+            return settingsDao.isLabourSetupPasswordInitialized()
+                    ? settingsDao.verifyLabourSetupPassword(password)
+                    : settingsDao.verifyDefaultLabourSetupPassword(password);
+        }
 
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setHeaderText("Password cannot be blank");
-                    alert.showAndWait();
-                    return;
-                }
+        return settingsDao.verifyPassword(password);
+    }
 
-                settingsDao.setPassword(password);
+    private void setProtectedPassword(String scope, String password) {
+        if (DatabaseManager.isApiDatabase()) {
+            protectedPasswordApiClient.setPassword(scope, password);
+            return;
+        }
+
+        if (ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE.equals(scope)) {
+            settingsDao.setLabourSetupPassword(password);
+        } else {
+            settingsDao.setPassword(password);
+        }
+    }
+
+    private void showAdminProtectedView(
+            String viewName,
+            String passwordLabel,
+            Supplier<Boolean> passwordInitializedSupplier,
+            java.util.function.Consumer<String> passwordSetter,
+            java.util.function.Predicate<String> passwordVerifier,
+            Supplier<Node> protectedViewSupplier
+    ) {
+
+        if (!passwordInitializedSupplier.get()) {
+
+            Optional<String> password = promptNewPassword(
+                    "Create " + passwordLabel + " Password",
+                    DatabaseManager.isApiDatabase()
+                            ? "Create a new " + passwordLabel + " password for this signed-in store."
+                            : "Create a new " + passwordLabel + " password for this PC."
+            );
+            if (password.isPresent()) {
+                passwordSetter.accept(password.get());
 
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setHeaderText("Password Created");
                 alert.showAndWait();
 
                 showView(protectedViewSupplier.get());
-            });
+            }
 
             return;
         }
 
-        PasswordField passwordField = new PasswordField();
+        promptPassword(
+                passwordLabel + " Login",
+                "Enter the " + passwordLabel + " password."
+        ).ifPresent(password -> {
 
-        Dialog<String> dialog = new Dialog<>();
-
-        dialog.setTitle("Administrator Login");
-
-        ButtonType loginButton =
-                new ButtonType("Login", ButtonBar.ButtonData.OK_DONE);
-
-        dialog.getDialogPane().getButtonTypes().addAll(
-                loginButton,
-                ButtonType.CANCEL
-        );
-
-        VBox box = new VBox(10);
-
-        box.getChildren().addAll(
-                new Label("Password"),
-                passwordField
-        );
-
-        dialog.getDialogPane().setContent(box);
-
-        dialog.setResultConverter(button -> {
-
-            if (button == loginButton) {
-                return passwordField.getText();
-            }
-
-            return null;
-        });
-
-        dialog.showAndWait().ifPresent(password -> {
-
-            if (settingsDao.verifyPassword(password)) {
+            if (passwordVerifier.test(password)) {
 
                 showView(protectedViewSupplier.get());
 
@@ -876,6 +946,90 @@ public class MainView {
                 alert.showAndWait();
             }
         });
+    }
+
+    private Optional<String> promptPassword(String title, String headerText) {
+        PasswordField passwordField = new PasswordField();
+
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(headerText);
+
+        ButtonType loginButton =
+                new ButtonType("Login", ButtonBar.ButtonData.OK_DONE);
+
+        dialog.getDialogPane().getButtonTypes().addAll(
+                loginButton,
+                ButtonType.CANCEL
+        );
+
+        VBox box = new VBox(10);
+        box.getChildren().addAll(
+                new Label("Password"),
+                passwordField
+        );
+        dialog.getDialogPane().setContent(box);
+
+        dialog.setResultConverter(button -> {
+            if (button == loginButton) {
+                return passwordField.getText();
+            }
+
+            return null;
+        });
+
+        return dialog.showAndWait();
+    }
+
+    private Optional<String> promptNewPassword(String title, String headerText) {
+        PasswordField newPasswordField = new PasswordField();
+        PasswordField confirmPasswordField = new PasswordField();
+
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.setHeaderText(headerText);
+
+        ButtonType saveButton =
+                new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+
+        dialog.getDialogPane().getButtonTypes().addAll(
+                saveButton,
+                ButtonType.CANCEL
+        );
+
+        VBox box = new VBox(
+                10,
+                new Label("New Password"),
+                newPasswordField,
+                new Label("Confirm Password"),
+                confirmPasswordField
+        );
+        dialog.getDialogPane().setContent(box);
+
+        dialog.setResultConverter(button -> {
+            if (button != saveButton) {
+                return null;
+            }
+
+            String newPassword = newPasswordField.getText();
+            if (newPassword == null || newPassword.isBlank()) {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setHeaderText("Password cannot be blank");
+                alert.showAndWait();
+                return null;
+            }
+
+            if (!newPassword.equals(confirmPasswordField.getText())) {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setHeaderText("Passwords do not match");
+                alert.showAndWait();
+                return null;
+            }
+
+            return newPassword;
+        });
+
+        return dialog.showAndWait();
     }
 
     private VBox buildPlaceholderView(String titleText, String messageText) {

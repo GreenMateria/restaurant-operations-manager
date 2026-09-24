@@ -4,7 +4,7 @@
 
 **Current Stable Release Target:** v4.2.0
 
-Current database schema version: **21**
+Current database schema version: **22**
 
 Application compiles successfully.
 
@@ -39,6 +39,11 @@ Completed:
 -   v4.2.0 launches the main application window maximized for manager workstations.
 -   v4.2.0 adds an About panel with version, database mode, signed-in store, and application scope.
 -   v4.2.0 adds a Switch Store action in the sidebar so a user can clear the current store session and return to Store Login without restarting the application.
+-   System and Labour Setup protected passwords are now store-scoped in Cloud API mode and stored as salted PBKDF2 hashes on the signed-in location record, so managers are not tied to one workstation.
+-   Labour Setup uses a temporary first-use password that immediately prompts for a new store-scoped Labour Setup password when the signed-in store does not have one yet.
+-   `scripts/Apply-LocationProtectedPasswordsMigration.ps1` was added to apply the schema 22 protected-password columns to AWS RDS.
+-   `scripts/Reset-LabourSetupPassword.ps1` remains a local SQLite/development fallback helper for returning a PC to the first-use Labour Setup password flow outside API mode.
+-   On Thursday, September 24, 2026, `esm-operations-api` was redeployed with protected-password routes, AWS RDS was advanced to schema version 22, `/health` returned `status=ok`, and `/protected-passwords/status` correctly rejected API-key-only requests without a store location token.
 -   Labour Management Phase 1 foundation added on Sunday, September 6, 2026.
 -   Labour Management is now a top-level dashboard module with submenu entries for Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Setup.
 -   Labour Management Phase 2 Labour Hours foundation added on Sunday, September 6, 2026 and reshaped on Monday, September 7, 2026.
@@ -47,7 +52,7 @@ Completed:
 -   Labour Hours supports saved-week listing through `/labour/weeks`, and bulk save/load in Cloud API mode through `/labour/weekly` routes and local DAO fallback.
 -   Labour Hours stores wage, employee name, position name, labour group, tip-pool eligibility, and uniform-deduction context on daily entries/rows so saved historical labour workflows do not recalculate from later setup changes.
 -   The live AWS API stack was redeployed on Sunday, September 6, 2026 so the deployed `/labour/weekly` routes are available to API-mode desktops.
--   The live AWS RDS database was advanced to schema version 17 for Labour Management after the API route deployment exposed missing Labour tables in the production schema.
+-   The live AWS RDS database was first advanced for Labour Management after the API route deployment exposed missing Labour tables in the production schema; later multi-location and protected-password migrations advanced the live schema to version 22.
 -   `scripts/Apply-LabourSchemaMigration.ps1` was added as a secure prompt-based helper for applying the Labour schema through the RDS admin user without storing the admin password.
 -   Labour Setup is implemented as an administrator-protected JavaFX setup screen for labour positions, employees, and default uniform deduction settings.
 -   Labour Setup supports API mode through `/labour` routes, with local DAO support retained for development fallback.
@@ -65,15 +70,16 @@ Completed:
 -   Tip Pool Breakdown net payout amounts now round to the nearest nickel for Canadian cash payout handling.
 -   Tip Pool Breakdown now supports printing a compact black-and-white payout report with employee rows and totals.
 -   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target.
+-   Protected-password workflows for System and Labour Setup are API-backed and store-scoped in Cloud API mode for the v4.2.0 release target.
 -   On Monday, September 21, 2026, the API and desktop imported-invoice path was fixed so API-mode GFS invoice imports validate unknown SKUs against cloud products/aliases, save new supplier SKU aliases through the API, create missing products through the API, and return clear validation details instead of a generic invoice-save `HTTP 500`.
 -   The `esm-operations-api` stack was redeployed in `ca-central-1` on Monday, September 21, 2026 with the imported-invoice SKU/alias fix; deployed `/health` returned `status=ok`.
 -   Inventory Count Sheet printing was fixed after the v3.1.1 stable release: print layout is now created after printer selection, pages are scaled to the selected printer's printable area, failures show a clear error alert, and alcohol count sheet printing uses the API-backed alcohol profile client in API mode.
 -   Direct desktop Cloud PostgreSQL mode was retired on Monday, September 7, 2026; release desktops now use the shared Cloud API as the normal operating path.
 -   The System screen no longer exposes direct PostgreSQL mode switching, direct cloud connection testing, or upload-this-PC-to-cloud controls.
 -   SQLite remains as a local cloud-snapshot/backup target for API downloads and emergency local restore only, not as a normal daily operating mode.
--   System administrator password storage was moved to local salted PBKDF2 hashes in `%LOCALAPPDATA%\FoodInventory\database.properties`.
--   Legacy plain-text local/SQLite administrator passwords are migrated to a hash after a successful login.
--   `scripts/Reset-AdminPassword.ps1` was added as a local password recovery helper that prompts for a new admin password and writes only a salted hash.
+-   System administrator password storage was previously moved to local salted PBKDF2 hashes in `%LOCALAPPDATA%\FoodInventory\database.properties`; this now remains the SQLite/development fallback while Cloud API mode uses store-scoped protected passwords on `locations`.
+-   Legacy plain-text local/SQLite administrator passwords are migrated to a hash after a successful local fallback login.
+-   `scripts/Reset-AdminPassword.ps1` was added as a local SQLite/development password recovery helper that prompts for a new admin password and writes only a salted hash.
 -   August 10, 2026 cloud-mode performance pass: inventory count Save Quantities / Complete Count now batch-updates count lines in one transaction and runs the save work in a background JavaFX task instead of blocking the UI thread
 -   August 10, 2026 cloud-mode performance pass: Sales report import, Sales Period save, and Weekly Production usage report import/generation now run in background tasks so long Excel/database work does not freeze the app window
 -   August 10, 2026 cloud-mode performance pass: Weekly Production report generation now batch-loads active production profile lines instead of querying profile lines one profile at a time

@@ -6,7 +6,7 @@ import java.util.List;
 
 public class DatabaseMigrationRunner {
 
-    private static final int CURRENT_SCHEMA_VERSION = 21;
+    private static final int CURRENT_SCHEMA_VERSION = 22;
 
     public static void runMigrations(Connection conn) throws SQLException {
         createSchemaVersionTable(conn);
@@ -39,7 +39,8 @@ public class DatabaseMigrationRunner {
                 new Migration18(),
                 new Migration19(),
                 new Migration20(),
-                new Migration21()
+                new Migration21(),
+                new Migration22()
         );
 
         for (Migration migration : migrations) {
@@ -171,6 +172,11 @@ public class DatabaseMigrationRunner {
         if (currentVersion >= 20 && !columnExists(conn, "products", "location_id")) {
             System.out.println("Repairing missing migration 20 schema");
             new Migration20().migrate(conn);
+        }
+
+        if (currentVersion >= 22 && !columnExists(conn, "locations", "labour_setup_password_hash")) {
+            System.out.println("Repairing missing migration 22 schema");
+            new Migration22().migrate(conn);
         }
     }
 

@@ -171,7 +171,7 @@ When database structure changes:
 
 Never assume the project-root database is the active database.
 
-System administrator passwords are local machine settings stored in `%LOCALAPPDATA%\FoodInventory\database.properties` as salted PBKDF2 hashes. Do not store or reintroduce plain-text admin passwords.
+In Cloud API mode, System administrator and Labour Setup passwords are store-scoped protected passwords stored as salted PBKDF2 hashes on the signed-in `locations` row. Local SQLite/development fallback stores protected passwords in `%LOCALAPPDATA%\FoodInventory\database.properties`. Do not store or reintroduce plain-text protected passwords.
 
 Runtime DB path is under:
 

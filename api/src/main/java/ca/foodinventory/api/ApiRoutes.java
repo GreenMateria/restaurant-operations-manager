@@ -17,6 +17,7 @@ class ApiRoutes {
     private final AdminSyncRepository adminSyncRepository;
     private final LabourRepository labourRepository;
     private final LocationAuthRepository locationAuthRepository;
+    private final ProtectedPasswordRepository protectedPasswordRepository;
 
     ApiRoutes() {
         this(
@@ -30,7 +31,8 @@ class ApiRoutes {
                 new ReportingRepository(),
                 new AdminSyncRepository(),
                 new LabourRepository(),
-                new LocationAuthRepository()
+                new LocationAuthRepository(),
+                new ProtectedPasswordRepository()
         );
     }
 
@@ -45,7 +47,8 @@ class ApiRoutes {
             ReportingRepository reportingRepository,
             AdminSyncRepository adminSyncRepository,
             LabourRepository labourRepository,
-            LocationAuthRepository locationAuthRepository
+            LocationAuthRepository locationAuthRepository,
+            ProtectedPasswordRepository protectedPasswordRepository
     ) {
         this.productRepository = productRepository;
         this.posMenuItemRepository = posMenuItemRepository;
@@ -58,6 +61,7 @@ class ApiRoutes {
         this.adminSyncRepository = adminSyncRepository;
         this.labourRepository = labourRepository;
         this.locationAuthRepository = locationAuthRepository;
+        this.protectedPasswordRepository = protectedPasswordRepository;
     }
 
     ApiResult handle(
@@ -98,6 +102,72 @@ class ApiRoutes {
             } catch (SQLException e) {
                 e.printStackTrace();
                 return databaseError("Failed to log in.");
+            }
+        }
+
+        if (normalizedPath.startsWith("/protected-passwords")) {
+            ApiResult unauthorized = requireApiKey(headers);
+            if (unauthorized != null) {
+                return unauthorized;
+            }
+
+            try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) {
+                    return locationUnauthorized();
+                }
+
+                if ("GET".equalsIgnoreCase(method)
+                        && "/protected-passwords/status".equals(normalizedPath)) {
+                    return ApiResult.json(
+                            200,
+                            protectedPasswordRepository.statusJson(locationContext.id())
+                    );
+                }
+
+                if ("POST".equalsIgnoreCase(method)
+                        && "/protected-passwords/verify".equals(normalizedPath)) {
+                    boolean verified = protectedPasswordRepository.verify(
+                            locationContext.id(),
+                            parseBody(body)
+                    );
+                    return ApiResult.json(200, Json.object(
+                            "verified",
+                            String.valueOf(verified)
+                    ));
+                }
+
+                String scope = protectedPasswordScope(normalizedPath);
+                if ("PUT".equalsIgnoreCase(method) && scope != null) {
+                    protectedPasswordRepository.setPassword(
+                            locationContext.id(),
+                            scope,
+                            parseBody(body)
+                    );
+                    return ApiResult.json(200, Json.object(
+                            "status",
+                            "ok",
+                            "message",
+                            "Password saved."
+                    ));
+                }
+
+                return ApiResult.json(404, Json.object(
+                        "error",
+                        "not_found",
+                        "message",
+                        "Protected password route was not found."
+                ));
+            } catch (IllegalArgumentException e) {
+                return badRequest(e);
+            } catch (IllegalStateException e) {
+                return ApiResult.json(503, Json.object(
+                        "error", "database_not_configured",
+                        "message", e.getMessage()
+                ));
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return databaseError("Failed to process protected password request.");
             }
         }
 
@@ -1675,6 +1745,20 @@ class ApiRoutes {
         }
 
         return value.toString().trim();
+    }
+
+    private String protectedPasswordScope(String path) {
+        String prefix = "/protected-passwords/";
+        if (path == null || !path.startsWith(prefix)) {
+            return null;
+        }
+
+        String remaining = path.substring(prefix.length());
+        if (remaining.isBlank() || remaining.contains("/")) {
+            return null;
+        }
+
+        return remaining;
     }
 
     private Integer pathId(String path, String prefix) {

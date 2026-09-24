@@ -129,6 +129,12 @@ CREATE TABLE IF NOT EXISTS locations (
     password_hash TEXT,
     password_salt TEXT,
     password_iterations INTEGER NOT NULL DEFAULT 600000,
+    admin_password_hash TEXT,
+    admin_password_salt TEXT,
+    admin_password_iterations INTEGER NOT NULL DEFAULT 600000,
+    labour_setup_password_hash TEXT,
+    labour_setup_password_salt TEXT,
+    labour_setup_password_iterations INTEGER NOT NULL DEFAULT 600000,
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

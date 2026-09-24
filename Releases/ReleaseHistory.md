@@ -256,3 +256,8 @@ Date: 2026-09-13 14:11
 Date: 2026-09-21 11:20
 
 - Fixed invoice save bug
+
+## v4.1.2
+Date: 2026-09-24 13:11
+
+- Added password reset

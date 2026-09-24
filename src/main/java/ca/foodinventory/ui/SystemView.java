@@ -6,6 +6,7 @@ import ca.foodinventory.dao.SettingsDao;
 import ca.foodinventory.service.ApiHealthClient;
 import ca.foodinventory.service.DatabaseBackupService;
 import ca.foodinventory.service.GitHubUpdateService;
+import ca.foodinventory.service.ProtectedPasswordApiClient;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -28,6 +29,8 @@ public class SystemView {
     private final SettingsDao settingsDao = new SettingsDao();
     private final ApiHealthClient apiHealthClient =
             new ApiHealthClient();
+    private final ProtectedPasswordApiClient protectedPasswordApiClient =
+            new ProtectedPasswordApiClient();
     private final UpdateDialogService updateDialogService =
             new UpdateDialogService(new GitHubUpdateService());
     private final Label databaseModeLabel = new Label();
@@ -40,6 +43,7 @@ public class SystemView {
     private Button downloadButton;
     private Button testApiButton;
     private Button changePasswordButton;
+    private Button changeLabourSetupPasswordButton;
     private Button checkUpdatesButton;
 
     public VBox getView() {
@@ -63,8 +67,11 @@ public class SystemView {
         restoreButton = new Button("Restore Local SQLite Backup");
         restoreButton.getStyleClass().add("dashboard-button");
 
-        changePasswordButton = new Button("Change Password");
+        changePasswordButton = new Button("Change Administrator Password");
         changePasswordButton.getStyleClass().add("dashboard-button");
+
+        changeLabourSetupPasswordButton = new Button("Change Labour Setup Password");
+        changeLabourSetupPasswordButton.getStyleClass().add("dashboard-button");
 
         checkUpdatesButton = new Button("Check for Updates");
         checkUpdatesButton.getStyleClass().add("dashboard-button");
@@ -85,6 +92,8 @@ public class SystemView {
 
         changePasswordButton.setOnAction(e -> changePassword());
 
+        changeLabourSetupPasswordButton.setOnAction(e -> changeLabourSetupPassword());
+
         checkUpdatesButton.setOnAction(e -> checkForUpdates());
 
         HBox apiButtons = new HBox(15, testApiButton, downloadButton);
@@ -103,7 +112,8 @@ public class SystemView {
                 apiButtons,
                 syncStatusLabel,
                 checkUpdatesButton,
-                changePasswordButton
+                changePasswordButton,
+                changeLabourSetupPasswordButton
         );
 
         return root;
@@ -380,6 +390,7 @@ public class SystemView {
         downloadButton.setDisable(disabled);
         testApiButton.setDisable(disabled);
         changePasswordButton.setDisable(disabled);
+        changeLabourSetupPasswordButton.setDisable(disabled);
         checkUpdatesButton.setDisable(disabled);
     }
 
@@ -401,6 +412,53 @@ public class SystemView {
     }
 
     private void changePassword() {
+        changeStoredPassword(
+                "Change Administrator Password",
+                DatabaseManager.isApiDatabase()
+                        ? "Set a new administrator password for this signed-in store."
+                        : "Set a new administrator password for this PC.",
+                "Password Updated",
+                DatabaseManager.isApiDatabase()
+                        ? "Store administrator password updated."
+                        : "Administrator password updated.",
+                password -> setProtectedPassword(ProtectedPasswordApiClient.ADMIN_SCOPE, password)
+        );
+    }
+
+    private void changeLabourSetupPassword() {
+        changeStoredPassword(
+                "Change Labour Setup Password",
+                DatabaseManager.isApiDatabase()
+                        ? "Set a new Labour Setup password for this signed-in store."
+                        : "Set a new Labour Setup password for this PC.",
+                "Password Updated",
+                DatabaseManager.isApiDatabase()
+                        ? "Store Labour Setup password updated."
+                        : "Labour Setup password updated.",
+                password -> setProtectedPassword(ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE, password)
+        );
+    }
+
+    private void setProtectedPassword(String scope, String password) {
+        if (DatabaseManager.isApiDatabase()) {
+            protectedPasswordApiClient.setPassword(scope, password);
+            return;
+        }
+
+        if (ProtectedPasswordApiClient.LABOUR_SETUP_SCOPE.equals(scope)) {
+            settingsDao.setLabourSetupPassword(password);
+        } else {
+            settingsDao.setPassword(password);
+        }
+    }
+
+    private void changeStoredPassword(
+            String dialogTitle,
+            String headerText,
+            String successTitle,
+            String successMessage,
+            java.util.function.Consumer<String> passwordSetter
+    ) {
         PasswordField newPasswordField = new PasswordField();
         PasswordField confirmPasswordField = new PasswordField();
 
@@ -413,8 +471,8 @@ public class SystemView {
         );
 
         Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Change Password");
-        dialog.setHeaderText("Set a new administrator password for this PC.");
+        dialog.setTitle(dialogTitle);
+        dialog.setHeaderText(headerText);
         dialog.getDialogPane().setContent(fields);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
@@ -435,8 +493,8 @@ public class SystemView {
         }
 
         try {
-            settingsDao.setPassword(newPassword);
-            showAlert(Alert.AlertType.INFORMATION, "Password Updated", "Administrator password updated.");
+            passwordSetter.accept(newPassword);
+            showAlert(Alert.AlertType.INFORMATION, successTitle, successMessage);
         } catch (RuntimeException ex) {
             showAlert(Alert.AlertType.ERROR, "Password Update Failed", ex.getMessage());
         }

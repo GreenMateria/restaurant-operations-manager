@@ -8,7 +8,7 @@ Current deployed proof:
 https://rn0j30p2vf.execute-api.ca-central-1.amazonaws.com/prod
 ```
 
-Initially verified on Tuesday, September 1, 2026. For v4.2.0, the deployed API requires a valid store location session token on the main location-scoped business routes.
+Initially verified on Tuesday, September 1, 2026. For v4.2.0, the deployed API requires a valid store location session token on the main location-scoped business routes. Store-scoped protected-password routes for System and Labour Setup were deployed on Thursday, September 24, 2026, with the live RDS schema advanced to version 22.
 
 ```text
 GET /health -> 200 OK
@@ -40,6 +40,7 @@ GET /production/weeks/{id}/days with x-api-key -> 7 production week days
 GET /production/weeks/{id}/lines with x-api-key -> production week lines returned
 GET /production/freezer-pull/lines with x-api-key -> 12 Freezer Pull lines
 GET /labour/weekly/{weekStartDate} with x-api-key -> weekly labour rows returned after Labour schema deployment
+GET /protected-passwords/status with x-api-key but without x-location-token -> 401 location_unauthorized
 ```
 
 ## Endpoints
@@ -47,6 +48,9 @@ GET /labour/weekly/{weekStartDate} with x-api-key -> weekly labour rows returned
 ```text
 GET /health
 POST /auth/login
+GET /protected-passwords/status
+POST /protected-passwords/verify
+PUT /protected-passwords/{scope}
 GET /products
 POST /products
 PUT /products/{id}
@@ -147,16 +151,18 @@ Current desktop API-mode coverage:
 - Reporting/Sales: Invoice History, invoice lines and breakdowns, invoice delete, Sales Period list/save, POS sales Excel import persistence, Inventory Valuation, and Weekly Cost Report generation.
 - Labour Management: Labour Setup positions/employees/settings, Labour Hours saved-week listing and pop-out Monday-Sunday Shift 1 / Shift 2 employee-hour entry, Daily Labour Cost weekly net-sales/labour percentage entry, Tip Pool allocation, and Tip Pool Breakdown payout reporting with nickel-rounded net payouts and printing.
 - Multi-location: `POST /auth/login` returns a store session token, desktop clients send `x-location-token`, and store-owned reads/writes are scoped to the resolved location.
+- Protected passwords: System administrator and Labour Setup password status, verification, and changes are API-backed through store-scoped protected-password routes in Cloud API mode.
 - Product support: GFS product guide CSV parsing stays in the desktop client, normalized products are upserted through `POST /products/import`, imported-invoice SKUs can be checked through `POST /products/resolve-skus`, supplier SKU aliases can be saved through `POST /products/aliases`, and product purchase history loads through `GET /products/{id}/purchase-history`.
 - Admin sync: `GET /admin/sync/download` returns a PostgreSQL table snapshot, and `POST /admin/sync/upload` replaces cloud data from a desktop-generated SQLite table snapshot. These remain administrator migration/recovery tools, not routine daily sync.
 - Production API routes were deployed to `esm-operations-api` in `ca-central-1` on Friday, September 4, 2026, and read-only smoke checks passed.
 - Live desktop validation confirmed Production CSV/report import and Weekly Production generation complete in API mode.
 - Reporting/Sales and product support routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026, and read-only smoke checks passed.
 - Admin sync routes were deployed to `esm-operations-api` in `ca-central-1` on Saturday, September 5, 2026; missing-key checks passed and authenticated read-only download returned 24 tables and 11,417 rows.
-- Labour Setup and Labour Hours routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026. Daily Labour Cost, Tip Pool support fields, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Smoke checks confirmed `/labour/weeks` responds and `/labour/daily/{workDate}` returns tip-pool/uniform context. The live AWS RDS Labour schema was advanced to version 17 with the secure prompt-based `scripts/Apply-LabourSchemaMigration.ps1` helper.
+- Labour Setup and Labour Hours routes were deployed to `esm-operations-api` in `ca-central-1` on Sunday, September 6, 2026. Daily Labour Cost, Tip Pool support fields, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Smoke checks confirmed `/labour/weeks` responds and `/labour/daily/{workDate}` returns tip-pool/uniform context. The live AWS RDS Labour schema was advanced to version 17 with the secure prompt-based `scripts/Apply-LabourSchemaMigration.ps1` helper, then later multi-location and protected-password migrations advanced the live schema to version 22.
 - Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
 - Multi-location API scoping and `LocationAuthRequired=true` were deployed for v4.0.0 and remain current for v4.2.0. Smoke checks confirmed `/products` rejects requests without a location token and a TEST store token returns isolated data.
 - Imported-invoice SKU/alias support was fixed and deployed on Monday, September 21, 2026. The deployed `/health` endpoint returned `status=ok` after deployment.
+- Store-scoped protected-password API routes were deployed on Thursday, September 24, 2026. The live RDS schema is version 22 with protected-password columns on `locations`, and `/protected-passwords/status` rejects requests that have an API key but no store location token.
 
 Intentional remaining gaps:
 

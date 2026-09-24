@@ -38,7 +38,7 @@ An API layer proof now exists for the next credential-protection step:
 Desktop app -> API Gateway HTTP API -> AWS Lambda -> AWS RDS PostgreSQL
 ```
 
-The API stack is deployed as `esm-operations-api` in `ca-central-1`. As of the v4.2.0 release target, the desktop app can use API mode for normal Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot workflows. Store Login is enabled in release packaging, the API scopes normal store-owned workflows to the signed-in location, and the desktop shell can switch stores without restarting. Current work PCs should use Cloud API mode for daily operation.
+The API stack is deployed as `esm-operations-api` in `ca-central-1`. As of the v4.2.0 release target, the desktop app can use API mode for normal Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, store-scoped protected passwords, and administrative cloud snapshot workflows. Store Login is enabled in release packaging, the API scopes normal store-owned workflows to the signed-in location, and the desktop shell can switch stores without restarting. Current work PCs should use Cloud API mode for daily operation.
 
 The local SQLite file is retained as the backup/snapshot target:
 
@@ -74,9 +74,10 @@ Cloud connectivity status:
 - Labour Management schema version 17 was applied to AWS RDS on Sunday, September 6, 2026 after deploying the initial Labour Hours API routes.
 - Daily Labour Cost, Tip Pool support fields, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026.
 - Labour Management was manager-tested and accepted as working as intended on Tuesday, September 8, 2026.
-- Multi-location schema migrations advanced AWS RDS through schema version 21 on Friday, September 11, 2026.
+- Multi-location schema migrations advanced AWS RDS through schema version 21 on Friday, September 11, 2026; the later protected-password migration advanced the live schema to version 22.
 - Store Login and location token enforcement were deployed to the live API with `LocationAuthRequired=true`, and TEST-store isolation was validated.
-- `scripts/Manage-Locations.ps1` and related helper scripts can create stores, rename stores, reset store passwords, apply location schema/uniqueness migrations, and copy selected setup/master data between stores.
+- Store-scoped protected-password routes were deployed on Thursday, September 24, 2026, and AWS RDS was advanced through schema version 22 for System administrator and Labour Setup password hashes on `locations`.
+- `scripts/Manage-Locations.ps1` and related helper scripts can create stores, rename stores, reset store passwords, apply location schema/uniqueness/protected-password migrations, and copy selected setup/master data between stores.
 - `scripts/Apply-LabourSchemaMigration.ps1` is available for the Labour schema setup path and prompts securely for the RDS admin password.
 - Java connection test succeeded on Sunday, August 2, 2026.
 - Connected to Aiven PostgreSQL `defaultdb` using SSL.
@@ -485,4 +486,4 @@ A more secure long-term architecture is:
 Desktop app -> application backend/API -> PostgreSQL
 ```
 
-The first version of this architecture has been deployed with API Gateway HTTP API and AWS Lambda. API mode now covers Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot workflows. Direct desktop PostgreSQL mode has been retired from normal client use.
+The first version of this architecture has been deployed with API Gateway HTTP API and AWS Lambda. API mode now covers Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, store-scoped protected passwords, and administrative cloud snapshot workflows. Direct desktop PostgreSQL mode has been retired from normal client use.

@@ -769,9 +769,10 @@ Use Labour Setup to maintain the employee and position information used by the l
 
 1. From the dashboard, click **Labour Management**.
 2. Click **Labour Setup**.
-3. Enter the system password if asked.
-4. Set up positions, hourly wages, labour groups, tip-pool eligibility, uniform-deduction applicability, and active employees.
-5. Save changes.
+3. Enter the Labour Setup password if asked.
+4. If this is the first Labour Setup login for this store, enter the temporary password and then create a new Labour Setup password when prompted.
+5. Set up positions, hourly wages, labour groups, tip-pool eligibility, uniform-deduction applicability, and active employees.
+6. Save changes.
 
 ## Labour Hours
 
@@ -826,7 +827,7 @@ To switch stores without closing the program, click **Switch Store** in the left
 ## Local Backup
 
 1. Open **System**.
-2. Enter the system password if asked.
+2. Enter the administrator password if asked.
 3. Click **Create Backup File**.
 4. Choose where to save the backup.
 5. Confirm the backup completed.
@@ -848,6 +849,18 @@ Users may need to reopen a screen to see changes saved from another PC. Avoid ed
 3. If a newer version is available, choose whether to download and install it.
 
 When a release includes a checksum file, the app verifies the downloaded installer before offering to launch it.
+
+## Passwords
+
+The System screen and Labour Setup screen can use different passwords.
+
+In normal Cloud API mode, these passwords belong to the signed-in store and work from any workstation after that store signs in.
+
+Use **System -> Change Administrator Password** to change the password for backup, restore, update checks, API checks, and other system tools.
+
+Use **System -> Change Labour Setup Password** to change the password for Labour Setup.
+
+When a store has no Labour Setup password saved yet, the first Labour Setup login uses the temporary password `LabourSetup!` and then requires a new Labour Setup password before opening the setup screen.
 
 ## Cloud Snapshot Download
 

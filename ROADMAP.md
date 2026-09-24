@@ -11,6 +11,7 @@
 -   Cloud API mode is now the normal desktop startup mode when API settings are configured.
 -   v4.0.0 added multi-location Store Login, location-scoped API reads/writes, location-aware uniqueness in PostgreSQL, and setup-copy tooling between stores.
 -   v4.2.0 is the cleaned presentation release: StoreOps Manager branding, neutral logo, polished card-based navigation, maximized launch, About panel, and Switch Store support.
+-   v4.2.0 also adds store-scoped System administrator and Labour Setup protected passwords in Cloud API mode so protected access follows the signed-in store across workstations.
 -   SQLite remains only as a local cloud-snapshot/backup target and development fallback.
 -   Configured work PCs should run in Cloud API mode for daily shared-data operation, with AWS RDS PostgreSQL as the backend data store.
 -   Direct desktop AWS RDS PostgreSQL mode has been retired from the System module.
@@ -67,6 +68,7 @@
 -   Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown API support is implemented in the development build for positions, employees, default uniform deduction settings, weekly employee hour entry, manual daily net sales, daily tip pool amounts, labour cost percentages, tip allocation, and uniform-deduction payout reporting.
 -   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target.
 -   Store Login and location token enforcement are deployed for the main store-owned API workflows; TEST-store validation confirmed store data isolation.
+-   Protected-password API routes are deployed, and the live AWS RDS schema has been advanced through schema version 22.
 
 ### Future
 
@@ -178,7 +180,7 @@ Desktop app
 -   Labour Hours no longer shows employee number, hourly rate, total pay, bottom total rows, or the restaurant header.
 -   Labour Hours department headers use a clearer styled band in the pop-out entry window.
 -   Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support Cloud API mode through `/labour` routes and local DAO fallback for development.
--   Labour API routes are deployed to `esm-operations-api`, including `/labour/weeks`, `/labour/weekly`, and `/labour/daily`, and the live AWS RDS schema has been advanced through schema version 21.
+-   Labour API routes are deployed to `esm-operations-api`, including `/labour/weeks`, `/labour/weekly`, and `/labour/daily`, and the live AWS RDS schema has been advanced through schema version 22.
 -   Migration 16 added Labour Management setup tables and future daily labour/sales foundations.
 -   Migration 17 added daily labour snapshot columns for historical wage/position/group reporting integrity.
 -   Daily Labour Cost is a weekly start/end date range screen with Monday-Sunday rows, editable net sales, BOH labour dollars/percentages, FOH labour dollars/percentages, total labour percentage, and a total row.
