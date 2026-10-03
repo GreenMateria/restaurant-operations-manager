@@ -53,7 +53,7 @@ public class LabourDailyEntryDao {
         Map<Integer, WeeklyLabourRow> rowsByEmployeeId = new LinkedHashMap<>();
 
         try (Connection connection = DatabaseManager.getConnection()) {
-            loadCurrentRows(connection, rowsByEmployeeId);
+            loadCurrentRows(connection, rowsByEmployeeId, start, end);
             loadEntryRows(connection, rowsByEmployeeId, start, end);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to load weekly labour", e);
@@ -72,7 +72,7 @@ public class LabourDailyEntryDao {
         LabourDailySales sales;
 
         try (Connection connection = DatabaseManager.getConnection()) {
-            loadCurrentRows(connection, rowsByEmployeeId);
+            loadCurrentRows(connection, rowsByEmployeeId, workDate, workDate);
             loadEntryRows(connection, rowsByEmployeeId, workDate, workDate);
             sales = loadDailySales(connection, workDate);
         } catch (SQLException e) {
@@ -194,7 +194,9 @@ public class LabourDailyEntryDao {
 
     private void loadCurrentRows(
             Connection connection,
-            Map<Integer, WeeklyLabourRow> rowsByEmployeeId
+            Map<Integer, WeeklyLabourRow> rowsByEmployeeId,
+            LocalDate start,
+            LocalDate end
     ) throws SQLException {
         String sql = """
                 SELECT
@@ -212,6 +214,7 @@ public class LabourDailyEntryDao {
              ResultSet resultSet = statement.executeQuery()) {
             while (resultSet.next()) {
                 WeeklyLabourRow row = currentRow(resultSet);
+                applyEffectivePayRates(connection, row, start, end);
                 rowsByEmployeeId.put(row.getEmployeeId(), row);
             }
         }
@@ -253,7 +256,7 @@ public class LabourDailyEntryDao {
                     if (row == null) {
                         row = historicalRow(resultSet, entry);
                         rowsByEmployeeId.put(row.getEmployeeId(), row);
-                    } else if (row.getEntriesByDate().isEmpty()) {
+                    } else {
                         applySnapshot(row, resultSet, entry);
                     }
                     row.getEntriesByDate().put(entry.getWorkDate(), entry);
@@ -276,6 +279,49 @@ public class LabourDailyEntryDao {
         row.setTipPoolEligible(resultSet.getInt("tip_pool_eligible") == 1);
         row.setUniformDeductionApplicable(resultSet.getInt("uniform_deduction_applicable") == 1);
         return row;
+    }
+
+    private void applyEffectivePayRates(
+            Connection connection,
+            WeeklyLabourRow row,
+            LocalDate start,
+            LocalDate end
+    ) throws SQLException {
+        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+            LabourDailyEntry entry = row.getOrCreateEntry(date);
+            entry.setHourlyWage(effectivePayRate(
+                    connection,
+                    row.getEmployeeId(),
+                    date,
+                    row.getHourlyWage()
+            ));
+        }
+    }
+
+    private BigDecimal effectivePayRate(
+            Connection connection,
+            int employeeId,
+            LocalDate workDate,
+            BigDecimal fallback
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT hourly_wage
+                FROM labour_employee_pay_rates
+                WHERE employee_id = ?
+                  AND location_id = 1
+                  AND effective_date <= ?
+                ORDER BY effective_date DESC
+                LIMIT 1
+                """)) {
+            statement.setInt(1, employeeId);
+            statement.setString(2, workDate.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return decimal(resultSet, "hourly_wage");
+                }
+            }
+        }
+        return fallback == null ? BigDecimal.ZERO : fallback;
     }
 
     private WeeklyLabourRow historicalRow(

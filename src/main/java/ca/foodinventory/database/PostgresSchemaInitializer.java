@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 22;
+    public static final int CURRENT_SCHEMA_VERSION = 23;
 
     private static final String[] STORE_OWNED_TABLES = {
             "products",
@@ -69,6 +69,7 @@ public class PostgresSchemaInitializer {
         requireTable(connection, "production_week_lines");
         requireTable(connection, "labour_positions");
         requireTable(connection, "labour_employees");
+        requireTable(connection, "labour_employee_pay_rates");
         requireTable(connection, "labour_daily_sales");
         requireTable(connection, "labour_daily_entries");
         requireTable(connection, "locations");
@@ -331,6 +332,18 @@ public class PostgresSchemaInitializer {
                 """);
 
         statement.execute("""
+                CREATE TABLE IF NOT EXISTS labour_employee_pay_rates (
+                    id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL DEFAULT 1 REFERENCES locations(id),
+                    employee_id INTEGER NOT NULL REFERENCES labour_employees(id),
+                    hourly_wage NUMERIC NOT NULL DEFAULT 0,
+                    effective_date TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(location_id, employee_id, effective_date)
+                )
+                """);
+
+        statement.execute("""
                 CREATE TABLE IF NOT EXISTS labour_daily_sales (
                     id SERIAL PRIMARY KEY,
                     location_id INTEGER NOT NULL DEFAULT 1 REFERENCES locations(id),
@@ -555,6 +568,10 @@ public class PostgresSchemaInitializer {
                 ON labour_employees(location_id, position_id, active)
                 """);
         statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_labour_employee_pay_rates_lookup
+                ON labour_employee_pay_rates(location_id, employee_id, effective_date)
+                """);
+        statement.execute("""
                 CREATE INDEX IF NOT EXISTS idx_labour_daily_entries_date
                 ON labour_daily_entries(location_id, work_date)
                 """);
@@ -615,6 +632,14 @@ public class PostgresSchemaInitializer {
         addColumnIfMissing(connection, statement, "locations", "labour_setup_password_hash", "TEXT");
         addColumnIfMissing(connection, statement, "locations", "labour_setup_password_salt", "TEXT");
         addColumnIfMissing(connection, statement, "locations", "labour_setup_password_iterations", "INTEGER NOT NULL DEFAULT 600000");
+        statement.execute("""
+                INSERT INTO labour_employee_pay_rates (
+                    location_id, employee_id, hourly_wage, effective_date
+                )
+                SELECT location_id, id, hourly_wage, '1900-01-01'
+                FROM labour_employees
+                ON CONFLICT(location_id, employee_id, effective_date) DO NOTHING
+                """);
         for (String tableName : STORE_OWNED_TABLES) {
             addColumnIfMissing(connection, statement, tableName, "location_id", "INTEGER NOT NULL DEFAULT 1");
         }

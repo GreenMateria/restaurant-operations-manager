@@ -275,6 +275,11 @@ public class MainView {
                 createDashboardSection(
                         "Administration",
                         createDashboardCard(
+                                "POS Catalog / PLUs",
+                                "Import and maintain shared POS items for alcohol mappings and production.",
+                                () -> showView(new PosMenuItemsView())
+                        ),
+                        createDashboardCard(
                                 "System",
                                 "Backup, restore, update checks, and administrator tools.",
                                 this::showSystemMenu
@@ -492,9 +497,9 @@ public class MainView {
                 ),
 
                 createDashboardCard(
-                        "POS Menu Items",
-                        "Import and maintain POS items used for production planning.",
-                        () -> showView(new PosMenuItemsView())
+                        "POS Production Mappings",
+                        "Assign shared POS catalog items to production profiles.",
+                        () -> showView(new PosMenuItemsView(true))
                 ),
 
                 createDashboardCard(

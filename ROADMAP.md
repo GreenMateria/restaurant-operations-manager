@@ -12,6 +12,7 @@
 -   v4.0.0 added multi-location Store Login, location-scoped API reads/writes, location-aware uniqueness in PostgreSQL, and setup-copy tooling between stores.
 -   v4.2.0 is the cleaned presentation release: StoreOps Manager branding, neutral logo, polished card-based navigation, maximized launch, About panel, and Switch Store support.
 -   v4.2.0 also adds store-scoped System administrator and Labour Setup protected passwords in Cloud API mode so protected access follows the signed-in store across workstations.
+-   v4.2.0 also adds effective-dated Labour employee pay rates so future raises affect labour reports only on or after the configured effective date.
 -   SQLite remains only as a local cloud-snapshot/backup target and development fallback.
 -   Configured work PCs should run in Cloud API mode for daily shared-data operation, with AWS RDS PostgreSQL as the backend data store.
 -   Direct desktop AWS RDS PostgreSQL mode has been retired from the System module.
@@ -68,7 +69,7 @@
 -   Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown API support is implemented in the development build for positions, employees, default uniform deduction settings, weekly employee hour entry, manual daily net sales, daily tip pool amounts, labour cost percentages, tip allocation, and uniform-deduction payout reporting.
 -   Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target.
 -   Store Login and location token enforcement are deployed for the main store-owned API workflows; TEST-store validation confirmed store data isolation.
--   Protected-password API routes are deployed, and the live AWS RDS schema has been advanced through schema version 22.
+-   Protected-password and labour pay-rate API updates are deployed, and the live AWS RDS schema has been advanced through schema version 23.
 
 ### Future
 
@@ -176,13 +177,15 @@ Desktop app
 -   Labour Management is complete and accepted as working as intended for the v4.2.0 release target.
 -   Labour Management is a top-level dashboard module.
 -   Labour Setup is administrator-protected and supports configurable positions, employees, hourly wages, tip-pool eligibility, uniform-deduction applicability, active/inactive state, target labour percentages, and default uniform deduction settings.
+-   Labour Setup supports effective-dated hourly wage changes; Labour Hours and Daily Labour seed unsaved entries from the rate effective on each work date while saved entries keep their stored wage snapshot.
 -   Labour Hours replaced the old Weekly Labour screen name. It uses an inventory-count-style saved-week list and opens a separate spreadsheet-style pop-out editor for Monday-Sunday Shift 1 / Shift 2 manual hour entry.
 -   Labour Hours no longer shows employee number, hourly rate, total pay, bottom total rows, or the restaurant header.
 -   Labour Hours department headers use a clearer styled band in the pop-out entry window.
 -   Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown support Cloud API mode through `/labour` routes and local DAO fallback for development.
--   Labour API routes are deployed to `esm-operations-api`, including `/labour/weeks`, `/labour/weekly`, and `/labour/daily`, and the live AWS RDS schema has been advanced through schema version 22.
+-   Labour API routes are deployed to `esm-operations-api`, including `/labour/weeks`, `/labour/weekly`, and `/labour/daily`, and the live AWS RDS schema has been advanced through schema version 23.
 -   Migration 16 added Labour Management setup tables and future daily labour/sales foundations.
 -   Migration 17 added daily labour snapshot columns for historical wage/position/group reporting integrity.
+-   Migration 23 added `labour_employee_pay_rates` for effective-dated wage history.
 -   Daily Labour Cost is a weekly start/end date range screen with Monday-Sunday rows, editable net sales, BOH labour dollars/percentages, FOH labour dollars/percentages, total labour percentage, and a total row.
 -   Tip Pool is implemented with daily tip-out pool entry under each day's Tip column, tip-pool eligible hours, calculated employee tip allocations, and weekly totals.
 -   Tip Pool Breakdown is implemented as a start/end date range payout report with gross tips, configured per-worked-day uniform deductions for applicable employees, nickel-rounded net payout totals, and compact black-and-white printing.

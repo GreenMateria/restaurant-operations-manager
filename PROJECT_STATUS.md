@@ -4,7 +4,7 @@
 
 **Current Stable Release Target:** v4.2.0
 
-Current database schema version: **22**
+Current database schema version: **23**
 
 Application compiles successfully.
 
@@ -18,6 +18,8 @@ All implemented features through v4.2.0 are considered working as intended unles
 
 Completed:
 
+-   Updated the KDS section end heading to X41 Note.ESM for POS catalog import, KDS cleanup, and usage-report parsing. Cleanup refuses deletion when a KDS start heading has no matching end heading.
+-   Shared POS item import and maintenance now lives under Administration → POS Catalog / PLUs. Production → POS Production Mappings retains profile assignments and usage-report import. Catalog XLSX parsing continues to use column A for item names and column B for PLUs.
 -   Multi-location rollout foundation started on Thursday, September 10, 2026.
 -   Migration 18 adds `locations` and `location_sessions` for one username/password per location and session-token based API login.
 -   Migration 19 adds `location_id` to Labour Management tables and the Labour API now scopes positions, employees, daily sales, daily entries, and saved weeks by the logged-in location.
@@ -42,6 +44,10 @@ Completed:
 -   System and Labour Setup protected passwords are now store-scoped in Cloud API mode and stored as salted PBKDF2 hashes on the signed-in location record, so managers are not tied to one workstation.
 -   Labour Setup uses a temporary first-use password that immediately prompts for a new store-scoped Labour Setup password when the signed-in store does not have one yet.
 -   `scripts/Apply-LocationProtectedPasswordsMigration.ps1` was added to apply the schema 22 protected-password columns to AWS RDS.
+-   Migration 23 adds `labour_employee_pay_rates` so employee hourly wage changes can be entered with an effective date without rewriting previous labour records.
+-   Labour Hours and Daily Labour now seed unsaved daily entries from the employee pay rate effective on each work date, while already-saved daily entries continue to use their stored wage snapshot.
+-   `scripts/Apply-LabourPayRateSchemaMigration.ps1` was added to apply the schema 23 pay-rate history table to AWS RDS.
+-   On Friday, October 2, 2026, AWS RDS was verified at schema version 23 with `labour_employee_pay_rates` present, `esm-operations-api` was redeployed with the labour pay-rate API updates, `/health` returned `status=ok`, and `/protected-passwords/status` correctly rejected API-key-only requests without a store location token.
 -   `scripts/Reset-LabourSetupPassword.ps1` remains a local SQLite/development fallback helper for returning a PC to the first-use Labour Setup password flow outside API mode.
 -   On Thursday, September 24, 2026, `esm-operations-api` was redeployed with protected-password routes, AWS RDS was advanced to schema version 22, `/health` returned `status=ok`, and `/protected-passwords/status` correctly rejected API-key-only requests without a store location token.
 -   Labour Management Phase 1 foundation added on Sunday, September 6, 2026.
@@ -52,7 +58,7 @@ Completed:
 -   Labour Hours supports saved-week listing through `/labour/weeks`, and bulk save/load in Cloud API mode through `/labour/weekly` routes and local DAO fallback.
 -   Labour Hours stores wage, employee name, position name, labour group, tip-pool eligibility, and uniform-deduction context on daily entries/rows so saved historical labour workflows do not recalculate from later setup changes.
 -   The live AWS API stack was redeployed on Sunday, September 6, 2026 so the deployed `/labour/weekly` routes are available to API-mode desktops.
--   The live AWS RDS database was first advanced for Labour Management after the API route deployment exposed missing Labour tables in the production schema; later multi-location and protected-password migrations advanced the live schema to version 22.
+-   The live AWS RDS database was first advanced for Labour Management after the API route deployment exposed missing Labour tables in the production schema; later multi-location, protected-password, and pay-rate history migrations advanced the live schema to version 23.
 -   `scripts/Apply-LabourSchemaMigration.ps1` was added as a secure prompt-based helper for applying the Labour schema through the RDS admin user without storing the admin password.
 -   Labour Setup is implemented as an administrator-protected JavaFX setup screen for labour positions, employees, and default uniform deduction settings.
 -   Labour Setup supports API mode through `/labour` routes, with local DAO support retained for development fallback.
@@ -224,7 +230,7 @@ Current behaviour:
 -   Earlier PostgreSQL mode passed broad DAO/service smoke tests and manual JavaFX UI testing, including the previously slow Weekly Production, Freezer Pull, and Inventory Valuation screens.
 -   Normal reads and saves now use the shared AWS RDS database through the Cloud API.
 -   Cloud Snapshot download is an administrator backup/recovery tool, not a routine daily sync action.
--   Alcohol Sales Mappings uses the already imported POS Menu Items list for POS SKU selection; managers should keep the Production POS Menu Items catalog current before mapping alcohol variance items.
+-   Alcohol Sales Mappings uses the shared POS catalog for POS SKU selection; managers should keep Administration → POS Catalog / PLUs current before mapping alcohol variance items.
 -   Installed versions automatically check GitHub Releases on startup.
 -   If a newer version exists, the user is prompted to download it.
 -   The installer is downloaded inside the application when a Windows installer asset is available.

@@ -8,8 +8,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
 
 public class LabourEmployeeDao {
 
@@ -19,7 +21,13 @@ public class LabourEmployeeDao {
                 SELECT
                     le.id, le.name, le.position_id, lp.name AS position_name,
                     lp.labour_group, le.hourly_wage, le.tip_pool_eligible,
-                    le.uniform_deduction_applicable, le.active
+                    le.uniform_deduction_applicable, le.active,
+                    (
+                        SELECT MAX(effective_date)
+                        FROM labour_employee_pay_rates rates
+                        WHERE rates.employee_id = le.id
+                          AND rates.location_id = le.location_id
+                    ) AS pay_rate_effective_date
                 FROM labour_employees le
                 LEFT JOIN labour_positions lp ON le.position_id = lp.id
                 ORDER BY lp.sort_order, le.name
@@ -55,9 +63,15 @@ public class LabourEmployeeDao {
                 VALUES (?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = DatabaseManager.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             applyFields(statement, employee);
             statement.executeUpdate();
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                if (keys.next()) {
+                    employee.setId(keys.getInt(1));
+                }
+            }
+            savePayRate(connection, employee);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to insert labour employee", e);
         }
@@ -79,6 +93,7 @@ public class LabourEmployeeDao {
             applyFields(statement, employee);
             statement.setInt(7, employee.getId());
             statement.executeUpdate();
+            savePayRate(connection, employee);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to update labour employee", e);
         }
@@ -115,6 +130,7 @@ public class LabourEmployeeDao {
                 resultSet.getString("position_name"),
                 resultSet.getString("labour_group"),
                 getBigDecimal(resultSet, "hourly_wage"),
+                getDate(resultSet, "pay_rate_effective_date"),
                 resultSet.getInt("tip_pool_eligible") == 1,
                 resultSet.getInt("uniform_deduction_applicable") == 1,
                 resultSet.getInt("active") == 1
@@ -124,5 +140,29 @@ public class LabourEmployeeDao {
     private BigDecimal getBigDecimal(ResultSet resultSet, String column) throws SQLException {
         String value = resultSet.getString(column);
         return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value);
+    }
+
+    private LocalDate getDate(ResultSet resultSet, String column) throws SQLException {
+        String value = resultSet.getString(column);
+        return value == null || value.isBlank() ? null : LocalDate.parse(value);
+    }
+
+    private void savePayRate(Connection connection, LabourEmployee employee) throws SQLException {
+        if (employee.getId() <= 0 || employee.getPayRateEffectiveDate() == null) {
+            return;
+        }
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO labour_employee_pay_rates (
+                    location_id, employee_id, hourly_wage, effective_date
+                )
+                VALUES (1, ?, ?, ?)
+                ON CONFLICT(location_id, employee_id, effective_date)
+                DO UPDATE SET hourly_wage = excluded.hourly_wage
+                """)) {
+            statement.setInt(1, employee.getId());
+            statement.setBigDecimal(2, employee.getHourlyWage());
+            statement.setString(3, employee.getPayRateEffectiveDate().toString());
+            statement.executeUpdate();
+        }
     }
 }

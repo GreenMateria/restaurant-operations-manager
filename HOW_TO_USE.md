@@ -32,6 +32,7 @@ The most common manager workflows are:
 - **Reporting** - invoice history, sales entry, and inventory valuation.
 - **Production** - weekly production and prep sheets.
 - **System** - backup, restore, API connection checks, and administrator tools.
+- **POS Catalog / PLUs** - shared POS item import and maintenance under Administration, used by Alcohol Sales Mappings and Production.
 - **About** - version, database mode, signed-in store, and application scope.
 
 ## Important Safety Rules
@@ -402,7 +403,9 @@ Use Sales Mappings to connect sold POS alcohol items to the inventory product th
 8. Choose the usage unit.
 9. Save the mapping.
 
-The POS Menu Item dropdown uses the same POS item catalog maintained in the Production area. If a POS item is missing from the dropdown, import or add it in **Production -> POS Menu Items** first.
+The POS Menu Item dropdown uses the shared catalog maintained in **Administration -> POS Catalog / PLUs**. If a POS item is missing, import or add it there first. Catalog XLSX files use **column A for item names** and **column B for PLUs**. Production profile assignments are available under **Production -> POS Production Mappings**.
+
+Catalog import skips rows between **KDS DNU.ESM** and **X41 Note.ESM**, regardless of their row numbers. **Delete KDS Items** uses the same headings to identify previously imported KDS PLUs and asks for confirmation before deleting them. If the KDS start heading is found without the end heading, cleanup refuses to delete items.
 
 ## ALCOHOL 10 - Alcohol Variance Report
 

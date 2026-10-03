@@ -1,6 +1,7 @@
 package ca.foodinventory.model;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public class LabourEmployee {
 
@@ -10,6 +11,7 @@ public class LabourEmployee {
     private String positionName;
     private String labourGroup;
     private BigDecimal hourlyWage;
+    private LocalDate payRateEffectiveDate;
     private boolean tipPoolEligible;
     private boolean uniformDeductionApplicable;
     private boolean active;
@@ -24,6 +26,7 @@ public class LabourEmployee {
             String positionName,
             String labourGroup,
             BigDecimal hourlyWage,
+            LocalDate payRateEffectiveDate,
             boolean tipPoolEligible,
             boolean uniformDeductionApplicable,
             boolean active
@@ -34,6 +37,7 @@ public class LabourEmployee {
         this.positionName = positionName;
         this.labourGroup = labourGroup;
         this.hourlyWage = hourlyWage;
+        this.payRateEffectiveDate = payRateEffectiveDate;
         this.tipPoolEligible = tipPoolEligible;
         this.uniformDeductionApplicable = uniformDeductionApplicable;
         this.active = active;
@@ -85,6 +89,14 @@ public class LabourEmployee {
 
     public void setHourlyWage(BigDecimal hourlyWage) {
         this.hourlyWage = hourlyWage;
+    }
+
+    public LocalDate getPayRateEffectiveDate() {
+        return payRateEffectiveDate;
+    }
+
+    public void setPayRateEffectiveDate(LocalDate payRateEffectiveDate) {
+        this.payRateEffectiveDate = payRateEffectiveDate;
     }
 
     public boolean isTipPoolEligible() {

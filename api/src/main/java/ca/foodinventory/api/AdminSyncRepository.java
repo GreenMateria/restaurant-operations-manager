@@ -41,6 +41,7 @@ class AdminSyncRepository {
             "production_week_lines",
             "labour_positions",
             "labour_employees",
+            "labour_employee_pay_rates",
             "labour_daily_sales",
             "labour_daily_entries",
             "schema_version"

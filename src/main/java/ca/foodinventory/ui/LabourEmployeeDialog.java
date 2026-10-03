@@ -10,6 +10,7 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -18,6 +19,7 @@ import javafx.scene.layout.GridPane;
 import javafx.util.StringConverter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 public class LabourEmployeeDialog extends Dialog<LabourEmployee> {
@@ -25,6 +27,7 @@ public class LabourEmployeeDialog extends Dialog<LabourEmployee> {
     private final TextField nameField = new TextField();
     private final ComboBox<LabourPosition> positionComboBox = new ComboBox<>();
     private final TextField hourlyWageField = new TextField();
+    private final DatePicker payRateEffectiveDatePicker = new DatePicker();
     private final CheckBox tipPoolEligibleCheckBox = new CheckBox("Tip-pool eligible");
     private final CheckBox uniformDeductionCheckBox = new CheckBox("Uniform deduction applicable");
     private final CheckBox activeCheckBox = new CheckBox("Active");
@@ -60,6 +63,7 @@ public class LabourEmployeeDialog extends Dialog<LabourEmployee> {
 
         nameField.setPromptText("Employee name");
         hourlyWageField.setPromptText("Example: 17.20");
+        payRateEffectiveDatePicker.setValue(LocalDate.now());
         positionComboBox.setPrefWidth(280);
         activeCheckBox.setSelected(true);
 
@@ -74,12 +78,14 @@ public class LabourEmployeeDialog extends Dialog<LabourEmployee> {
         grid.add(positionComboBox, 1, 1);
         grid.add(new Label("Hourly Wage:"), 0, 2);
         grid.add(hourlyWageField, 1, 2);
-        grid.add(new Label("Tip Pool:"), 0, 3);
-        grid.add(tipPoolEligibleCheckBox, 1, 3);
-        grid.add(new Label("Uniform:"), 0, 4);
-        grid.add(uniformDeductionCheckBox, 1, 4);
-        grid.add(new Label("Status:"), 0, 5);
-        grid.add(activeCheckBox, 1, 5);
+        grid.add(new Label("Effective Date:"), 0, 3);
+        grid.add(payRateEffectiveDatePicker, 1, 3);
+        grid.add(new Label("Tip Pool:"), 0, 4);
+        grid.add(tipPoolEligibleCheckBox, 1, 4);
+        grid.add(new Label("Uniform:"), 0, 5);
+        grid.add(uniformDeductionCheckBox, 1, 5);
+        grid.add(new Label("Status:"), 0, 6);
+        grid.add(activeCheckBox, 1, 6);
 
         getDialogPane().setContent(grid);
 
@@ -132,6 +138,9 @@ public class LabourEmployeeDialog extends Dialog<LabourEmployee> {
         hourlyWageField.setText(existingEmployee.getHourlyWage() == null
                 ? "0.00"
                 : existingEmployee.getHourlyWage().toPlainString());
+        payRateEffectiveDatePicker.setValue(existingEmployee.getPayRateEffectiveDate() == null
+                ? LocalDate.now()
+                : existingEmployee.getPayRateEffectiveDate());
         tipPoolEligibleCheckBox.setSelected(existingEmployee.isTipPoolEligible());
         uniformDeductionCheckBox.setSelected(existingEmployee.isUniformDeductionApplicable());
         activeCheckBox.setSelected(existingEmployee.isActive());
@@ -163,6 +172,10 @@ public class LabourEmployeeDialog extends Dialog<LabourEmployee> {
             showValidationError("Hourly wage must be a number.");
             return false;
         }
+        if (payRateEffectiveDatePicker.getValue() == null) {
+            showValidationError("Effective date is required.");
+            return false;
+        }
         return true;
     }
 
@@ -175,6 +188,7 @@ public class LabourEmployeeDialog extends Dialog<LabourEmployee> {
         employee.setPositionName(position.getName());
         employee.setLabourGroup(position.getLabourGroup());
         employee.setHourlyWage(parseMoney(hourlyWageField.getText()));
+        employee.setPayRateEffectiveDate(payRateEffectiveDatePicker.getValue());
         employee.setTipPoolEligible(tipPoolEligibleCheckBox.isSelected());
         employee.setUniformDeductionApplicable(uniformDeductionCheckBox.isSelected());
         employee.setActive(activeCheckBox.isSelected());

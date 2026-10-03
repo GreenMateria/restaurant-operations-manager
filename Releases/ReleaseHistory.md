@@ -261,3 +261,8 @@ Date: 2026-09-21 11:20
 Date: 2026-09-24 13:11
 
 - Added password reset
+
+## v4.1.3
+Date: 2026-10-03 13:09
+
+- Modified PLU imports. Added effective date to wages, to not corrupe past reports

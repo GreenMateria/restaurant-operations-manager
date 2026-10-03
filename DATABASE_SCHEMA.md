@@ -1,6 +1,6 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: Friday, September 11, 2026_
+_Last Updated: Friday, October 2, 2026_
 
 This file documents the current database structure for the Food Inventory / StoreOps Manager application.
 
@@ -27,7 +27,7 @@ Read this after `PROJECT_REFERENCE.md` when working on database, DAO, reporting,
 src/main/java/ca/foodinventory/database
 ```
 
-- Current migration version: **22**.
+- Current migration version: **23**.
 - Do not manually edit user databases unless explicitly asked.
 - Prefer adding schema changes through a new migration.
 
@@ -58,6 +58,7 @@ Current known migration files:
 - `Migration20`
 - `Migration21`
 - `Migration22`
+- `Migration23`
 
 PostgreSQL support:
 
@@ -92,6 +93,10 @@ PostgreSQL support:
   - Copies selected setup/master data from one location to another after both locations exist.
   - Supports products, aliases, inventory templates, alcohol setup, production setup, POS menu items, and production product mappings.
   - Does not copy invoices, counts, sales periods, labour history, generated production weeks, sessions, or passwords.
+- `scripts/Apply-LabourPayRateSchemaMigration.ps1`
+  - Applies the Migration 23 labour pay-rate history table to AWS RDS through a schema-capable admin user.
+  - Prompts for the RDS admin password securely and does not store it.
+  - Refreshes `operations_app` grants for the pay-rate table and sequence after schema creation.
 
 Migration responsibilities:
 
@@ -151,6 +156,11 @@ Migration responsibilities:
 - `Migration22`
   - Adds store-scoped protected-password columns to `locations` for System administrator and Labour Setup passwords.
   - Cloud API mode stores these passwords as salted PBKDF2 hashes on the signed-in location so protected access follows the store across workstations.
+- `Migration23`
+  - Adds `labour_employee_pay_rates` for effective-dated employee hourly wage history.
+  - Seeds existing employee wages with an effective date of `1900-01-01`.
+  - Labour Hours and Daily Labour use the rate effective on each work date when creating unsaved entries.
+  - Already-saved `labour_daily_entries.hourly_wage` values remain the historical wage snapshot for reports.
 
 ---
 
@@ -513,6 +523,26 @@ Notes:
 - Employees are deactivated with `active = 0` rather than deleted.
 - Future finalized labour/tip records should use stored daily entry snapshots for historical accuracy when wages or positions later change.
 
+## labour_employee_pay_rates
+
+Stores effective-dated hourly wage history for Labour Management employees.
+
+Important fields:
+
+- `id`
+- `location_id`
+- `employee_id`
+- `hourly_wage`
+- `effective_date`
+- `created_at`
+
+Notes:
+
+- One row is stored per employee, location, and effective date.
+- Existing employee wages are seeded with an effective date of `1900-01-01` during Migration 23.
+- Labour Hours and Daily Labour use the latest pay-rate row whose effective date is on or before the work date when creating unsaved daily entries.
+- Saved `labour_daily_entries.hourly_wage` remains the historical wage snapshot for that work date.
+
 ## labour_daily_sales
 
 Stores future daily operational sales values for Labour Management.
@@ -594,7 +624,7 @@ Notes:
 - Labour Hours data is stored by actual calendar date, not by relative "this week" columns.
 - Daily Labour Cost and Tip Pool use `workDate` / `salesDate` in `YYYY-MM-DD` format and save daily sales plus employee daily entries in one request.
 - `tip_pool_eligible` and `uniform_deduction_applicable` are returned in labour row payloads so Tip Pool and Tip Pool Breakdown can calculate from the same API-loaded labour data.
-- The live AWS RDS Labour schema was applied on Sunday, September 6, 2026. Labour API route updates for Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Later multi-location and protected-password migrations advanced the live RDS schema through version 22.
+- The live AWS RDS Labour schema was applied on Sunday, September 6, 2026. Labour API route updates for Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Later multi-location, protected-password, and pay-rate history migrations advanced the live RDS schema through version 23.
 
 ---
 

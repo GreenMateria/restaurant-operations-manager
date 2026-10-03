@@ -18,7 +18,7 @@ import java.util.Set;
 public class PosMenuItemImportService {
 
     private static final String KDS_SECTION_START_MARKER = "kds dnu.esm";
-    private static final String KDS_SECTION_END_MARKER = "gifts and selling suppli.esm";
+    private static final String KDS_SECTION_END_MARKER = "x41 note.esm";
     private static final int MENU_ITEM_NAME_COLUMN = 0;
     private static final int POS_SKU_COLUMN = 1;
 
@@ -150,10 +150,16 @@ public class PosMenuItemImportService {
                 }
             }
 
+            if (readingKdsSection) {
+                throw new IllegalArgumentException(
+                        "KDS section has no X41 Note.ESM end heading. No items will be deleted."
+                );
+            }
+
             return posSkus;
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to read KDS POS menu items", e);
+            throw new RuntimeException("Failed to read KDS POS menu items: " + e.getMessage(), e);
         }
     }
 

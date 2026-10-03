@@ -26,6 +26,7 @@ import java.util.Set;
 
 public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
+    private final boolean productionMode;
     private final PosMenuItemDao dao = new PosMenuItemDao();
     private final ProductionApiClient apiClient = new ProductionApiClient();
     private final ProductionUsageReportImportService usageReportImportService =
@@ -42,10 +43,17 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
     private Button importButton;
 
     public PosMenuItemsView() {
+        this(false);
+    }
+
+    public PosMenuItemsView(boolean productionMode) {
         super(
-                "POS Menu Items",
-                "Manage POS menu items used by sales mix imports."
+                productionMode ? "POS Production Mappings" : "POS Catalog / PLUs",
+                productionMode
+                        ? "Assign POS items to production profiles. Import shared items from Administration > POS Catalog / PLUs."
+                        : "Shared POS items for Alcohol Sales Mappings and Production."
         );
+        this.productionMode = productionMode;
 
         setupTable();
         installToolbar();
@@ -59,15 +67,17 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         addButton = createPrimaryButton("Add", this::addItem);
         editButton = createPrimaryButton("Edit", this::editSelectedItem);
         deactivateButton = createPrimaryButton("Deactivate", this::deactivateSelectedItem);
-        setupImportButton = createPrimaryButton("Import Menu Items", this::importMenuItems);
+        setupImportButton = createPrimaryButton("Import POS Catalog", this::importMenuItems);
         deleteKdsButton = createPrimaryButton("Delete KDS Items", this::deleteKdsItems);
         importButton = createPrimaryButton("Import Usage Report", this::importUsageReport);
 
-        return new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton, importButton);
+        return productionMode
+                ? new HBox(10, editButton, importButton)
+                : new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton);
     }
 
     private void setupTable() {
-        TableColumn<PosMenuItem, String> posNumberCol = new TableColumn<>("POS Number");
+        TableColumn<PosMenuItem, String> posNumberCol = new TableColumn<>("POS PLU");
         posNumberCol.setCellValueFactory(new PropertyValueFactory<>("posSku"));
 
         TableColumn<PosMenuItem, String> nameCol = new TableColumn<>("Menu Item Name");
@@ -288,7 +298,7 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
     private void importMenuItems() {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Import POS Menu Items");
+        chooser.setTitle("Import POS Catalog — Name in A, PLU in B");
 
         chooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("Excel Files", "*.xlsx")

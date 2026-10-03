@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Sunday, September 13, 2026_
+_Last Updated: Friday, October 2, 2026_
 
 This document is the primary reference for the **StoreOps Manager** project.
 
@@ -92,8 +92,9 @@ Important:
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
 - Current release target is v4.2.0. `pom.xml` may remain at the prior version until `Release.ps1` performs the release-version update during packaging.
-- Current database schema version in code is 22.
+- Current database schema version in code is 23.
 - API layer stack `esm-operations-api` is deployed in AWS and the desktop app uses API mode for normal workflows.
+- The deployed API stack was updated on Friday, October 2, 2026 after confirming AWS RDS schema version 23 and `labour_employee_pay_rates` were already present.
 - Store Login is enabled by release packaging with `location.login.required=true`.
 - Desktop API clients include the store session token with normal business requests, and the deployed API scopes store-owned reads/writes to the resolved location.
 - Current API-mode migrated areas are Food Department workflows, Alcohol Department workflows, Supplies Department workflows, Production workflows, Reporting/Sales workflows, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, GFS product guide import persistence, product purchase history, and administrative cloud snapshot download.
@@ -204,6 +205,8 @@ Main cards include:
 - Labour Management
 - System
 - About
+
+Administration also includes **POS Catalog / PLUs**, the shared POS item import and maintenance screen for Alcohol Sales Mappings and Production. Catalog XLSX imports read item names from column A and PLUs from column B. Production retains **POS Production Mappings** for profile assignments and usage-report import.
 
 The sidebar includes Home, Back, and Switch Store when Store Login is required. Switch Store confirms the action, clears the saved location session, and returns to Store Login without closing the app.
 
@@ -724,7 +727,7 @@ POS menu items map POS SKUs or PLUs to production profiles.
 
 Multiple POS SKUs may map into the same production requirement.
 
-Alcohol Sales Mappings also reuse this POS Menu Items catalog as the selectable POS item source. This avoids maintaining a second POS item list while keeping alcohol inventory variance mappings separate from production profiles.
+Alcohol Sales Mappings also reuse this shared catalog as the selectable POS item source. Import and maintain it through Administration → POS Catalog / PLUs; assign production profiles through Production → POS Production Mappings. This avoids maintaining a second POS item list while keeping alcohol inventory variance mappings separate from production profiles.
 
 ## Product Mappings
 
@@ -815,9 +818,10 @@ Implemented Labour Management work includes:
 - Configurable labour employees with position, hourly wage, active status, tip-pool eligibility, and uniform-deduction applicability.
 - Configurable default uniform deduction amount stored in settings.
 - API-backed Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown reads/writes for Cloud API mode.
-- Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes, and the live RDS schema has been advanced through schema version 22 for multi-location operation.
+- Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes, and the live RDS schema has been advanced through schema version 23 for multi-location operation and effective-dated labour pay rates.
 - Schema foundations for future daily operational sales and daily employee labour entries by actual calendar date.
 - Wage, employee name, position name, and labour group snapshots on saved daily labour entries so historical weeks do not recalculate from later setup changes.
+- Labour Setup stores pay-rate effective dates in `labour_employee_pay_rates`; unsaved Labour Hours and Daily Labour rows use the rate effective on the work date, while saved rows keep their stored wage snapshot.
 
 Daily Labour Cost, Tip Pool, and Tip Pool Breakdown are implemented and accepted as working as intended.
 

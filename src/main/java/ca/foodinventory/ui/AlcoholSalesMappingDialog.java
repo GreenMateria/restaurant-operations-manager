@@ -53,7 +53,8 @@ public class AlcoholSalesMappingDialog extends Dialog<AlcoholSalesMapping> {
         this.existingMapping = existingMapping;
 
         setTitle(existingMapping == null ? "Add Alcohol Sales Mapping" : "Edit Alcohol Sales Mapping");
-        setHeaderText("Map a POS item to the alcohol inventory product it consumes.");
+        setHeaderText("Map a POS item to the alcohol inventory product it consumes.\n"
+                + "Maintain POS items in Administration > POS Catalog / PLUs.");
 
         buildDialog();
         loadPosMenuItems();

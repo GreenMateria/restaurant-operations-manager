@@ -101,7 +101,13 @@ class LabourRepository {
                 SELECT
                     le.id, le.name, le.position_id, lp.name AS position_name,
                     lp.labour_group, le.hourly_wage, le.tip_pool_eligible,
-                    le.uniform_deduction_applicable, le.active
+                    le.uniform_deduction_applicable, le.active,
+                    (
+                        SELECT MAX(effective_date)
+                        FROM labour_employee_pay_rates rates
+                        WHERE rates.employee_id = le.id
+                          AND rates.location_id = le.location_id
+                    ) AS pay_rate_effective_date
                 FROM labour_employees le
                 LEFT JOIN labour_positions lp ON le.position_id = lp.id
                 WHERE le.location_id = ?
@@ -179,6 +185,7 @@ class LabourRepository {
                     }
                 }
             }
+            savePayRate(connection, locationId, id, wage, stringValue(body.get("payRateEffectiveDate")));
             return employeeByIdJson(connection, locationId, id);
         }
     }
@@ -550,7 +557,13 @@ class LabourRepository {
                 SELECT
                     le.id, le.name, le.position_id, lp.name AS position_name,
                     lp.labour_group, le.hourly_wage, le.tip_pool_eligible,
-                    le.uniform_deduction_applicable, le.active
+                    le.uniform_deduction_applicable, le.active,
+                    (
+                        SELECT MAX(effective_date)
+                        FROM labour_employee_pay_rates rates
+                        WHERE rates.employee_id = le.id
+                          AND rates.location_id = le.location_id
+                    ) AS pay_rate_effective_date
                 FROM labour_employees le
                 LEFT JOIN labour_positions lp ON le.position_id = lp.id
                 WHERE le.id = ? AND le.location_id = ?
@@ -571,7 +584,13 @@ class LabourRepository {
             LocalDate weekEndDate
     ) throws SQLException {
         int employeeId = resultSet.getInt("employee_id");
-        BigDecimal wage = resultSet.getBigDecimal("hourly_wage");
+        BigDecimal wage = effectivePayRate(
+                connection,
+                locationId,
+                employeeId,
+                weekStartDate,
+                resultSet.getBigDecimal("hourly_wage")
+        );
         return weeklyRowJson(
                 employeeId,
                 resultSet.getString("employee_name"),
@@ -584,7 +603,7 @@ class LabourRepository {
                 resultSet.getInt("employee_active") == 1,
                 resultSet.getInt("tip_pool_eligible") == 1,
                 resultSet.getInt("uniform_deduction_applicable") == 1,
-                entriesJson(connection, locationId, employeeId, weekStartDate, weekEndDate)
+                currentEntriesJson(connection, locationId, resultSet, weekStartDate, weekEndDate)
         );
     }
 
@@ -800,6 +819,45 @@ class LabourRepository {
                 + "}";
     }
 
+    private String currentEntriesJson(
+            Connection connection,
+            int locationId,
+            ResultSet resultSet,
+            LocalDate weekStartDate,
+            LocalDate weekEndDate
+    ) throws SQLException {
+        StringBuilder json = new StringBuilder();
+        boolean first = true;
+        int employeeId = resultSet.getInt("employee_id");
+        int positionId = resultSet.getInt("position_id");
+        BigDecimal fallbackWage = resultSet.getBigDecimal("hourly_wage");
+        for (LocalDate date = weekStartDate; !date.isAfter(weekEndDate); date = date.plusDays(1)) {
+            if (!first) {
+                json.append(',');
+            }
+            json.append("{")
+                    .append("\"id\":0,")
+                    .append("\"workDate\":").append(Json.nullableString(date.toString())).append(',')
+                    .append("\"employeeId\":").append(employeeId).append(',')
+                    .append("\"positionId\":").append(positionId).append(',')
+                    .append("\"hourlyWage\":")
+                    .append(effectivePayRate(connection, locationId, employeeId, date, fallbackWage).toPlainString())
+                    .append(',')
+                    .append("\"shift1Hours\":0,")
+                    .append("\"shift2Hours\":0,")
+                    .append("\"employeeNameSnapshot\":")
+                    .append(Json.nullableString(resultSet.getString("employee_name"))).append(',')
+                    .append("\"positionNameSnapshot\":")
+                    .append(Json.nullableString(resultSet.getString("position_name"))).append(',')
+                    .append("\"labourGroupSnapshot\":")
+                    .append(Json.nullableString(resultSet.getString("labour_group"))).append(',')
+                    .append("\"finalized\":false")
+                    .append("}");
+            first = false;
+        }
+        return json.toString();
+    }
+
     private String dailySalesJson(Connection connection, int locationId, LocalDate workDate) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT id, sales_date, net_sales, tip_out_pool, finalized
@@ -972,11 +1030,69 @@ class LabourRepository {
                 + "\"positionName\":" + Json.nullableString(resultSet.getString("position_name")) + ","
                 + "\"labourGroup\":" + Json.nullableString(resultSet.getString("labour_group")) + ","
                 + "\"hourlyWage\":" + (wage == null ? "0" : wage.toPlainString()) + ","
+                + "\"payRateEffectiveDate\":"
+                + Json.nullableString(resultSet.getString("pay_rate_effective_date")) + ","
                 + "\"tipPoolEligible\":" + (resultSet.getInt("tip_pool_eligible") == 1) + ","
                 + "\"uniformDeductionApplicable\":"
                 + (resultSet.getInt("uniform_deduction_applicable") == 1) + ","
                 + "\"active\":" + (resultSet.getInt("active") == 1)
                 + "}";
+    }
+
+    private void savePayRate(
+            Connection connection,
+            int locationId,
+            int employeeId,
+            BigDecimal wage,
+            String effectiveDateText
+    ) throws SQLException {
+        if (employeeId <= 0 || effectiveDateText == null || effectiveDateText.isBlank()) {
+            return;
+        }
+        LocalDate effectiveDate = LocalDate.parse(effectiveDateText);
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT INTO labour_employee_pay_rates (
+                    location_id, employee_id, hourly_wage, effective_date
+                )
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(location_id, employee_id, effective_date)
+                DO UPDATE SET hourly_wage = excluded.hourly_wage
+                """)) {
+            statement.setInt(1, locationId);
+            statement.setInt(2, employeeId);
+            statement.setBigDecimal(3, wage);
+            statement.setString(4, effectiveDate.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    private BigDecimal effectivePayRate(
+            Connection connection,
+            int locationId,
+            int employeeId,
+            LocalDate workDate,
+            BigDecimal fallback
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT hourly_wage
+                FROM labour_employee_pay_rates
+                WHERE location_id = ?
+                  AND employee_id = ?
+                  AND effective_date <= ?
+                ORDER BY effective_date DESC
+                LIMIT 1
+                """)) {
+            statement.setInt(1, locationId);
+            statement.setInt(2, employeeId);
+            statement.setString(3, workDate.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    BigDecimal wage = resultSet.getBigDecimal("hourly_wage");
+                    return wage == null ? BigDecimal.ZERO : wage;
+                }
+            }
+        }
+        return fallback == null ? BigDecimal.ZERO : fallback;
     }
 
     private String firstNonBlank(String first, String second) {

@@ -251,6 +251,7 @@ public class LabourApiClient {
                     stringValue(object.get("positionName")),
                     stringValue(object.get("labourGroup")),
                     moneyValue(object.get("hourlyWage")),
+                    dateValue(object.get("payRateEffectiveDate")),
                     booleanValue(object.get("tipPoolEligible")),
                     booleanValue(object.get("uniformDeductionApplicable")),
                     booleanValue(object.get("active"))
@@ -375,6 +376,10 @@ public class LabourApiClient {
                 + "\"name\":" + jsonString(employee.getName()) + ","
                 + "\"positionId\":" + employee.getPositionId() + ","
                 + "\"hourlyWage\":" + money(employee.getHourlyWage()) + ","
+                + "\"payRateEffectiveDate\":"
+                + jsonString(employee.getPayRateEffectiveDate() == null
+                ? LocalDate.now().toString()
+                : employee.getPayRateEffectiveDate().toString()) + ","
                 + "\"tipPoolEligible\":" + employee.isTipPoolEligible() + ","
                 + "\"uniformDeductionApplicable\":"
                 + employee.isUniformDeductionApplicable() + ","
@@ -552,6 +557,11 @@ public class LabourApiClient {
 
     private String stringValue(Object value) {
         return value == null ? null : value.toString();
+    }
+
+    private LocalDate dateValue(Object value) {
+        String text = stringValue(value);
+        return text == null || text.isBlank() ? null : LocalDate.parse(text);
     }
 
     private String nullSafe(String value) {

@@ -33,6 +33,7 @@ import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -205,6 +206,9 @@ public class LabourSetupView extends BorderPane {
         wageCol.setCellValueFactory(new PropertyValueFactory<>("hourlyWage"));
         wageCol.setCellFactory(column -> decimalCell("$"));
 
+        TableColumn<LabourEmployee, LocalDate> effectiveDateCol = new TableColumn<>("Rate Effective");
+        effectiveDateCol.setCellValueFactory(new PropertyValueFactory<>("payRateEffectiveDate"));
+
         TableColumn<LabourEmployee, Boolean> tipCol = new TableColumn<>("Tip Eligible");
         tipCol.setCellValueFactory(new PropertyValueFactory<>("tipPoolEligible"));
 
@@ -219,6 +223,7 @@ public class LabourSetupView extends BorderPane {
                 positionCol,
                 groupCol,
                 wageCol,
+                effectiveDateCol,
                 tipCol,
                 uniformCol,
                 activeCol

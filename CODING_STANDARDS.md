@@ -236,7 +236,7 @@ Skip KDS-only rows between markers:
 
 ```text
 kds dnu.<store suffix>
-Gifts and Selling Suppli.<store suffix>
+X41 Note.ESM
 ```
 
 Cloud-mode save/import workflows that can touch many rows should run off the JavaFX application thread and batch database writes where practical. This is especially important for inventory count saves/completions, Sales Period save/import, and Weekly Production usage report import/generation.

@@ -4,6 +4,13 @@
 
 Date: 2026-09-13
 
+### Shared POS Catalog
+
+- Updated KDS exclusion and cleanup to end at X41 Note.ESM; cleanup refuses deletion if that end heading is missing after the KDS start.
+- Moved shared POS item import and maintenance to Administration → POS Catalog / PLUs for discoverability from Alcohol and Production workflows.
+- Kept production profile assignments and usage-report import under Production → POS Production Mappings.
+- Clarified catalog XLSX columns: A for item names and B for PLUs.
+
 ### Branding And Presentation
 
 - Rebranded the desktop application as StoreOps Manager with neutral app/window/update wording.
@@ -35,6 +42,16 @@ Date: 2026-09-13
 - Added schema migration 22 and `scripts/Apply-LocationProtectedPasswordsMigration.ps1` for applying the protected-password columns to AWS RDS.
 - Added `GET /protected-passwords/status`, `POST /protected-passwords/verify`, and `PUT /protected-passwords/{scope}` to the API and deployed them to `esm-operations-api` in `ca-central-1` on Thursday, September 24, 2026.
 - Verified the live RDS schema version is 22 and the deployed protected-password routes require a valid store location token.
+
+### Labour Pay Rate History
+
+- Added schema migration 23 with `labour_employee_pay_rates` for effective-dated hourly wage history.
+- Added a Rate Effective date to Labour Setup employee wage changes.
+- Updated Labour Hours and Daily Labour so unsaved entries use the employee pay rate effective on each work date.
+- Preserved historical reporting behavior by keeping already-saved `labour_daily_entries.hourly_wage` snapshots unchanged after later wage changes.
+- Added `scripts/Apply-LabourPayRateSchemaMigration.ps1` for applying the schema 23 table to AWS RDS.
+- Verified AWS RDS was at schema version 23 with `labour_employee_pay_rates` present, then redeployed `esm-operations-api` in `ca-central-1` on Friday, October 2, 2026.
+- Smoke-tested the deployed API after redeploy: `/health` returned `status=ok`, and `/protected-passwords/status` rejected API-key-only requests without a store location token.
 
 ## v4.0.0
 

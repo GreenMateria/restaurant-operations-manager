@@ -15,7 +15,7 @@ import java.util.*;
 public class ProductionUsageReportImportService {
 
     private static final String KDS_SECTION_START_MARKER = "kds dnu.esm";
-    private static final String KDS_SECTION_END_MARKER = "gifts and selling suppli.esm";
+    private static final String KDS_SECTION_END_MARKER = "x41 note.esm";
 
     private static final int SKU_COLUMN = 1;
     private static final int MONDAY_QUANTITY_COLUMN = 3;

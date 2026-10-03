@@ -58,7 +58,7 @@ public class PosMenuItemDialog extends Dialog<PosMenuItem> {
         grid.setVgap(12);
         grid.setPadding(new Insets(20));
 
-        grid.add(new Label("POS Number:"), 0, 0);
+        grid.add(new Label("POS PLU:"), 0, 0);
         grid.add(posNumberField, 1, 0);
 
         grid.add(new Label("Menu Item Name:"), 0, 1);
