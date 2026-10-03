@@ -31,12 +31,25 @@ public class ProductionUsageReportImportService {
     private final ProductionApiClient productionApiClient = new ProductionApiClient();
 
     public ImportedUsageReportSummary importUsageReport(File file) {
+        return importUsageReport(file, null);
+    }
+
+    /** Alcohol mappings select their own PLUs, including those inside production-only skipped sections. */
+    public ImportedUsageReportSummary importUsageReport(File file, Set<String> mappedPosSkus) {
         try (
                 FileInputStream fileInputStream = new FileInputStream(file);
                 Workbook workbook = new XSSFWorkbook(fileInputStream)
         ) {
             Sheet sheet = workbook.getSheetAt(0);
-            Set<String> activePosSkus = loadActivePosSkus();
+            boolean productionImport = mappedPosSkus == null;
+            Set<String> activePosSkus = productionImport ? loadActivePosSkus() : new HashSet<>();
+            if (!productionImport) {
+                for (String sku : mappedPosSkus) {
+                    if (sku != null) {
+                        activePosSkus.add(sku.trim().toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
 
             List<ImportedUsageReportLine> lines = new ArrayList<>();
             boolean skippingKdsSection = false;
@@ -50,12 +63,12 @@ public class ProductionUsageReportImportService {
 
                 String rowText = getRowText(row);
 
-                if (containsMarker(rowText, KDS_SECTION_START_MARKER)) {
+                if (productionImport && containsMarker(rowText, KDS_SECTION_START_MARKER)) {
                     skippingKdsSection = true;
                     continue;
                 }
 
-                if (containsMarker(rowText, KDS_SECTION_END_MARKER)) {
+                if (productionImport && containsMarker(rowText, KDS_SECTION_END_MARKER)) {
                     skippingKdsSection = false;
                     continue;
                 }
@@ -79,7 +92,7 @@ public class ProductionUsageReportImportService {
                 double sundayQuantitySold = getCellNumber(row.getCell(SUNDAY_QUANTITY_COLUMN));
                 double weeklyQuantitySold = getCellNumber(row.getCell(WEEKLY_QUANTITY_COLUMN));
 
-                if (!activePosSkus.contains(posSku.trim().toLowerCase())) {
+                if (!activePosSkus.contains(posSku.trim().toLowerCase(Locale.ROOT))) {
                     continue;
                 }
 

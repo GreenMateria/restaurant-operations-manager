@@ -161,6 +161,7 @@ Desktop app
 -   Alcohol Sales Mapping add/edit reuses the existing Production POS Menu Items catalog so managers select imported POS items instead of retyping SKU/name details.
 -   Alcohol Variance Report now calculates actual-vs-sold usage from opening/closing alcohol counts, period purchases, imported POS usage, and active Sales Mappings, including bottle/keg portion conversion and red/green variance quantity and dollar columns.
 -   Alcohol Variance Report is accepted as complete for the v4.2.0 release target.
+-   Wine usage import was corrected and manager-validated on October 3, 2026: Alcohol reads active mapped PLUs throughout the selected file, including rows inside Production's excluded KDS section. All 22 tests passed.
 -   Alcohol workflow changes should be driven by specific live-data issues when they appear.
 -   Freezer Pull is working as intended and is not an active roadmap item.
 

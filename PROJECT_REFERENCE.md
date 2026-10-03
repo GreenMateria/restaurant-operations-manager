@@ -1,6 +1,6 @@
 # PROJECT_REFERENCE.md
 
-_Last Updated: Friday, October 2, 2026_
+_Last Updated: Saturday, October 3, 2026_
 
 This document is the primary reference for the **StoreOps Manager** project.
 
@@ -633,12 +633,13 @@ The alcohol workflow foundation exists, including:
 - Alcohol Department navigation now includes alcohol-specific Sales Mappings and Variance Report entry points so bar variance work does not overload the Production menu
 - Alcohol Sales Mappings stores POS SKU/PLU to alcohol inventory product mappings with quantity used per sale and usage unit
 - Alcohol Sales Mapping add/edit reuses active records from the existing Production POS Menu Items catalog, filling POS SKU/PLU and POS Item Name automatically while leaving manual fields editable as a fallback
-- Alcohol Variance Report currently has the department entry point and setup shell; variance calculation/output is the next build step
+- Alcohol Variance Report calculates actual versus sold usage and quantity/dollar variances from completed opening/closing counts, period purchases, active Alcohol Sales Mappings, product profiles, valuation costs, and a separately selected POS usage `.xlsx` file. A prior Production import is not required.
+- On October 3, 2026, corrected wine sales being skipped between the production import's KDS start and X41 Note.ESM end headings. Alcohol now reads active mapped PLUs throughout the sheet without an active shared POS catalog filter; Production keeps its existing exclusion. Verified six domestic wine PLUs with 25 sales, all 22 tests passed, and the manager confirmed correct operation. No API deployment or schema migration is needed.
 
 Remaining priorities focus on future alcohol reporting, order guide, and printing polish when a specific live-data issue or workflow request appears:
 
 1. Populate alcohol-only sales-to-inventory mappings from the POS Menu Items picker for variance reporting.
-2. Build alcohol variance calculation/output before starting any food variance workflow.
+2. Monitor the completed alcohol variance report with live data and refine it when a concrete issue is reported.
 3. Refine alcohol cost reporting behaviour only when live validation identifies a concrete issue.
 4. Continue alcohol order guide workflow review as needed.
 5. Finalize alcohol-specific printing and user workflow polish where needed.
@@ -1097,7 +1098,7 @@ All implemented features through version 4.2.0 are considered working as intende
 
 Primary unfinished areas:
 
-- Food production-to-inventory variance later, after alcohol variance is working
+- Food production-to-inventory variance later, after multi-location and infrastructure priorities are settled
 - Recipe costing
 - Yield tracking
 - Advanced reporting
@@ -1110,16 +1111,15 @@ Primary unfinished areas:
 ## Immediate
 
 1. Continue monitoring daily Cloud API use on the configured work PCs.
-2. Build alcohol variance calculation/output inside the Alcohol Department after operational workflows are stable.
+2. Prepare the desktop update containing the validated alcohol wine usage import fix.
 3. Continue advanced reporting and workflow polish.
 
 ## Medium Term
 
-1. Finish alcohol sales-to-inventory mappings.
-2. Build alcohol theoretical usage calculations.
-3. Build alcohol variance reporting.
-4. Resume food production item to inventory product mappings after alcohol variance is working.
-5. Add recipe and yield management.
+1. Review and maintain alcohol sales-to-inventory mappings as POS items change.
+2. Refine completed alcohol variance reporting when live use identifies a specific need.
+3. Resume food production item to inventory product mappings after multi-location and infrastructure priorities are settled.
+4. Add recipe and yield management.
 
 ## Long Term
 

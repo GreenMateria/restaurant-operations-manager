@@ -40,6 +40,26 @@ class PosMenuItemImportServiceTest {
     }
 
     @Test
+    void alcoholMappingsReadWineInsideSkippedProductionSectionWithoutCatalogEntry() throws Exception {
+        Path report = writeReport(true);
+        try (Workbook workbook = new XSSFWorkbook(Files.newInputStream(report))) {
+            addItem(workbook.getSheetAt(0), 43, "10z Pel Merlot.ESM", 6530063, 7);
+            try (OutputStream output = Files.newOutputStream(report)) {
+                workbook.write(output);
+            }
+        }
+
+        var usage = new ProductionUsageReportImportService()
+                .importUsageReport(report.toFile(), Set.of(" 6530063 ", "300"));
+
+        assertEquals(2, usage.getTotalRows());
+        assertEquals(11.0, usage.getWeeklyQuantitySold());
+        var wine = usage.getLines().stream()
+                .filter(line -> line.getPosSku().equals("6530063")).findFirst().orElseThrow();
+        assertEquals(7.0, wine.getWeeklyQuantitySold());
+    }
+
+    @Test
     void refusesCleanupWhenKdsEndHeadingIsMissing() throws Exception {
         RuntimeException error = assertThrows(RuntimeException.class,
                 () -> new PosMenuItemImportService().findKdsSectionPosSkus(writeReport(false).toFile()));

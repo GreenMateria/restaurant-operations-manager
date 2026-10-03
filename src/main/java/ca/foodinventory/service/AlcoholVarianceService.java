@@ -43,9 +43,12 @@ public class AlcoholVarianceService {
             String category,
             File usageReportFile
     ) {
-        ImportedUsageReportSummary usageSummary =
-                usageImportService.importUsageReport(usageReportFile);
         List<AlcoholSalesMapping> mappings = loadActiveMappings(category);
+        ImportedUsageReportSummary usageSummary = usageImportService.importUsageReport(
+                usageReportFile,
+                mappings.stream().map(AlcoholSalesMapping::getPosSku)
+                        .collect(java.util.stream.Collectors.toSet())
+        );
         Map<Integer, AlcoholProductProfile> profilesByProductId = loadProfiles();
         Map<String, Double> soldByPosSku = weeklySoldByPosSku(usageSummary);
         Map<Integer, ProductSalesUsage> salesUsageByProduct =

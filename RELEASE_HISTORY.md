@@ -4,6 +4,13 @@
 
 Date: 2026-09-13
 
+### Alcohol Variance Import Fix (2026-10-03)
+
+- Fixed wine sold quantities appearing as zero when wine rows fall between the production import's KDS start and X41 Note.ESM end headings.
+- Alcohol Variance now reads the selected usage report using active Alcohol Sales Mapping PLUs throughout the sheet, without requiring those PLUs to remain active in the shared POS catalog. Production retains its existing KDS exclusion.
+- Verified the supplied sales mix file returns 25 sales across six domestic wine PLUs; all 22 automated tests passed, and the manager confirmed the variance report works correctly.
+- This is a desktop import fix; no API deployment or database migration is required.
+
 ### Shared POS Catalog
 
 - Updated KDS exclusion and cleanup to end at X41 Note.ESM; cleanup refuses deletion if that end heading is missing after the KDS start.

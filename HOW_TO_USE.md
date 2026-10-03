@@ -409,7 +409,15 @@ Catalog import skips rows between **KDS DNU.ESM** and **X41 Note.ESM**, regardle
 
 ## ALCOHOL 10 - Alcohol Variance Report
 
-The Alcohol Department includes the Variance Report entry point for the next reporting step. The current development build has the setup shell in place; final variance calculation/output is still pending before stable release.
+1. Open **Alcohol Department** -> **Variance Report**.
+2. Choose completed opening and closing alcohol counts for the period.
+3. Select **All Alcohol** or an individual category.
+4. Click **Choose POS Usage Report** and select the sales mix `.xlsx` file for the same period. You can select the same file used by Production; importing it in Production first is not required.
+5. Click **Generate** and review Actual Usage, Sold Usage, Variance, and Variance $.
+
+Actual usage is opening inventory plus period purchases minus closing inventory. Sold usage uses weekly quantities from the selected report and active Alcohol Sales Mappings, with bottle/keg portion conversion where configured. Variance is actual usage minus sold usage; positive values display red and negative values display green. Variance dollars use the closing count's valuation average cost.
+
+Alcohol reads its mapped PLUs throughout the report, including wine rows inside the section Production excludes. The shared POS catalog is a picker for mapping setup; an existing active alcohol mapping does not require an active catalog entry when generating the report.
 
 ---
 

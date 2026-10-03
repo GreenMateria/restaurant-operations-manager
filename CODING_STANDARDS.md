@@ -1,6 +1,6 @@
 # CODING_STANDARDS.md
 
-_Last Updated: Monday, September 7, 2026_
+_Last Updated: Saturday, October 3, 2026_
 
 This file documents coding conventions and project-specific implementation rules for the Food Inventory / StoreOps Manager application.
 
@@ -240,6 +240,8 @@ X41 Note.ESM
 ```
 
 Cloud-mode save/import workflows that can touch many rows should run off the JavaFX application thread and batch database writes where practical. This is especially important for inventory count saves/completions, Sales Period save/import, and Weekly Production usage report import/generation.
+
+Alcohol Variance uses the same XLSX quantity columns but selects PLUs from active Alcohol Sales Mappings. Do not apply Production's KDS section exclusion or active shared POS catalog filter to alcohol usage: valid wine rows can occur between the KDS start and X41 Note.ESM end headings. Keep Production's existing exclusion behavior when changing the shared parser.
 
 ---
 

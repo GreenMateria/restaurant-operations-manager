@@ -3,6 +3,8 @@
 ## v4.2.0
 Date: 2026-09-13
 
+- Fixed Alcohol Variance showing zero wine sold usage when wine rows occur inside the section excluded by Production. Alcohol imports now read active mapped PLUs throughout the selected usage report. Validated on October 3, 2026 with the supplied sales mix file, 22 passing tests, and manager confirmation. No API deployment or database migration is required.
+
 - Rebranded the desktop application as StoreOps Manager with neutral app/window/update wording and a generic operations icon.
 - Updated release packaging metadata so new installers use StoreOps Manager naming and a neutral vendor value.
 - Added a maximized launch experience, polished card-based dashboard navigation, card-based section menus, an About panel, and Switch Store support.
@@ -266,3 +268,8 @@ Date: 2026-09-24 13:11
 Date: 2026-10-03 13:09
 
 - Modified PLU imports. Added effective date to wages, to not corrupe past reports
+
+## v4.1.4
+Date: 2026-10-03 15:03
+
+- Fixed Alcohol Varience reporting

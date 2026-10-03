@@ -18,6 +18,8 @@ All implemented features through v4.2.0 are considered working as intended unles
 
 Completed:
 
+-   On Saturday, October 3, 2026, fixed Alcohol Variance importing zero wine sales because the shared production importer skipped wine rows between the KDS start and X41 Note.ESM end headings. Alcohol import now selects active mapped PLUs throughout the file without filtering through the active shared POS catalog; Production keeps its existing exclusion. Verified six domestic wine PLUs with 25 sales in the supplied report, passed all 22 tests with `mvn clean test`, and received manager confirmation that the report works properly. The fix needs a desktop update only, with no API deployment or schema migration.
+
 -   Updated the KDS section end heading to X41 Note.ESM for POS catalog import, KDS cleanup, and usage-report parsing. Cleanup refuses deletion when a KDS start heading has no matching end heading.
 -   Shared POS item import and maintenance now lives under Administration → POS Catalog / PLUs. Production → POS Production Mappings retains profile assignments and usage-report import. Catalog XLSX parsing continues to use column A for item names and column B for PLUs.
 -   Multi-location rollout foundation started on Thursday, September 10, 2026.
