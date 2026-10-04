@@ -419,6 +419,8 @@ Actual usage is opening inventory plus period purchases minus closing inventory.
 
 Alcohol reads its mapped PLUs throughout the report, including wine rows inside the section Production excludes. The shared POS catalog is a picker for mapping setup; an existing active alcohol mapping does not require an active catalog entry when generating the report.
 
+Mapped products keep their Sales Mapping category even when sold usage is zero. For example, mapped wines remain under WINE regardless of RED/WHITE count-sheet sections. Products without an active mapping fall back to their count-sheet section.
+
 ---
 
 # SUPPLIES Section

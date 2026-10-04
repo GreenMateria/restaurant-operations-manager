@@ -94,6 +94,9 @@ public class AlcoholVarianceService {
             }
 
             ProductSalesUsage salesUsage = entry.getValue();
+            if (salesUsage.quantity() == 0) {
+                continue;
+            }
             if (!matchesCategory(category, salesUsage.category())) {
                 continue;
             }
@@ -183,10 +186,7 @@ public class AlcoholVarianceService {
 
         for (AlcoholSalesMapping mapping : mappings) {
             double quantitySold = soldByPosSku.getOrDefault(normalizeSku(mapping.getPosSku()), 0.0);
-            if (quantitySold == 0) {
-                continue;
-            }
-
+            // Retain the mapping category even when the report has no sales for this PLU.
             AlcoholProductProfile profile = profilesByProductId.get(mapping.getProductId());
             double mappedUsage = convertMappedUsageToInventoryQuantity(
                     quantitySold * mapping.getQuantityPerSale(),

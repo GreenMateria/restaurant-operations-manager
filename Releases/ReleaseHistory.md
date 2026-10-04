@@ -1,5 +1,9 @@
 # Release History
 
+## Unreleased
+
+- Fixed mapped wines with zero recorded sales appearing under RED/WHITE instead of WINE in Alcohol Variance. WINE filtering now includes those rows.
+
 ## v4.2.0
 Date: 2026-09-13
 
@@ -273,3 +277,8 @@ Date: 2026-10-03 13:09
 Date: 2026-10-03 15:03
 
 - Fixed Alcohol Varience reporting
+
+## v4.1.5
+Date: 2026-10-04 13:14
+
+- BUG FIX IN REPORTING

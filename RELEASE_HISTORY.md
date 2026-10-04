@@ -1,5 +1,9 @@
 # Release History
 
+## Unreleased
+
+- Fixed Alcohol Variance showing RED/WHITE count-sheet sections for mapped wines with zero recorded sales. Active mapping categories now remain available at zero sales, so these products appear under WINE in both All Alcohol and WINE reports.
+
 ## v4.2.0
 
 Date: 2026-09-13
