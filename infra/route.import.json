@@ -1,0 +1,10 @@
+[
+    {
+        "ResourceType":  "AWS::EC2::Route",
+        "LogicalResourceId":  "PublicRoute",
+        "ResourceIdentifier":  {
+                                   "CidrBlock":  "0.0.0.0/0",
+                                   "RouteTableId":  "rtb-0eafc1b83bb7e259c"
+                               }
+    }
+]

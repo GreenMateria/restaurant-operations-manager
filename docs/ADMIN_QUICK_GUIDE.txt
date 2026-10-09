@@ -1,0 +1,74 @@
+STOREOPS ADMIN GUIDE
+
+Normal restaurant operations do not require deployments.
+
+DESKTOP-ONLY CHANGE
+Screens, Excel imports, printing, or desktop calculations:
+  - Test the change.
+  - Run your existing Release.ps1 to publish the desktop update.
+  - No API deployment is needed.
+  - The recent wine import and category fixes are desktop-only changes.
+
+API CHANGE
+Server routes, cloud queries, or server-side calculations:
+  - Click Deploy API (usual update).
+  - Review the task window and deployment prompts.
+  - Verify the affected workflow after deployment.
+  - Publish a desktop release too if desktop code changed.
+
+DATABASE SCHEMA CHANGE
+New tables, columns, or constraints:
+  - Follow the migration instructions prepared for that specific change.
+  - Use the relevant advanced maintenance action when instructed.
+  - Deploy the matching API update in the order specified for the change.
+  - Routine releases do not require schema maintenance.
+
+AWS INFRASTRUCTURE CHANGE
+Database settings, network rules, monitoring, or other AWS resource configuration:
+  - Have the relevant infra template updated and reviewed.
+  - Select Plan infrastructure changes in the maintenance picker, then click
+    Run advanced maintenance. Review the proposed resources in its task window.
+  - Close the plan task window.
+  - Select Apply reviewed infrastructure changes and run it. Type APPLY only
+    after reviewing the plan. The tool refuses removals and replacements.
+  - Use AWS infrastructure status to check results.
+  - No infrastructure plan/apply is needed for ordinary desktop or API releases.
+
+NEW STORE
+  - Click Refresh stores, then Add a new store.
+  - Enter the store code, name, and login username.
+  - Enter the RDS administrator password and new store password when prompted.
+  - Finish and close the task window, then Refresh stores again.
+  - Select the new store by name.
+  - If needed, click Copy setup to selected store and choose your live store
+    as the source. The target must have no existing setup data.
+  - Review the source and target, then type COPY in the task window.
+
+EXISTING STORE
+  - Click Refresh stores and select the store by name.
+  - Choose Edit selected store or Reset selected store password.
+  - Password reset changes the store login password, not System or Labour Setup.
+  - Finish and close the task window, then Refresh stores after changes.
+
+DEPLOYMENT CONFIGURATION
+  - Use API guided configuration only when deliberately changing SAM settings
+    or configuring deployment for the first time.
+  - Use Deploy API (usual update) for normal API updates.
+  - SAM stores deployment settings separately from the launcher Settings form.
+  - Launcher Settings control store administration and infrastructure status.
+
+CREDENTIALS AND SAVED ENTRIES
+  - The launcher remembers stack, region, usernames, and tool paths.
+  - AWS CLI and SAM reuse their existing configuration. AWS sign-in may need
+    renewing if credentials expire.
+  - Routine API deployment now references a managed Secrets Manager secret;
+    it does not require re-entering the API key or database application password.
+  - The launcher does not save passwords. Store administration still asks for
+    the RDS administrator password. Store creation/reset asks for a store password.
+  - Settings versions and activity history are retained between runs.
+
+AFTER EVERY TASK
+  - Read the result and any errors in the task window.
+  - Press Enter to close it when finished.
+  - Refresh stores if store details changed.
+  - Do not run advanced maintenance for each routine deployment.

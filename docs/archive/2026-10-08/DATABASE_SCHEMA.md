@@ -1,6 +1,6 @@
 # DATABASE_SCHEMA.md
 
-_Last Updated: Friday, October 2, 2026_
+_Last Updated: Thursday, October 8, 2026_
 
 This file documents the current database structure for the Food Inventory / StoreOps Manager application.
 
@@ -231,6 +231,7 @@ Notes:
 
 - Invoice duplicate handling relies on `invoice_number`.
 - `merchandise_subtotal` is the inventory-cost portion of the invoice.
+- For finalized GFS LineItemList imports, `imported_total` stores the original CSV merchandise subtotal, not a supplier header/grand total. Invoice number/date and final invoice total are supplied manually during reconciliation.
 - `freight`, `hst`, and other non-inventory charges are excluded from valuation logic.
 
 ---
@@ -254,6 +255,9 @@ Notes:
 
 - `base_quantity` is used for usage and valuation calculations.
 - GFS import calculates base quantity from cases and splits.
+- Finalized GFS import uses `Current Quantity` and `Split Item Indicator`; `base_quantity = case quantity × products.conversion_factor + split quantity`. Pack/conversion settings come from product setup, not the finalized CSV.
+- `extended_cost` comes directly from the finalized CSV's billed Line Total, excluding item tax. Zero-quantity/zero-value rows are skipped.
+- Weighted rows derive case/each cost from billed line total divided by received quantity, rather than treating the supplier's per-pound price as case cost. Actual delivered weight is absent, so converted quantity and base-unit cost remain approximate when case weight varies.
 - `case_cost` remains the stored purchased-unit cost field.
 - When manual invoices use split / each pricing without a case cost, product fallback valuation cost is derived from the each cost and the product conversion factor rather than overwriting `last_case_cost` with zero.
 
@@ -275,6 +279,7 @@ Notes:
 
 - Used for HST, Freight, Bottle Deposit, Keg Deposit, and similar non-inventory charges.
 - These rows are saved for invoice balancing and display, but are not part of inventory valuation.
+- Food import requires manual paper HST and shipping at reconciliation. Shipping is persisted as Freight for compatibility; CSV Item Tax is not automatically saved as HST. Save requires merchandise plus adjustments to equal the manually entered paper grand total.
 - For alcohol invoices, exact paper HST and exact paper bottle deposit should be saved here as the accounting values.
 - Any remaining reconciliation difference should be absorbed into merchandise line allocation rather than changing the saved HST amount.
 

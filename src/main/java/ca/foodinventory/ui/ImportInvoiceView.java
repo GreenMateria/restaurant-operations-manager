@@ -50,7 +50,7 @@ public class ImportInvoiceView {
         Label title = new Label("Import Invoice");
         title.getStyleClass().add("page-title");
 
-        Button chooseFileButton = new Button("Choose GFS CSV");
+        Button chooseFileButton = new Button("Choose Finalized Invoice CSV");
         chooseFileButton.getStyleClass().add("primary-button");
         chooseFileButton.setOnAction(e -> chooseCsvFile());
 
@@ -85,11 +85,11 @@ public class ImportInvoiceView {
         HBox summaryBar = new HBox(20);
 
         summaryBar.getChildren().addAll(
-                new Label("Imported Total:"),
+                new Label("Imported Merchandise:"),
                 importedTotalValue,
-                new Label("Preview Total:"),
+                new Label("Current Merchandise:"),
                 calculatedTotalValue,
-                new Label("Difference:"),
+                new Label("Edits to Merchandise:"),
                 differenceValue
         );
 
@@ -191,7 +191,7 @@ public class ImportInvoiceView {
 
     private void chooseCsvFile() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Choose GFS CSV Invoice");
+        fileChooser.setTitle("Choose Finalized GFS Invoice — LineItemList CSV");
         fileChooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("CSV Files", "*.csv")
         );
@@ -202,7 +202,12 @@ public class ImportInvoiceView {
             return;
         }
 
-        currentInvoice = importService.readInvoice(file);
+        try {
+            currentInvoice = importService.readInvoice(file);
+        } catch (RuntimeException e) {
+            showAlert(Alert.AlertType.ERROR, "Invoice Import Failed", e.getMessage());
+            return;
+        }
         currentLines = currentInvoice.getLines();
 
         table.setItems(FXCollections.observableArrayList(currentLines));
@@ -634,7 +639,9 @@ public class ImportInvoiceView {
             calculatedGrandTotalLabel.setText(formatMoney(calculatedGrandTotal));
             differenceLabel.setText(formatMoney(difference));
 
-            boolean balanced = !paperInvoiceTotalField.getText().isBlank()
+            boolean validAmounts = isValidMoney(paperInvoiceTotalField.getText())
+                    && adjustmentRows.stream().allMatch(row -> isValidMoney(row.amountField().getText()));
+            boolean balanced = validAmounts
                     && difference.compareTo(BigDecimal.ZERO) == 0;
             boolean requiredFieldsPresent = !invoiceNumberField.getText().isBlank()
                     && !invoiceDateField.getText().isBlank();
@@ -648,7 +655,7 @@ public class ImportInvoiceView {
             saveButton.setDisable(!(balanced && requiredFieldsPresent));
         };
 
-        addAdjustmentRow(adjustmentsBox, adjustmentRows, "Freight", BigDecimal.ZERO, refreshTotals);
+        addAdjustmentRow(adjustmentsBox, adjustmentRows, "Shipping", BigDecimal.ZERO, refreshTotals);
         addAdjustmentRow(adjustmentsBox, adjustmentRows, "HST", BigDecimal.ZERO, refreshTotals);
 
         Button addAdjustmentButton = new Button("Add Adjustment");
@@ -672,13 +679,13 @@ public class ImportInvoiceView {
         GridPane totalsGrid = new GridPane();
         totalsGrid.setHgap(12);
         totalsGrid.setVgap(10);
-        totalsGrid.add(new Label("CSV Imported Total:"), 0, 0);
+        totalsGrid.add(new Label("Imported Merchandise:"), 0, 0);
         totalsGrid.add(importedTotalLabel, 1, 0);
         totalsGrid.add(new Label("Merchandise Subtotal:"), 0, 1);
         totalsGrid.add(merchandiseSubtotalLabel, 1, 1);
         totalsGrid.add(new Label("Calculated Grand Total:"), 0, 2);
         totalsGrid.add(calculatedGrandTotalLabel, 1, 2);
-        totalsGrid.add(new Label("Paper Invoice Total:"), 0, 3);
+        totalsGrid.add(new Label("Paper Invoice Grand Total:"), 0, 3);
         totalsGrid.add(paperInvoiceTotalField, 1, 3);
         totalsGrid.add(new Label("Difference:"), 0, 4);
         totalsGrid.add(differenceLabel, 1, 4);
@@ -691,6 +698,7 @@ public class ImportInvoiceView {
                 new Separator(),
                 new Label("Merchandise"),
                 new Label("The merchandise subtotal is the only amount used for inventory valuation and cost reporting."),
+                new Label("Enter shipping, HST, and the grand total from the paper invoice. Save is enabled when they balance."),
                 new Separator(),
                 adjustmentsHeading,
                 adjustmentsBox,
@@ -712,6 +720,9 @@ public class ImportInvoiceView {
             int displayOrder = 10;
             for (AdjustmentRow row : adjustmentRows) {
                 String description = row.descriptionField().getText().trim();
+                if (description.equalsIgnoreCase("Shipping")) {
+                    description = "Freight";
+                }
                 BigDecimal amount = parseMoney(row.amountField().getText());
                 if (!description.isBlank()) {
                     adjustments.add(new InvoiceAdjustment(description, amount, displayOrder));
@@ -801,10 +812,15 @@ public class ImportInvoiceView {
         calculatedTotalValue.setText(formatMoney(calculatedTotal));
         differenceValue.setText(formatMoney(difference));
 
-        if (difference.compareTo(BigDecimal.ZERO) == 0) {
-            differenceValue.setStyle("-fx-text-fill: lightgreen; -fx-font-weight: bold;");
-        } else {
-            differenceValue.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
+        differenceValue.setStyle("-fx-font-weight: bold;");
+    }
+
+    private boolean isValidMoney(String value) {
+        try {
+            new BigDecimal(value.replace("$", "").replace(",", "").trim());
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 

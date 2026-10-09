@@ -1,0 +1,134 @@
+{
+    "Description":  "Retained adoption of the existing StoreOps VPC baseline; preserves admin and Lambda access.",
+    "AWSTemplateFormatVersion":  "2010-09-09",
+    "Resources":  {
+                      "Network":  {
+                                      "Properties":  {
+                                                         "InstanceTenancy":  "default",
+                                                         "EnableDnsSupport":  true,
+                                                         "EnableDnsHostnames":  true,
+                                                         "CidrBlock":  "172.31.0.0/16"
+                                                     },
+                                      "DeletionPolicy":  "Retain",
+                                      "Type":  "AWS::EC2::VPC",
+                                      "UpdateReplacePolicy":  "Retain"
+                                  },
+                      "Subnetcacentral1a":  {
+                                                "Properties":  {
+                                                                   "AvailabilityZone":  "ca-central-1a",
+                                                                   "MapPublicIpOnLaunch":  true,
+                                                                   "AssignIpv6AddressOnCreation":  false,
+                                                                   "VpcId":  {
+                                                                                 "Ref":  "Network"
+                                                                             },
+                                                                   "CidrBlock":  "172.31.16.0/20"
+                                                               },
+                                                "DeletionPolicy":  "Retain",
+                                                "Type":  "AWS::EC2::Subnet",
+                                                "UpdateReplacePolicy":  "Retain"
+                                            },
+                      "Subnetcacentral1b":  {
+                                                "Properties":  {
+                                                                   "AvailabilityZone":  "ca-central-1b",
+                                                                   "MapPublicIpOnLaunch":  true,
+                                                                   "AssignIpv6AddressOnCreation":  false,
+                                                                   "VpcId":  {
+                                                                                 "Ref":  "Network"
+                                                                             },
+                                                                   "CidrBlock":  "172.31.0.0/20"
+                                                               },
+                                                "DeletionPolicy":  "Retain",
+                                                "Type":  "AWS::EC2::Subnet",
+                                                "UpdateReplacePolicy":  "Retain"
+                                            },
+                      "Subnetcacentral1d":  {
+                                                "Properties":  {
+                                                                   "AvailabilityZone":  "ca-central-1d",
+                                                                   "MapPublicIpOnLaunch":  true,
+                                                                   "AssignIpv6AddressOnCreation":  false,
+                                                                   "VpcId":  {
+                                                                                 "Ref":  "Network"
+                                                                             },
+                                                                   "CidrBlock":  "172.31.32.0/20"
+                                                               },
+                                                "DeletionPolicy":  "Retain",
+                                                "Type":  "AWS::EC2::Subnet",
+                                                "UpdateReplacePolicy":  "Retain"
+                                            },
+                      "DatabaseAccessGroup":  {
+                                                  "Properties":  {
+                                                                     "GroupName":  "default",
+                                                                     "SecurityGroupIngress":  [
+                                                                                                  {
+                                                                                                      "IpProtocol":  "tcp",
+                                                                                                      "ToPort":  5432,
+                                                                                                      "Description":  "ESM API Lambda access to PostgreSQL",
+                                                                                                      "FromPort":  5432,
+                                                                                                      "SourceSecurityGroupId":  "sg-09e7c97add719b857"
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "IpProtocol":  "tcp",
+                                                                                                      "ToPort":  5432,
+                                                                                                      "FromPort":  5432,
+                                                                                                      "CidrIp":  "72.38.209.198/32"
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "IpProtocol":  "tcp",
+                                                                                                      "ToPort":  5432,
+                                                                                                      "FromPort":  5432,
+                                                                                                      "CidrIp":  "24.141.234.197/32"
+                                                                                                  },
+                                                                                                  {
+                                                                                                      "IpProtocol":  "-1",
+                                                                                                      "SourceSecurityGroupId":  "sg-056216eb5a750ccfa"
+                                                                                                  }
+                                                                                              ],
+                                                                     "VpcId":  {
+                                                                                   "Ref":  "Network"
+                                                                               },
+                                                                     "GroupDescription":  "default VPC security group",
+                                                                     "SecurityGroupEgress":  [
+                                                                                                 {
+                                                                                                     "IpProtocol":  "-1",
+                                                                                                     "CidrIp":  "0.0.0.0/0"
+                                                                                                 }
+                                                                                             ]
+                                                                 },
+                                                  "DeletionPolicy":  "Retain",
+                                                  "Type":  "AWS::EC2::SecurityGroup",
+                                                  "UpdateReplacePolicy":  "Retain"
+                                              },
+                      "InternetGateway":  {
+                                              "Properties":  {
+
+                                                             },
+                                              "DeletionPolicy":  "Retain",
+                                              "Type":  "AWS::EC2::InternetGateway",
+                                              "UpdateReplacePolicy":  "Retain"
+                                          },
+                      "RouteTable":  {
+                                         "Properties":  {
+                                                            "VpcId":  {
+                                                                          "Ref":  "Network"
+                                                                      }
+                                                        },
+                                         "DeletionPolicy":  "Retain",
+                                         "Type":  "AWS::EC2::RouteTable",
+                                         "UpdateReplacePolicy":  "Retain"
+                                     },
+                      "PublicRoute":  {
+                                          "Properties":  {
+                                                             "RouteTableId":  {
+                                                                                  "Ref":  "RouteTable"
+                                                                              },
+                                                             "GatewayId":  {
+                                                                               "Ref":  "InternetGateway"
+                                                                           },
+                                                             "DestinationCidrBlock":  "0.0.0.0/0"
+                                                         },
+                                          "DeletionPolicy":  "Retain",
+                                          "Type":  "AWS::EC2::Route",
+                                          "UpdateReplacePolicy":  "Retain"
+                                      }
+                  }
+}

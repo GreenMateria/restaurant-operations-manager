@@ -133,6 +133,21 @@ public class LabourApiClient {
         );
     }
 
+    public void saveNetSales(LocalDate date, BigDecimal amount) {
+        saveSalesAmount("net-sales", date, amount);
+    }
+
+    public void saveTipPool(LocalDate date, BigDecimal amount) {
+        saveSalesAmount("tip-pool", date, amount);
+    }
+
+    private void saveSalesAmount(String scope, LocalDate date, BigDecimal amount) {
+        put("/labour/" + scope,
+                "{\"workDate\":" + jsonString(date.toString())
+                        + ",\"amount\":" + money(amount) + "}",
+                "save " + scope);
+    }
+
     private String get(String path, String action) {
         HttpResponse<String> response = send(requestBuilder(path).GET().build(), action);
         requireStatus(response, 200, "Labour API");

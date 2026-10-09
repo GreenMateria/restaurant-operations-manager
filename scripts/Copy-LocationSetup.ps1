@@ -6,7 +6,8 @@ param(
     [string]$AdminUser = "postgres_admin",
     [string]$PsqlPath = "C:\Program Files\PostgreSQL\18\bin\psql.exe",
     [string]$AwsPath = "C:\Program Files\Amazon\AWSCLIV2\aws.exe",
-    [switch]$NoPause
+    [switch]$NoPause,
+    [switch]$RequireEmptyTarget
 )
 
 $ErrorActionPreference = "Stop"
@@ -115,6 +116,20 @@ BEGIN
 
     IF NOT EXISTS (SELECT 1 FROM locations WHERE id = $TargetLocationId) THEN
         RAISE EXCEPTION 'Target location % does not exist.', $TargetLocationId;
+    END IF;
+
+    IF $(if ($RequireEmptyTarget) { 'true' } else { 'false' }) AND (
+        EXISTS (SELECT 1 FROM products WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM inventory_count_templates WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM production_items WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM production_profiles WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM production_stations WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM pos_menu_items WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM labour_positions WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM labour_employees WHERE location_id = $TargetLocationId)
+        OR EXISTS (SELECT 1 FROM alcohol_sales_mappings WHERE location_id = $TargetLocationId)
+    ) THEN
+        RAISE EXCEPTION 'Target store already has setup data. No entries were changed. Use an empty target store.';
     END IF;
 END
 `$`$;
@@ -452,6 +467,7 @@ try {
         --dbname $database `
         --set ON_ERROR_STOP=1 `
         --command $sql
+    if ($LASTEXITCODE -ne 0) { throw 'Setup copy failed. Check the database error above.' }
 } finally {
     Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     Remove-Item Env:\PGSSLMODE -ErrorAction SilentlyContinue

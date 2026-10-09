@@ -13,12 +13,10 @@ fail_on_empty_changeset = false
 # Fill these placeholders only in your local copy or pass them on the command line.
 parameter_overrides = [
   "ApiStageName=prod",
-  "DbUrl=jdbc:postgresql://<host>:5432/postgres?sslmode=require",
-  "DbUser=<api-db-user>",
-  "DbPassword=<api-db-password>",
-  "ApiKey=<shared-api-key>",
+  "RuntimeSecretArn=<managed-secret-arn>",
   "LambdaSubnetIds=<subnet-id-1>,<subnet-id-2>",
   "LambdaSecurityGroupIds=<lambda-security-group-id>",
   "ReservedConcurrency=0",
-  "LambdaLogRetentionDays=30"
+  "LambdaLogRetentionDays=30",
+  "LocationAuthRequired=true"
 ]

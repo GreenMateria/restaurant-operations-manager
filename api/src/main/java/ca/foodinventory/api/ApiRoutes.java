@@ -1191,6 +1191,12 @@ class ApiRoutes {
                 labourRepository.saveWeeklyLabour(locationContext.id(), parseBody(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Weekly labour saved."));
             }
+            if ("PUT".equalsIgnoreCase(method)
+                    && ("/labour/net-sales".equals(path) || "/labour/tip-pool".equals(path))) {
+                labourRepository.saveSalesAmount(locationContext.id(), parseBody(body),
+                        "/labour/tip-pool".equals(path));
+                return ApiResult.json(200, Json.object("status", "ok", "message", "Sales amount saved."));
+            }
             String dailyDate = pathDate(path, "/labour/daily/");
             if ("GET".equalsIgnoreCase(method) && dailyDate != null) {
                 return ApiResult.json(200, labourRepository.dailyLabourJson(locationContext.id(), dailyDate));

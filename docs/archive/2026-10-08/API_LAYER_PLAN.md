@@ -1,7 +1,7 @@
 # API Layer Plan
 
 _Created: Tuesday, September 1, 2026_
-_Last Updated: Friday, September 11, 2026_
+_Last Updated: Thursday, October 8, 2026_
 
 This document plans the next architecture step for StoreOps Manager: moving database credentials off client PCs by putting an authenticated API layer between the desktop application and AWS RDS PostgreSQL.
 
@@ -327,6 +327,8 @@ Started on Tuesday, September 1, 2026:
 - Food Department, Alcohol Department, Supplies Department, Production, Reporting/Sales, Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, Alcohol Variance, and product support gaps are now API-backed in the development build.
 
 Current Food implementation status:
+
+- Finalized invoice import (October 8, 2026): desktop parsing uses GFS LineItemList received quantities and billed line totals, skips zero-delivery/zero-value rows, and handles weighted billed costs. Manual paper shipping/HST/grand-total reconciliation precedes the existing API save. Product conversions determine base quantities; actual delivered weight is not supplied. Manager testing passed. No API/schema change is required.
 
 - Food Products: API-backed load, add/edit non-alcohol product fields, deactivate, product purchase history, GFS product guide import persistence, supplier SKU alias save, and imported-invoice SKU/alias resolution are implemented. GFS CSV parsing remains client-side.
 - Food Import Invoice and Manual Invoice: duplicate check, overwrite delete, and save are implemented locally through the API. Food Import Invoice now validates unknown SKUs through the API in Cloud API mode, writes new supplier SKU aliases to the signed-in store, and creates missing products through the API before saving.

@@ -11,6 +11,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApiRoutesTest {
 
+    @Test
+    void independentSalesRoutesRejectInvalidAmountsBeforeDatabaseAccess() {
+        System.setProperty("foodinventory.api.key", "secret");
+        System.setProperty("foodinventory.api.locationAuthRequired", "false");
+        for (String path : List.of("/labour/net-sales", "/labour/tip-pool")) {
+            for (String body : List.of(
+                    "{\"workDate\":\"2026-10-05\",\"amount\":-1}",
+                    "{\"workDate\":\"2026-10-05\"}",
+                    "{\"workDate\":\"2026-10-05\",\"amount\":null}")) {
+                ApiRoutes.ApiResult result = new ApiRoutes().handle("PUT", path,
+                        Map.of("x-api-key", List.of("secret")), body);
+                assertEquals(400, result.statusCode());
+            }
+        }
+    }
+
+    @Test
+    void independentSalesRoutesRequireStoreAuthentication() {
+        System.setProperty("foodinventory.api.key", "secret");
+        System.setProperty("foodinventory.api.locationAuthRequired", "true");
+        for (String path : List.of("/labour/net-sales", "/labour/tip-pool")) {
+            assertEquals(401, new ApiRoutes().handle("PUT", path,
+                    Map.of("x-api-key", List.of("secret")),
+                    "{\"workDate\":\"2026-10-05\",\"amount\":300}").statusCode());
+        }
+    }
+
     @AfterEach
     void clearProperties() {
         System.clearProperty("foodinventory.api.key");

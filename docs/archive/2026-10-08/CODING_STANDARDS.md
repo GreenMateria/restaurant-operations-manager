@@ -1,6 +1,6 @@
 # CODING_STANDARDS.md
 
-_Last Updated: Saturday, October 3, 2026_
+_Last Updated: Thursday, October 8, 2026_
 
 This file documents coding conventions and project-specific implementation rules for the Food Inventory / StoreOps Manager application.
 
@@ -185,18 +185,21 @@ Runtime DB path is under:
 
 ## GFS Invoice CSV
 
-Preserve current mapping unless explicitly changed.
+Use the finalized GFS `LineItemList.csv`, matched by column headers. Delivery-order H/P exports are rejected with a clear message.
 
-Known mapping:
-
-- Column B = SKU
-- Column C = Case Qty
-- Column D = Split Qty
-- Column F = Pack Size
-- Column H = Description
-- Column K = Case Cost
-- Column L = Each Cost
-- Header row contains invoice/date/total data.
+- `Item Code` = SKU (preserve leading zeros).
+- `Item Description` = description.
+- `Current Quantity` = received cases or splits, selected by `Split Item Indicator` (Y/N).
+- `Line Total` = authoritative merchandise extended cost, excluding item tax.
+- `Unit Price` = purchased unit cost for normal items.
+- `Unit of Measure` Y marks weighted items; derive billed case/each cost from line total / received quantity rather than storing the per-pound price as case cost.
+- Skip zero-quantity, zero-value rows. Reject invalid numbers and unsupported indicators instead of silently importing zero.
+- Pack size and base-unit conversions come from product setup. Actual delivered weight is not supplied in this export.
+- Invoice number/date, shipping, HST, and paper grand total are entered manually at save. Shipping is stored as the existing Freight adjustment for API/database compatibility.
+- Save requires merchandise plus adjustments to equal the paper grand total. The imported total now means original merchandise subtotal, not supplier grand total.
+- Preview wording is Imported Merchandise, Current Merchandise, and Edits to Merchandise; the edit comparison is informational and must not imply an unbalanced paper invoice.
+- Exact billed cost is preserved for weighted items, while base-unit quantity remains `cases × product conversion factor + splits`. Do not imply that the export provides measured delivered weight.
+- Regression coverage verifies billed weighted cost, zero-delivery exclusion, split quantities, SKU leading zeros, invalid numeric rejection, and delivery-order format rejection. The supplied finalized invoice was also verified read-only and accepted in manager testing on October 8, 2026.
 
 Important:
 

@@ -390,9 +390,9 @@ public class TipPoolView extends BorderPane {
             protected Void call() {
                 for (DailyLabourData data : dataByDate.values()) {
                     if (DatabaseManager.isApiDatabase()) {
-                        apiClient.saveDailyLabour(data);
+                        apiClient.saveTipPool(data.workDate(), data.sales().getTipOutPool());
                     } else {
-                        labourDailyEntryDao.saveDay(data);
+                        labourDailyEntryDao.saveTipPool(data.workDate(), data.sales().getTipOutPool());
                     }
                 }
                 return null;

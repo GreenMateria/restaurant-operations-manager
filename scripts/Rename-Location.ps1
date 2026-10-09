@@ -119,6 +119,7 @@ try {
         --dbname $database `
         --set ON_ERROR_STOP=1 `
         --command $sql
+    if ($LASTEXITCODE -ne 0) { throw 'Store details were not updated. Check the database error above.' }
 } finally {
     Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     Remove-Item Env:\PGSSLMODE -ErrorAction SilentlyContinue

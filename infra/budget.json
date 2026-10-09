@@ -1,0 +1,10 @@
+{
+  "AccountId": "863819358995",
+  "Budget": {
+    "BudgetName": "My Monthly Cost Budget",
+    "BudgetLimit": { "Amount": "30.0", "Unit": "USD" },
+    "BudgetType": "COST",
+    "TimeUnit": "MONTHLY",
+    "TimePeriod": { "Start": "2026-09-01T00:00:00Z", "End": "2087-06-15T00:00:00Z" }
+  }
+}

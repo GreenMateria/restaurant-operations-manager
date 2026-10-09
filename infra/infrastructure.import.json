@@ -1,0 +1,30 @@
+[
+    {
+        "ResourceType":  "AWS::IAM::Role",
+        "LogicalResourceId":  "DatabaseMonitoringRole",
+        "ResourceIdentifier":  {
+                                   "RoleName":  "rds-monitoring-role"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::RDS::DBSubnetGroup",
+        "LogicalResourceId":  "DatabaseSubnetGroup",
+        "ResourceIdentifier":  {
+                                   "DBSubnetGroupName":  "default-vpc-0b41e3692165238ed"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::EC2::SecurityGroup",
+        "LogicalResourceId":  "ApiSecurityGroup",
+        "ResourceIdentifier":  {
+                                   "Id":  "sg-09e7c97add719b857"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::RDS::DBInstance",
+        "LogicalResourceId":  "Database",
+        "ResourceIdentifier":  {
+                                   "DBInstanceIdentifier":  "esm-operations-db"
+                               }
+    }
+]

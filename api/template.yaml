@@ -1,30 +1,17 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: StoreOps Manager API proof for API Gateway HTTP API, Lambda, and AWS RDS PostgreSQL.
+Description: StoreOps Manager production API backed by managed networking, RDS, and Secrets Manager.
 
 Parameters:
   ApiStageName:
     Type: String
     Default: prod
-  DbUrl:
+  RuntimeSecretArn:
     Type: String
-    NoEcho: true
-    Description: JDBC URL for AWS RDS PostgreSQL.
-  DbUser:
-    Type: String
-    NoEcho: true
-    Description: PostgreSQL application user.
-  DbPassword:
-    Type: String
-    NoEcho: true
-    Description: PostgreSQL application password.
-  ApiKey:
-    Type: String
-    NoEcho: true
-    Description: Shared API key required for protected endpoints.
+    Description: ARN of the managed StoreOps API credentials secret.
   LocationAuthRequired:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues:
       - 'true'
       - 'false'
@@ -66,10 +53,10 @@ Globals:
       - x86_64
     Environment:
       Variables:
-        FOOD_INVENTORY_API_DB_URL: !Ref DbUrl
-        FOOD_INVENTORY_API_DB_USER: !Ref DbUser
-        FOOD_INVENTORY_API_DB_PASSWORD: !Ref DbPassword
-        FOOD_INVENTORY_API_KEY: !Ref ApiKey
+        FOOD_INVENTORY_API_DB_URL: !Sub '{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:dbUrl}}'
+        FOOD_INVENTORY_API_DB_USER: !Sub '{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:dbUser}}'
+        FOOD_INVENTORY_API_DB_PASSWORD: !Sub '{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:dbPassword}}'
+        FOOD_INVENTORY_API_KEY: !Sub '{{resolve:secretsmanager:${RuntimeSecretArn}:SecretString:apiKey}}'
         FOOD_INVENTORY_API_ERROR_DETAILS: 'false'
         FOOD_INVENTORY_API_LOCATION_AUTH_REQUIRED: !Ref LocationAuthRequired
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed stale Daily Labour Cost saves overwriting newer Tip Pool amounts. Save Net Sales and Save Tip Pool now update only their respective amount, preserving other amounts, saved hours, and finalization. All 28 desktop tests and 11 API tests passed, including stale-screen regression coverage. No schema migration. Older desktop versions retain the previous full-day save behavior.
+- Operator deployed the updated API through Admin Tools on October 9, 2026. Verified `esm-operations-api` at UPDATE_COMPLETE, Lambda Active with Successful update status, and API health OK at approximately 11:30 a.m. Toronto. Live authenticated amount saves were not exercised. Updated desktop publication/installation remains pending verification; API deployment alone does not update client behavior.
+
+- Consolidated current technical documentation into PROJECT_REFERENCE.md with a contents list, schema, implementation standards, API instructions, infrastructure/recovery, status, and priorities. Superseded documents are preserved under docs/archive/2026-10-08; manager/operator guides and release histories retain their separate purposes.
+- Changed Food invoice import to finalized GFS LineItemList CSV files, using actual received quantities and billed line totals. Invoice number/date, shipping, HST, and paper grand total are entered at save; saving requires exact reconciliation. Clarified preview merchandise labels and rejected delivery-order exports.
+- Verified the supplied finalized invoice balances at $4,843.04 merchandise + $25.50 shipping + $46.14 HST = $4,914.68, with undelivered peppers skipped and weighted beef imported at $91.56. Manager confirmed the workflow on October 8, 2026; all 27 desktop tests passed.
+- Documented product-based quantity conversion and the accepted variable-weight limitation: billed cost is exact, but converted weight and cost per lb/kg are approximate when actual weight differs from configured case weight. No API deployment or database migration is required.
 - Fixed Alcohol Variance showing RED/WHITE count-sheet sections for mapped wines with zero recorded sales. Active mapping categories now remain available at zero sales, so these products appear under WINE in both All Alcohol and WINE reports.
 
 ## v4.2.0

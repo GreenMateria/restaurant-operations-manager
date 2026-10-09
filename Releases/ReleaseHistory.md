@@ -1,5 +1,12 @@
 # Release History
 
+## Unreleased — Finalized Food Invoice Import
+
+- Use finalized GFS LineItemList CSV received quantities and actual billed line totals instead of delivery-order exports.
+- Enter invoice number/date, shipping, HST, and paper grand total manually when saving; merchandise plus adjustments must balance exactly.
+- Skip zero-delivery/zero-value items and import weighted billed costs without manual overrides. Product setup provides quantity conversions; actual delivered weight remains unavailable in the export.
+- Clarified preview merchandise labels. Manager confirmed the workflow on October 8, 2026; 27 desktop tests passed. Desktop update only, with no API deployment or migration required.
+
 ## Unreleased
 
 - Fixed mapped wines with zero recorded sales appearing under RED/WHITE instead of WINE in Alcohol Variance. WINE filtering now includes those rows.
@@ -282,3 +289,8 @@ Date: 2026-10-03 15:03
 Date: 2026-10-04 13:14
 
 - BUG FIX IN REPORTING
+
+## v4.1.6
+Date: 2026-10-09 11:38
+
+- Fixed Save feature for Net Sales. Fixed invoice importing

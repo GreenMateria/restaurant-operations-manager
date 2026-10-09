@@ -1,0 +1,18 @@
+{
+  "AccountId": "863819358995",
+  "Region": "ca-central-1",
+  "Stacks": [
+    { "Name": "esm-operations-network", "Template": "network.template.json" },
+    { "Name": "esm-operations-infrastructure", "Template": "infrastructure.template.json" },
+    { "Name": "esm-operations-secrets", "Template": "secrets.template.json" },
+    { "Name": "esm-operations-monitoring", "Template": "monitoring.template.json" }
+  ],
+  "ApiStack": "esm-operations-api",
+  "ApiTemplate": "api/template.yaml",
+  "EnvironmentModel": "One production deployment; live and test stores are isolated by location in the same application/database. Test store is not a separate infrastructure environment.",
+  "ExternalAccountResources": [
+    "AWS-managed RDS KMS key, default PostgreSQL parameter/option groups",
+    "Default VPC gateway attachment, DHCP/default ACL and implicit main-route associations",
+    "AWS CLI operator identity/credentials and AWS-managed SAM deployment bucket stack"
+  ]
+}

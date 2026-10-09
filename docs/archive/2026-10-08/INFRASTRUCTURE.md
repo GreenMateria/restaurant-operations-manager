@@ -2,6 +2,21 @@
 
 _Created: Sunday, September 6, 2026_
 
+_Current baseline verified and migrated: Sunday, October 4, 2026_
+
+## Current IaC State
+
+The existing application infrastructure has been adopted in place. The live database, API endpoint, and live/test stores were preserved. Current definitions are `api/template.yaml` and the templates under `infra/`; `infra/environments.json` records the account, region, and stacks.
+
+- `esm-operations-api`: API Gateway, Lambda, execution role, invoke permissions, and log group.
+- `esm-operations-network`: existing VPC, three subnets, database access security group, internet gateway, main route table, and internet route.
+- `esm-operations-infrastructure`: existing RDS instance, database subnet group, Lambda security group, and RDS monitoring role. RDS retains automated backups for seven days and has deletion protection; a stack policy forbids database replacement/deletion.
+- `esm-operations-secrets`: retained Secrets Manager secret with the existing API key and restricted database credentials. The API deployment passes only its ARN. Existing credential values were preserved.
+- `esm-operations-monitoring`: database storage/CPU and unhandled Lambda error alarms. No notification subscription is enabled; alarms are visible in CloudWatch and the admin status view.
+- `infra/budget.json`: declarative definition of the existing USD 30 monthly budget. The deployment tool updates its limit in place when needed, preserving existing notifications. The legacy Budget resource is not imported into CloudFormation.
+
+Open **Admin Tools.cmd** for named Plan/Apply infrastructure actions and status. See [Infrastructure operations and recovery](docs/INFRASTRUCTURE_OPERATIONS.md) and [Admin Tools](docs/ADMIN_TOOLS.md). The original discovery notes below remain as historical context for earlier configuration.
+
 This document records the current Infrastructure-as-Code state for StoreOps Manager and the next practical steps for making the cloud deployment easier to manage and restore.
 
 ## Current AWS Account
@@ -57,17 +72,14 @@ The SAM template currently takes these deployment parameters:
 
 ```text
 ApiStageName
-DbUrl
-DbUser
-DbPassword
-ApiKey
+RuntimeSecretArn
 LambdaSubnetIds
 LambdaSecurityGroupIds
 ReservedConcurrency
 LocationAuthRequired
 ```
 
-`DbPassword` and `ApiKey` are marked `NoEcho`, but they are still provided as deployment parameters. A future hardening step should move secret values into AWS Secrets Manager or SSM Parameter Store SecureString.
+Database credentials and the API key are now stored in Secrets Manager. The template resolves them through `RuntimeSecretArn`; normal SAM deployment configuration contains no raw database password or API key. The one-time seed used a `NoEcho` parameter and a temporary file restricted to the Windows operator.
 
 ## Current API Runtime
 
@@ -141,9 +153,9 @@ DB subnet group: default-vpc-0b41e3692165238ed
 VPC security group: sg-056216eb5a750ccfa
 ```
 
-This RDS instance is not currently created by repo IaC. It was discovered as an existing manual/external resource.
+This existing RDS instance was imported into `esm-operations-infrastructure` on October 4, 2026. The import did not recreate it. Current backup retention is seven days and deletion protection is enabled.
 
-The live RDS application schema is currently at version 22. Labour Management, multi-location, location-aware uniqueness, and protected-password schema setup paths are applied outside SAM because the restricted `operations_app` runtime user intentionally cannot create or alter schema-owned structures in the `public` schema. Use the secure prompt-based migration helpers with the schema-capable RDS admin user for these setup paths; do not store the admin password in repo files or Lambda environment variables.
+The live RDS application schema is currently at version 23. Labour Management, multi-location, location-aware uniqueness, protected-password, and labour pay-rate schema setup paths remain controlled database migrations, separate from infrastructure deployment. The restricted `operations_app` runtime user cannot create or alter schema-owned structures in the `public` schema. Use the secure prompt-based migration helpers with the schema-capable RDS admin user; do not store the admin password in repo files or Lambda environment variables.
 
 For the current budget, keep the database small and Single-AZ unless the budget is intentionally changed.
 
@@ -212,6 +224,8 @@ This is automation, not cloud IaC. Keep it separate from AWS infrastructure depl
 
 ## Existing Operational Scripts
 
+The Windows entry point for API deployment and store administration is now **Admin Tools.cmd**. It opens a graphical launcher with named actions and store selection by name, saved non-secret settings, and retained activity history. See [Admin Tools instructions](docs/ADMIN_TOOLS.md). The existing scripts remain the implementation, and `Release.ps1` remains unchanged.
+
 Current script:
 
 ```text
@@ -225,9 +239,9 @@ Purpose:
 
 This is useful operational scripting, but not complete declarative IaC.
 
-## Not Managed By IaC Yet
+## Historical Gaps Before October 4 Migration
 
-These are still manual or external today:
+The original discovery list was:
 
 - RDS instance creation.
 - RDS database creation.
@@ -241,9 +255,9 @@ These are still manual or external today:
 - API custom domain, DNS, and certificate.
 - Per-user authentication beyond the current per-store Store Login model.
 
-## Recommended Next IaC Steps
+## Historical IaC Planning
 
-Do these after the first multi-location rollout has enough real operating feedback, so IaC reflects the target operating shape instead of guessing too early:
+The original rollout plan below is retained for context. Current infrastructure operations are described in the linked operations guide:
 
 1. Define dev/test/prod and per-location environment boundaries.
 2. Move API key and database password handling toward Secrets Manager or SSM SecureString.

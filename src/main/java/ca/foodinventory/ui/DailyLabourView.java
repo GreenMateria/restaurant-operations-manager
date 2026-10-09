@@ -342,9 +342,9 @@ public class DailyLabourView extends BorderPane {
             protected Void call() {
                 for (DailyLabourData data : dataByDate.values()) {
                     if (DatabaseManager.isApiDatabase()) {
-                        apiClient.saveDailyLabour(data);
+                        apiClient.saveNetSales(data.workDate(), data.sales().getNetSales());
                     } else {
-                        labourDailyEntryDao.saveDay(data);
+                        labourDailyEntryDao.saveNetSales(data.workDate(), data.sales().getNetSales());
                     }
                 }
                 return null;

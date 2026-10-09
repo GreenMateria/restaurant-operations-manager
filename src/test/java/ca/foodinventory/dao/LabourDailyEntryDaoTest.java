@@ -23,6 +23,45 @@ class LabourDailyEntryDaoTest {
     Path tempDir;
 
     @Test
+    void independentSalesSavesPreserveOtherAmountsHoursAndFinalization() throws Exception {
+        TestDatabaseSupport.useTempSqliteDatabase(tempDir.resolve("labour-independent-saves.db"));
+        LabourDailyEntryDao dao = new LabourDailyEntryDao();
+        LocalDate date = LocalDate.of(2026, 10, 5);
+        int positionId = insertPosition();
+        int employeeId = insertEmployee(positionId, "18.00");
+        saveEntry(employeeId, positionId, date.toString(), "18.00", "4.00");
+
+        dao.saveNetSales(date, new BigDecimal("1000"));
+        dao.saveTipPool(date, new BigDecimal("240"));
+        var staleNetSalesScreen = dao.loadDay(date);
+        var staleTipPoolScreen = dao.loadDay(date);
+        try (Connection connection = DatabaseManager.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE labour_daily_sales SET finalized = 1");
+            statement.executeUpdate("UPDATE labour_daily_entries SET shift_1_hours = 8");
+        }
+        dao.saveTipPool(date, new BigDecimal("300"));
+        staleNetSalesScreen.sales().setNetSales(new BigDecimal("1200"));
+        dao.saveNetSales(date, staleNetSalesScreen.sales().getNetSales());
+        var loaded = dao.loadDay(date);
+        assertMoney("300", loaded.sales().getTipOutPool());
+        assertMoney("1200", loaded.sales().getNetSales());
+
+        staleTipPoolScreen.sales().setTipOutPool(new BigDecimal("310"));
+        dao.saveTipPool(date, staleTipPoolScreen.sales().getTipOutPool());
+        loaded = dao.loadDay(date);
+        assertMoney("1200", loaded.sales().getNetSales());
+        assertMoney("310", loaded.sales().getTipOutPool());
+        assertEquals(true, loaded.sales().isFinalized());
+        assertMoney("8.00", loaded.rows().getFirst().getEntriesByDate().get(date).getShift1Hours());
+
+        dao.saveTipPool(date.plusDays(1), BigDecimal.ZERO);
+        assertMoney("0", dao.loadDay(date.plusDays(1)).sales().getNetSales());
+        dao.saveNetSales(date, BigDecimal.ZERO);
+        assertMoney("310", dao.loadDay(date).sales().getTipOutPool());
+    }
+
+    @Test
     void usesEmployeePayRateEffectiveForEachUnsavedWorkDate() throws Exception {
         TestDatabaseSupport.useTempSqliteDatabase(tempDir.resolve("labour-rates.db"));
 

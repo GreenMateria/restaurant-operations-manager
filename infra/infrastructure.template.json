@@ -1,0 +1,110 @@
+{
+    "AWSTemplateFormatVersion":  "2010-09-09",
+    "Description":  "StoreOps existing database and application networking; imported in place, retained on deletion/replacement.",
+    "Resources":  {
+                      "DatabaseMonitoringRole":  {
+                                                     "Properties":  {
+                                                                        "MaxSessionDuration":  3600,
+                                                                        "Path":  "/",
+                                                                        "AssumeRolePolicyDocument":  {
+                                                                                                         "Version":  "2012-10-17",
+                                                                                                         "Statement":  [
+                                                                                                                           {
+                                                                                                                               "Sid":  "",
+                                                                                                                               "Effect":  "Allow",
+                                                                                                                               "Principal":  {
+                                                                                                                                                 "Service":  "monitoring.rds.amazonaws.com"
+                                                                                                                                             },
+                                                                                                                               "Action":  "sts:AssumeRole"
+                                                                                                                           }
+                                                                                                                       ]
+                                                                                                     },
+                                                                        "RoleName":  "rds-monitoring-role",
+                                                                        "ManagedPolicyArns":  [
+                                                                                                  "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                                                                                              ]
+                                                                    },
+                                                     "DeletionPolicy":  "Retain",
+                                                     "Type":  "AWS::IAM::Role",
+                                                     "UpdateReplacePolicy":  "Retain"
+                                                 },
+                      "DatabaseSubnetGroup":  {
+                                                  "Properties":  {
+                                                                     "SubnetIds":  [
+                                                                                       "subnet-02d952055a4433d04",
+                                                                                       "subnet-05226760382273fff",
+                                                                                       "subnet-0f50b52729c04d72d"
+                                                                                   ],
+                                                                     "DBSubnetGroupName":  "default-vpc-0b41e3692165238ed",
+                                                                     "DBSubnetGroupDescription":  "Created from the RDS Management Console"
+                                                                 },
+                                                  "DeletionPolicy":  "Retain",
+                                                  "Type":  "AWS::RDS::DBSubnetGroup",
+                                                  "UpdateReplacePolicy":  "Retain"
+                                              },
+                      "ApiSecurityGroup":  {
+                                               "Properties":  {
+                                                                  "GroupName":  "esm-operations-api-lambda-sg",
+                                                                  "VpcId":  "vpc-0b41e3692165238ed",
+                                                                  "GroupDescription":  "Security group for ESM Operations Manager API Lambda",
+                                                                  "SecurityGroupEgress":  [
+                                                                                              {
+                                                                                                  "IpProtocol":  "tcp",
+                                                                                                  "ToPort":  5432,
+                                                                                                  "FromPort":  5432,
+                                                                                                  "DestinationSecurityGroupId":  "sg-056216eb5a750ccfa"
+                                                                                              }
+                                                                                          ]
+                                                              },
+                                               "DeletionPolicy":  "Retain",
+                                               "Type":  "AWS::EC2::SecurityGroup",
+                                               "UpdateReplacePolicy":  "Retain"
+                                           },
+                      "Database":  {
+                                       "Properties":  {
+                                                          "MonitoringInterval":  60,
+                                                          "MaxAllocatedStorage":  1000,
+                                                          "DeletionProtection":  true,
+                                                          "Engine":  "postgres",
+                                                          "StorageType":  "gp2",
+                                                          "EnablePerformanceInsights":  true,
+                                                          "BackupRetentionPeriod":  7,
+                                                          "MultiAZ":  false,
+                                                          "PerformanceInsightsKMSKeyId":  "arn:aws:kms:ca-central-1:863819358995:key/9cd9b1f4-8df7-461b-bae3-0533e7870612",
+                                                          "NetworkType":  "IPV4",
+                                                          "DBInstanceIdentifier":  "esm-operations-db",
+                                                          "StorageEncrypted":  true,
+                                                          "CopyTagsToSnapshot":  true,
+                                                          "DBSubnetGroupName":  {
+                                                                                    "Ref":  "DatabaseSubnetGroup"
+                                                                                },
+                                                          "KmsKeyId":  "arn:aws:kms:ca-central-1:863819358995:key/9cd9b1f4-8df7-461b-bae3-0533e7870612",
+                                                          "AllocatedStorage":  "20",
+                                                          "AutoMinorVersionUpgrade":  true,
+                                                          "PerformanceInsightsRetentionPeriod":  7,
+                                                          "EnableIAMDatabaseAuthentication":  false,
+                                                          "VPCSecurityGroups":  [
+                                                                                    "sg-056216eb5a750ccfa"
+                                                                                ],
+                                                          "CACertificateIdentifier":  "rds-ca-rsa2048-g1",
+                                                          "DBParameterGroupName":  "default.postgres18",
+                                                          "MasterUsername":  "postgres_admin",
+                                                          "EngineVersion":  "18.3",
+                                                          "MonitoringRoleArn":  {
+                                                                                    "Fn::GetAtt":  [
+                                                                                                       "DatabaseMonitoringRole",
+                                                                                                       "Arn"
+                                                                                                   ]
+                                                                                },
+                                                          "PubliclyAccessible":  true,
+                                                          "DBInstanceClass":  "db.t4g.micro",
+                                                          "Port":  "5432",
+                                                          "PreferredMaintenanceWindow":  "sun:08:57-sun:09:27",
+                                                          "PreferredBackupWindow":  "10:24-10:54"
+                                                      },
+                                       "DeletionPolicy":  "Retain",
+                                       "Type":  "AWS::RDS::DBInstance",
+                                       "UpdateReplacePolicy":  "Retain"
+                                   }
+                  }
+}

@@ -450,6 +450,29 @@ class LabourRepository {
         }
     }
 
+    void saveSalesAmount(int locationId, Map<String, Object> body, boolean tipPool) throws SQLException {
+        LocalDate date = LocalDate.parse(requireString(body, "workDate"));
+        if (!body.containsKey("amount") || body.get("amount") == null) {
+            throw new IllegalArgumentException("amount is required.");
+        }
+        BigDecimal amount = decimalValue(body.get("amount"));
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException("Amount cannot be negative.");
+        }
+        String column = tipPool ? "tip_out_pool" : "net_sales";
+        // Atomically update only the requested field, preserving other managers' changes.
+        String sql = "INSERT INTO labour_daily_sales (location_id, sales_date, " + column
+                + ") VALUES (?, ?, ?) ON CONFLICT(location_id, sales_date) DO UPDATE SET "
+                + column + " = excluded." + column;
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, locationId);
+            statement.setString(2, date.toString());
+            statement.setBigDecimal(3, amount);
+            statement.executeUpdate();
+        }
+    }
+
     @SuppressWarnings("unchecked")
     void saveDailyLabour(int locationId, Map<String, Object> body) throws SQLException {
         LocalDate workDate = LocalDate.parse(requireString(body, "workDate"));

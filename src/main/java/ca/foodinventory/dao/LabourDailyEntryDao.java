@@ -134,6 +134,31 @@ public class LabourDailyEntryDao {
         }
     }
 
+    public void saveNetSales(LocalDate date, BigDecimal amount) {
+        saveSalesAmount(date, amount, "net_sales");
+    }
+
+    public void saveTipPool(LocalDate date, BigDecimal amount) {
+        saveSalesAmount(date, amount, "tip_out_pool");
+    }
+
+    private void saveSalesAmount(LocalDate date, BigDecimal amount, String column) {
+        if (date == null || amount == null || amount.signum() < 0) {
+            throw new IllegalArgumentException("A date and non-negative amount are required.");
+        }
+        // The column is chosen only by the two methods above, never by user input.
+        String sql = "INSERT INTO labour_daily_sales (sales_date, " + column + ") VALUES (?, ?) "
+                + "ON CONFLICT(sales_date) DO UPDATE SET " + column + " = excluded." + column;
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, date.toString());
+            statement.setBigDecimal(2, amount);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to save " + column, e);
+        }
+    }
+
     public void saveDay(DailyLabourData data) {
         String salesSql = """
                 INSERT INTO labour_daily_sales (

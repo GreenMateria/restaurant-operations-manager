@@ -1,0 +1,48 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "StoreOps operational alarms. Notifications can be connected to an existing SNS topic without changing the resources.",
+  "Parameters": {
+    "DatabaseId": { "Type": "String", "Default": "esm-operations-db" },
+    "ApiFunctionName": { "Type": "String", "Default": "esm-operations-api-FoodInventoryApiFunction-HoikXKwCH2C0" },
+    "AlarmTopicArn": { "Type": "String", "Default": "", "Description": "Optional existing SNS topic ARN. Empty means alarms are visible in CloudWatch only." }
+  },
+  "Conditions": { "HasAlarmTopic": { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "AlarmTopicArn" }, ""] }] } },
+  "Resources": {
+    "DatabaseStorageAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "storeops-database-low-storage",
+        "AlarmDescription": "Database free storage below 2 GiB for ten minutes.",
+        "Namespace": "AWS/RDS", "MetricName": "FreeStorageSpace", "Statistic": "Average",
+        "Dimensions": [{ "Name": "DBInstanceIdentifier", "Value": { "Ref": "DatabaseId" } }],
+        "Period": 300, "EvaluationPeriods": 2, "Threshold": 2147483648,
+        "ComparisonOperator": "LessThanThreshold", "TreatMissingData": "missing",
+        "AlarmActions": { "Fn::If": ["HasAlarmTopic", [{ "Ref": "AlarmTopicArn" }], { "Ref": "AWS::NoValue" }] }
+      }
+    },
+    "DatabaseCpuAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "storeops-database-high-cpu",
+        "AlarmDescription": "Database CPU above 85 percent for fifteen minutes.",
+        "Namespace": "AWS/RDS", "MetricName": "CPUUtilization", "Statistic": "Average",
+        "Dimensions": [{ "Name": "DBInstanceIdentifier", "Value": { "Ref": "DatabaseId" } }],
+        "Period": 300, "EvaluationPeriods": 3, "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold", "TreatMissingData": "missing",
+        "AlarmActions": { "Fn::If": ["HasAlarmTopic", [{ "Ref": "AlarmTopicArn" }], { "Ref": "AWS::NoValue" }] }
+      }
+    },
+    "ApiErrorsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "storeops-api-errors",
+        "AlarmDescription": "Three or more unhandled Lambda errors in five minutes. HTTP error responses need separate API/application monitoring.",
+        "Namespace": "AWS/Lambda", "MetricName": "Errors", "Statistic": "Sum",
+        "Dimensions": [{ "Name": "FunctionName", "Value": { "Ref": "ApiFunctionName" } }],
+        "Period": 300, "EvaluationPeriods": 1, "Threshold": 3,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold", "TreatMissingData": "notBreaching",
+        "AlarmActions": { "Fn::If": ["HasAlarmTopic", [{ "Ref": "AlarmTopicArn" }], { "Ref": "AWS::NoValue" }] }
+      }
+    }
+  }
+}

@@ -39,3 +39,6 @@ Desktop.ini
 
 # Runtime folder (created by packaged app)
 runtime/
+
+# Local admin launcher settings and activity history
+.admin/

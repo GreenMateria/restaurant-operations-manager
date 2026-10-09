@@ -13,7 +13,8 @@ param(
     [string]$AdminUser = "postgres_admin",
     [string]$PsqlPath = "C:\Program Files\PostgreSQL\18\bin\psql.exe",
     [string]$AwsPath = "C:\Program Files\Amazon\AWSCLIV2\aws.exe",
-    [switch]$NoPause
+    [switch]$NoPause,
+    [switch]$CreateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -87,12 +88,14 @@ $resourceJson = & $AwsPath cloudformation describe-stack-resource `
     --stack-name $StackName `
     --logical-resource-id FoodInventoryApiFunction `
     --region $Region
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the API stack.' }
 $resource = $resourceJson | ConvertFrom-Json
 $functionName = $resource.StackResourceDetail.PhysicalResourceId
 
 $configJson = & $AwsPath lambda get-function-configuration `
     --function-name $functionName `
     --region $Region
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the API configuration.' }
 $config = $configJson | ConvertFrom-Json
 $envs = $config.Environment.Variables
 
@@ -194,6 +197,12 @@ TO $appUser;
 COMMIT;
 "@
 
+if ($CreateOnly) {
+    # New-store actions must not reset an existing store through the legacy upsert.
+    $sql = [regex]::Replace($sql, '(?s)ON CONFLICT\(code\)\s+DO UPDATE SET.*?active = 1;', ';')
+    if ($sql -match 'ON CONFLICT\(code\)') { throw 'Could not enable create-only mode. No database changes made.' }
+}
+
 $env:PGPASSWORD = $adminPassword
 $env:PGSSLMODE = "require"
 try {
@@ -204,6 +213,7 @@ try {
         --dbname $database `
         --set ON_ERROR_STOP=1 `
         --command $sql
+    if ($LASTEXITCODE -ne 0) { throw 'Store credentials were not saved. Check the database error above.' }
 } finally {
     Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     Remove-Item Env:\PGSSLMODE -ErrorAction SilentlyContinue

@@ -74,7 +74,7 @@
 ### Future
 
 -   Monitor the multi-location rollout and add reporting rollups or additional administration tooling only after first-store validation.
--   Convert the remaining manually managed cloud infrastructure into Infrastructure as Code after the first multi-location rollout feedback is clear.
+-   Existing application RDS/network infrastructure was adopted into IaC on October 4, 2026; Secrets Manager, recovery protections, operational alarms, and launcher Plan/Apply actions are in place. Continue drift/recovery checks and evolve the definitions as requirements change; see `docs/INFRASTRUCTURE_OPERATIONS.md`.
 -   Consider a browser-based version after the current desktop application is stable, core workflows are proven in daily use, and multi-location requirements are clearer.
 -   Treat this as a long-term migration path, not an immediate rewrite.
 -   Preferred future architecture:
@@ -133,6 +133,12 @@ Desktop app
 -   Additional failure and retry polish around updater UX
 
 ## Purchasing / Invoice Import
+
+### Completed
+
+- Finalized GFS LineItemList CSV import replaced delivery-order exports for Food invoices. Actual billed line totals and received quantities now import directly, including weighted cost and zero-delivery exclusion.
+- Invoice number/date, shipping, HST, and paper grand total are entered manually at save, with an exact balance check. Preview comparisons are explicitly informational merchandise edits.
+- Manager testing confirmed this workflow on October 8, 2026. Product setup supplies conversions and unit costing; variable-weight quantities remain approximate because the export does not contain actual delivered weight. This is an accepted current limitation, not a pending fix.
 
 ### Future
 

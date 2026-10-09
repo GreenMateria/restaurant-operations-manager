@@ -1,0 +1,51 @@
+[
+    {
+        "ResourceType":  "AWS::EC2::VPC",
+        "LogicalResourceId":  "Network",
+        "ResourceIdentifier":  {
+                                   "VpcId":  "vpc-0b41e3692165238ed"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::EC2::Subnet",
+        "LogicalResourceId":  "Subnetcacentral1a",
+        "ResourceIdentifier":  {
+                                   "SubnetId":  "subnet-02d952055a4433d04"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::EC2::Subnet",
+        "LogicalResourceId":  "Subnetcacentral1b",
+        "ResourceIdentifier":  {
+                                   "SubnetId":  "subnet-05226760382273fff"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::EC2::Subnet",
+        "LogicalResourceId":  "Subnetcacentral1d",
+        "ResourceIdentifier":  {
+                                   "SubnetId":  "subnet-0f50b52729c04d72d"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::EC2::SecurityGroup",
+        "LogicalResourceId":  "DatabaseAccessGroup",
+        "ResourceIdentifier":  {
+                                   "Id":  "sg-056216eb5a750ccfa"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::EC2::InternetGateway",
+        "LogicalResourceId":  "InternetGateway",
+        "ResourceIdentifier":  {
+                                   "InternetGatewayId":  "igw-02f231a6be197b2af"
+                               }
+    },
+    {
+        "ResourceType":  "AWS::EC2::RouteTable",
+        "LogicalResourceId":  "RouteTable",
+        "ResourceIdentifier":  {
+                                   "RouteTableId":  "rtb-0eafc1b83bb7e259c"
+                               }
+    }
+]

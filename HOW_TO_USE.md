@@ -529,10 +529,10 @@ Use the department menus for food, alcohol, and supplies invoices. Invoices keep
 
 1. From the dashboard, click **Food Department**.
 2. Click **Import Invoice**.
-3. Select the GFS invoice CSV file.
+3. Select the finalized GFS **LineItemList.csv** invoice export. Delivery-order CSV files are no longer used for this workflow.
 4. Wait for the invoice preview to load.
-5. Review the invoice number.
-6. Review the invoice date.
+5. Review the imported merchandise subtotal.
+6. Confirm delivered quantities and line totals; zero-quantity, zero-value items are skipped, and weighted item costs use the supplier's billed line total.
 7. Review the supplier.
 8. Scroll through the invoice lines.
 
@@ -540,9 +540,23 @@ Use the department menus for food, alcohol, and supplies invoices. Invoices keep
 
 If every line is matched:
 
-1. Compare the app total to the paper or supplier invoice total.
+1. Compare the merchandise subtotal to the paper invoice merchandise. Pack sizes and quantity conversions come from product setup; verify setup for new products.
 2. Review the category breakdown.
 3. Click **Save Invoice**.
+
+In the save dialog, enter the invoice number, invoice date, shipping, HST, and **Paper Invoice Grand Total** manually from the paper copy. The calculated grand total is merchandise plus shipping, HST, and any other adjustments. Save is enabled only when the difference is zero. Item tax values from the CSV are not added automatically. For variable-weight items, the CSV provides actual billed cost but not actual delivered weight.
+
+The preview labels mean:
+
+- **Imported Merchandise**: original sum of billed line totals from the finalized CSV, excluding tax and shipping.
+- **Current Merchandise**: sum of the current preview lines after any edits.
+- **Edits to Merchandise**: current merchandise minus imported merchandise. This is informational, not an invoice balance warning.
+
+The actual balance check is in the save dialog: **merchandise + shipping + HST + other adjustments = paper grand total**. Do not add an adjustment just to clear an informational preview change.
+
+Example validated on October 8, 2026: merchandise **$4,843.04**, shipping **$25.50**, and HST **$46.14** balance to the paper grand total **$4,914.68**. The finalized export already excludes the undelivered peppers from the imported lines and supplies the weighted beef's **$91.56** billed cost without an override.
+
+Unit costing uses the product's saved conversion factor. For example, one case containing 30 lb and costing $90 yields $3/lb. For variable-weight products, the full billed cost is accurate, but the converted quantity and cost per lb/kg use the configured amount rather than actual delivered weight. Small weight differences can therefore produce small usage/valuation variances. Review product setup if those differences become significant.
 
 If there are unknown SKUs:
 
@@ -808,6 +822,8 @@ Use Daily Labour Cost to enter daily net sales and review labour cost percentage
 ## Tip Pool
 
 Use Tip Pool to enter the daily tip-out pool and review employee tip allocations.
+
+Save Tip Pool updates only the pool amounts. Save Net Sales in Daily Labour Cost updates only net sales. Neither action changes saved labour hours. Save your entries, then reload Tip Pool Breakdown to see current payouts. These protections require the updated desktop and API; managers should upgrade all workstations.
 
 1. From **Labour Management**, click **Tip Pool**.
 2. Select the start and end date for the week.
