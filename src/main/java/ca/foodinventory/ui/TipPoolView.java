@@ -172,7 +172,7 @@ public class TipPoolView extends BorderPane {
         for (WeeklyLabourRow row : rows) {
             row.getOrCreateEntry(workDate);
         }
-        return new DailyLabourData(workDate, sales, rows);
+        return new DailyLabourData(workDate, sales, rows, data == null ? null : data.revision());
     }
 
     private void buildGrid() {
@@ -389,11 +389,13 @@ public class TipPoolView extends BorderPane {
             @Override
             protected Void call() {
                 for (DailyLabourData data : dataByDate.values()) {
+                    if (data.sales().getTipOutPool().compareTo(data.sales().getLoadedTipPool()) == 0) continue;
                     if (DatabaseManager.isApiDatabase()) {
-                        apiClient.saveTipPool(data.workDate(), data.sales().getTipOutPool());
+                        apiClient.saveTipPool(data.workDate(), data.sales().getTipOutPool(), data.sales().getLoadedTipPool());
                     } else {
-                        labourDailyEntryDao.saveTipPool(data.workDate(), data.sales().getTipOutPool());
+                        labourDailyEntryDao.saveTipPool(data.workDate(), data.sales().getTipOutPool(), data.sales().getLoadedTipPool());
                     }
+                    data.sales().markTipPoolSaved();
                 }
                 return null;
             }
@@ -405,8 +407,10 @@ public class TipPoolView extends BorderPane {
             loadRange(startDatePicker.getValue(), endDatePicker.getValue());
         });
         task.setOnFailed(event -> {
-            setReady("Save failed.");
-            showAlert(Alert.AlertType.ERROR, "Save Failed", rootCauseMessage(task.getException()));
+            boolean conflict = task.getException() instanceof ca.foodinventory.model.LabourConflictException;
+            setReady(conflict ? "Save blocked. Your entries are still on screen." : "Save failed.");
+            showAlert(conflict ? Alert.AlertType.WARNING : Alert.AlertType.ERROR,
+                    conflict ? "Data Changed" : "Save Failed", rootCauseMessage(task.getException()));
         });
         run(task, "tip-pool-save");
     }

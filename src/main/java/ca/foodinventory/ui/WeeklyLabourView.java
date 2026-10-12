@@ -295,7 +295,7 @@ public class WeeklyLabourView extends BorderPane {
                 row.getOrCreateEntry(weekStart.plusDays(day));
             }
         }
-        return new WeeklyLabourData(weekStart, rows);
+        return new WeeklyLabourData(weekStart, rows, data == null ? null : data.revision());
     }
 
     private void buildGrid() {
@@ -516,7 +516,7 @@ public class WeeklyLabourView extends BorderPane {
                 if (DatabaseManager.isApiDatabase()) {
                     apiClient.saveWeeklyLabour(currentData);
                 } else {
-                    labourDailyEntryDao.saveWeek(currentData.rows(), currentData.weekStartDate());
+                    labourDailyEntryDao.saveWeek(currentData);
                 }
                 return null;
             }
@@ -528,8 +528,10 @@ public class WeeklyLabourView extends BorderPane {
             loadWeek(currentData.weekStartDate());
         });
         task.setOnFailed(event -> {
-            setReady("Save failed.");
-            showAlert(Alert.AlertType.ERROR, "Save Failed", rootCauseMessage(task.getException()));
+            boolean conflict = task.getException() instanceof ca.foodinventory.model.LabourConflictException;
+            setReady(conflict ? "Save blocked. Your entries are still on screen." : "Save failed.");
+            showAlert(conflict ? Alert.AlertType.WARNING : Alert.AlertType.ERROR,
+                    conflict ? "Data Changed" : "Save Failed", rootCauseMessage(task.getException()));
         });
         run(task, "weekly-labour-save");
     }

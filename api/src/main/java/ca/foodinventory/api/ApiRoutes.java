@@ -906,6 +906,13 @@ class ApiRoutes {
                 if (locationContext == null) {
                     return locationUnauthorized();
                 }
+                if ("POST".equalsIgnoreCase(method) && countLinesPath.synchronizeRequest()) {
+                    String result = inventoryRepository.synchronizeCountWithTemplateJson(
+                            locationContext.id(), countLinesPath.countId());
+                    return result == null
+                            ? ApiResult.json(404, Json.object("error", "not_found", "message", "Inventory count not found."))
+                            : ApiResult.json(200, result);
+                }
                 if ("GET".equalsIgnoreCase(method) && countLinesPath.linesRequest()) {
                     return ApiResult.json(
                             200,
@@ -944,6 +951,8 @@ class ApiRoutes {
                             "message", "Inventory count not found."
                     ));
                 }
+            } catch (CountCompletedException e) {
+                return ApiResult.json(409, Json.object("error", "count_completed", "message", e.getMessage()));
             } catch (IllegalArgumentException e) {
                 return ApiResult.json(400, Json.object(
                         "error", "bad_request",
@@ -1188,8 +1197,8 @@ class ApiRoutes {
                 return ApiResult.json(200, labourRepository.weeklyLabourJson(locationContext.id(), weeklyStart));
             }
             if ("PUT".equalsIgnoreCase(method) && "/labour/weekly".equals(path)) {
-                labourRepository.saveWeeklyLabour(locationContext.id(), parseBody(body));
-                return ApiResult.json(200, Json.object("status", "ok", "message", "Weekly labour saved."));
+                String revision = labourRepository.saveWeeklyLabour(locationContext.id(), parseBody(body));
+                return ApiResult.json(200, Json.object("status", "ok", "revision", revision));
             }
             if ("PUT".equalsIgnoreCase(method)
                     && ("/labour/net-sales".equals(path) || "/labour/tip-pool".equals(path))) {
@@ -1256,6 +1265,10 @@ class ApiRoutes {
                 labourRepository.saveSettings(parseBody(body));
                 return ApiResult.json(200, Json.object("status", "ok", "message", "Labour settings saved."));
             }
+        } catch (LabourPreconditionException e) {
+            return ApiResult.json(428, Json.object("error", "precondition_required", "message", e.getMessage()));
+        } catch (LabourConflictException e) {
+            return ApiResult.json(409, Json.object("error", "edit_conflict", "message", e.getMessage()));
         } catch (IllegalArgumentException e) {
             return badRequest(e);
         } catch (IllegalStateException e) {
@@ -1943,6 +1956,10 @@ class ApiRoutes {
     }
 
     record CountLinesPath(int countId, String action) {
+
+        boolean synchronizeRequest() {
+            return "synchronize-template".equals(action);
+        }
 
         boolean countRequest() {
             return action == null || action.isBlank();

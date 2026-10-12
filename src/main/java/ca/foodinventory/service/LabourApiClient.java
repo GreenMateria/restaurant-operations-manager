@@ -2,6 +2,7 @@ package ca.foodinventory.service;
 
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.DailyLabourData;
+import ca.foodinventory.model.LabourConflictException;
 import ca.foodinventory.model.LabourDailyEntry;
 import ca.foodinventory.model.LabourDailySales;
 import ca.foodinventory.model.LabourEmployee;
@@ -114,10 +115,12 @@ public class LabourApiClient {
                 "/labour/daily/" + workDate,
                 "load daily labour"
         ));
+        if (!booleanValue(object.get("conflictProtection"))) throw new IllegalStateException("The API must be updated before protected Labour saves can be used.");
         return parseDailyLabour(object);
     }
 
     public void saveWeeklyLabour(WeeklyLabourData weeklyLabourData) {
+        if (weeklyLabourData.revision() == null) throw new IllegalStateException("Reload this week after updating the API before saving.");
         put(
                 "/labour/weekly",
                 weeklyLabourJson(weeklyLabourData),
@@ -126,6 +129,7 @@ public class LabourApiClient {
     }
 
     public void saveDailyLabour(DailyLabourData dailyLabourData) {
+        if (dailyLabourData.revision() == null) throw new IllegalStateException("Reload this date before saving.");
         put(
                 "/labour/daily",
                 dailyLabourJson(dailyLabourData),
@@ -133,18 +137,17 @@ public class LabourApiClient {
         );
     }
 
-    public void saveNetSales(LocalDate date, BigDecimal amount) {
-        saveSalesAmount("net-sales", date, amount);
+    public void saveNetSales(LocalDate date, BigDecimal amount, BigDecimal expected) {
+        saveSalesAmount("net-sales", date, amount, expected);
     }
-
-    public void saveTipPool(LocalDate date, BigDecimal amount) {
-        saveSalesAmount("tip-pool", date, amount);
+    public void saveTipPool(LocalDate date, BigDecimal amount, BigDecimal expected) {
+        saveSalesAmount("tip-pool", date, amount, expected);
     }
-
-    private void saveSalesAmount(String scope, LocalDate date, BigDecimal amount) {
+    private void saveSalesAmount(String scope, LocalDate date, BigDecimal amount, BigDecimal expected) {
+        if (expected == null) throw new IllegalStateException("Reload this date before saving.");
         put("/labour/" + scope,
                 "{\"workDate\":" + jsonString(date.toString())
-                        + ",\"amount\":" + money(amount) + "}",
+                        + ",\"amount\":" + money(amount) + ",\"expectedAmount\":" + money(expected) + "}",
                 "save " + scope);
     }
 
@@ -228,6 +231,10 @@ public class LabourApiClient {
     }
 
     private void requireStatus(HttpResponse<String> response, int expectedStatus, String apiName) {
+        if (response.statusCode() == 428) throw new IllegalStateException("Update the desktop application and reload this week before saving Labour data.");
+        if (response.statusCode() == 409) {
+            throw new LabourConflictException();
+        }
         if (response.statusCode() != expectedStatus) {
             throw new RuntimeException(apiName + " returned HTTP " + response.statusCode());
         }
@@ -291,7 +298,7 @@ public class LabourApiClient {
                 .comparingInt(WeeklyLabourRow::getPositionSortOrder)
                 .thenComparing(row -> nullSafe(row.getPositionName()))
                 .thenComparing(row -> nullSafe(row.getEmployeeName())));
-        return new WeeklyLabourData(weekStartDate, rows);
+        return new WeeklyLabourData(weekStartDate, rows, stringValue(object.get("revision")));
     }
 
     @SuppressWarnings("unchecked")
@@ -338,7 +345,7 @@ public class LabourApiClient {
                 .comparingInt(WeeklyLabourRow::getPositionSortOrder)
                 .thenComparing(row -> nullSafe(row.getPositionName()))
                 .thenComparing(row -> nullSafe(row.getEmployeeName())));
-        return new DailyLabourData(workDate, sales, rows);
+        return new DailyLabourData(workDate, sales, rows, stringValue(object.get("revision")));
     }
 
     private LabourDailySales parseDailySales(Map<String, Object> object) {
@@ -354,6 +361,7 @@ public class LabourApiClient {
         sales.setNetSales(moneyValue(object.get("netSales")));
         sales.setTipOutPool(moneyValue(object.get("tipOutPool")));
         sales.setFinalized(booleanValue(object.get("finalized")));
+        sales.captureLoadedAmounts();
         return sales;
     }
 
@@ -407,6 +415,7 @@ public class LabourApiClient {
         json.append('{')
                 .append("\"weekStartDate\":")
                 .append(jsonString(data.weekStartDate().toString()))
+                .append(",\"expectedRevision\":").append(jsonString(data.revision()))
                 .append(",\"rows\":[");
 
         boolean firstRow = true;
@@ -455,6 +464,7 @@ public class LabourApiClient {
         json.append('{')
                 .append("\"workDate\":")
                 .append(jsonString(data.workDate().toString()))
+                .append(",\"expectedRevision\":").append(jsonString(data.revision()))
                 .append(",\"sales\":")
                 .append(dailySalesJson(data.sales(), data.workDate()))
                 .append(",\"rows\":[");

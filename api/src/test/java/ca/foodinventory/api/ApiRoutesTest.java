@@ -12,6 +12,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ApiRoutesTest {
 
     @Test
+    void templateSynchronizationRequiresApiKeyAndStoreSession() {
+        System.setProperty("foodinventory.api.key", "secret");
+        System.setProperty("foodinventory.api.locationAuthRequired", "true");
+        ApiRoutes routes = new ApiRoutes();
+        assertEquals(401, routes.handle("POST", "/inventory-counts/1/synchronize-template", Map.of(), "").statusCode());
+        assertEquals(401, routes.handle("POST", "/inventory-counts/1/synchronize-template",
+                Map.of("x-api-key", List.of("secret")), "").statusCode());
+    }
+
+    @Test
     void independentSalesRoutesRejectInvalidAmountsBeforeDatabaseAccess() {
         System.setProperty("foodinventory.api.key", "secret");
         System.setProperty("foodinventory.api.locationAuthRequired", "false");
@@ -36,6 +46,21 @@ class ApiRoutesTest {
                     Map.of("x-api-key", List.of("secret")),
                     "{\"workDate\":\"2026-10-05\",\"amount\":300}").statusCode());
         }
+    }
+
+    @Test
+    void oldClientsCannotBypassLabourConflictChecks() {
+        System.setProperty("foodinventory.api.key", "secret");
+        System.setProperty("foodinventory.api.locationAuthRequired", "false");
+        for (String path : List.of("/labour/net-sales", "/labour/tip-pool")) {
+            assertEquals(428, new ApiRoutes().handle("PUT", path,
+                    Map.of("x-api-key", List.of("secret")),
+                    "{\"workDate\":\"2026-10-05\",\"amount\":300}").statusCode());
+        }
+        assertEquals(428, new ApiRoutes().handle("PUT", "/labour/weekly",
+                Map.of("x-api-key", List.of("secret")), "{\"weekStartDate\":\"2026-10-05\",\"rows\":[]}").statusCode());
+        assertEquals(428, new ApiRoutes().handle("PUT", "/labour/daily",
+                Map.of("x-api-key", List.of("secret")), "{\"workDate\":\"2026-10-05\",\"sales\":{},\"rows\":[]}").statusCode());
     }
 
     @AfterEach

@@ -2,6 +2,7 @@ package ca.foodinventory.service;
 
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
+import ca.foodinventory.model.InventoryCountSynchronizationResult;
 import ca.foodinventory.model.InventoryCountTemplate;
 import ca.foodinventory.model.InventoryCountTemplateLine;
 import ca.foodinventory.model.OrderGuideRow;
@@ -203,6 +204,24 @@ public class InventoryApiClient {
         );
         requireStatus(response, 200, "Inventory API");
         return parseCountLines(response.body());
+    }
+
+    public InventoryCountSynchronizationResult synchronizeCountWithTemplate(int countId) {
+        HttpResponse<String> response = send(
+                requestBuilder("/inventory-counts/" + countId + "/synchronize-template")
+                        .POST(HttpRequest.BodyPublishers.noBody()).build(),
+                "synchronize inventory count with its template");
+        if (response.statusCode() == 409 || response.statusCode() == 404) {
+            Map<String, Object> error = new ApiJsonParser().parseObject(response.body());
+            throw new IllegalStateException(String.valueOf(error.get("message")));
+        }
+        requireStatus(response, 200, "Inventory API");
+        Map<String, Object> result = new ApiJsonParser().parseObject(response.body());
+        List<Integer> added = new ArrayList<>();
+        if (result.get("addedProductIds") instanceof List<?> ids) {
+            for (Object id : ids) added.add(((Number) id).intValue());
+        }
+        return new InventoryCountSynchronizationResult(added);
     }
 
     public void updateCountLines(int countId, List<InventoryCountLine> lines) {

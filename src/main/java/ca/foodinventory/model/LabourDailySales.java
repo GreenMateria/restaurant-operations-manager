@@ -5,11 +5,34 @@ import java.time.LocalDate;
 
 public class LabourDailySales {
 
+    private BigDecimal loadedNetSales;
+    private BigDecimal loadedTipPool;
     private int id;
     private LocalDate salesDate;
     private BigDecimal netSales = BigDecimal.ZERO;
     private BigDecimal tipOutPool = BigDecimal.ZERO;
     private boolean finalized;
+
+    public void captureLoadedAmounts() {
+        loadedNetSales = getNetSales();
+        loadedTipPool = getTipOutPool();
+    }
+
+    public BigDecimal getLoadedNetSales() {
+        return loadedNetSales;
+    }
+
+    public BigDecimal getLoadedTipPool() {
+        return loadedTipPool;
+    }
+
+    public void markNetSalesSaved() {
+        loadedNetSales = getNetSales();
+    }
+
+    public void markTipPoolSaved() {
+        loadedTipPool = getTipOutPool();
+    }
 
     public int getId() {
         return id;

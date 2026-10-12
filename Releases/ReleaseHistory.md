@@ -294,3 +294,8 @@ Date: 2026-10-04 13:14
 Date: 2026-10-09 11:38
 
 - Fixed Save feature for Net Sales. Fixed invoice importing
+
+## v4.1.7
+Date: 2026-10-12 12:42
+
+- Fixed multiple users save issue. Added a syncronize ability for inventory counts.

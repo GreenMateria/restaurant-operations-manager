@@ -26,12 +26,16 @@ public class InventoryCountLineDao {
                     ON l.product_id = p.id
                 JOIN inventory_counts c
                     ON l.count_id = c.id
-                JOIN inventory_count_template_lines tl
+                LEFT JOIN inventory_count_template_lines tl
                     ON c.template_id = tl.template_id
                     AND l.product_id = tl.product_id
                     AND tl.active = 1
+                    AND tl.id = (SELECT MIN(candidate.id) FROM inventory_count_template_lines candidate
+                                 WHERE candidate.template_id = c.template_id
+                                   AND candidate.product_id = l.product_id
+                                   AND candidate.active = 1)
                 WHERE l.count_id = ?
-                ORDER BY tl.sort_order
+                ORDER BY COALESCE(tl.sort_order, 2147483647), l.id
                 """;
 
         try (

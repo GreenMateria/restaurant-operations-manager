@@ -114,7 +114,7 @@ You should now see the product in the template list.
 
 ![Food count template](docs/images/food-count-template.png)
 
-Important: if you already started a count before adding this item, the item will not automatically appear in that already-started count. For an incomplete count, delete the incomplete count, update the template, and start the count again.
+Important: if you already started a count before adding this item, the item will not automatically appear in that already-started count. In the upcoming update, open the incomplete count and click **Synchronize with Template** after updating the template. The app adds missing products at zero quantity and lists them for review. Existing saved quantities and unsaved entries are preserved; enter the new quantities and click **Save Quantities**. Repeating synchronization does not add duplicates. This applies to Food, Alcohol, and Supplies counts; completed counts cannot be synchronized. The updated desktop and API are required.
 
 ## FOOD 3 - Print The Food Count Sheet
 
@@ -823,7 +823,9 @@ Use Daily Labour Cost to enter daily net sales and review labour cost percentage
 
 Use Tip Pool to enter the daily tip-out pool and review employee tip allocations.
 
-Save Tip Pool updates only the pool amounts. Save Net Sales in Daily Labour Cost updates only net sales. Neither action changes saved labour hours. Save your entries, then reload Tip Pool Breakdown to see current payouts. These protections require the updated desktop and API; managers should upgrade all workstations.
+In the upcoming conflict-protection update, Labour Hours, Save Net Sales, and Save Tip Pool block outdated saves when another manager changed the same data. Your entries remain on screen so you can review or copy them before using **Load Week** to reload; reloading asks you to discard unsaved changes. Re-enter your changes against the latest data. There is no automatic merge. Labour Hours saves the whole week together; Net Sales and Tip Pool save changed dates individually, so earlier dates may have saved before a later conflict.
+
+Save Tip Pool updates only the pool amounts. Save Net Sales in Daily Labour Cost updates only net sales. Neither action changes saved labour hours. Save your entries, then reload Tip Pool Breakdown to see current payouts. These protections require the updated desktop and API; coordinate the API deployment with upgrades on all workstations. After the conflict-protection API deployment, older desktops cannot save Labour data until updated.
 
 1. From **Labour Management**, click **Tip Pool**.
 2. Select the start and end date for the week.

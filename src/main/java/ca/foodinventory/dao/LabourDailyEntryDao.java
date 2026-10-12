@@ -2,6 +2,7 @@ package ca.foodinventory.dao;
 
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.DailyLabourData;
+import ca.foodinventory.model.LabourConflictException;
 import ca.foodinventory.model.LabourDailyEntry;
 import ca.foodinventory.model.LabourDailySales;
 import ca.foodinventory.model.WeeklyLabourData;
@@ -51,10 +52,13 @@ public class LabourDailyEntryDao {
         LocalDate start = weekStartDate;
         LocalDate end = weekStartDate.plusDays(6);
         Map<Integer, WeeklyLabourRow> rowsByEmployeeId = new LinkedHashMap<>();
+        String revision;
 
         try (Connection connection = DatabaseManager.getConnection()) {
+            connection.setAutoCommit(false);
             loadCurrentRows(connection, rowsByEmployeeId, start, end);
             loadEntryRows(connection, rowsByEmployeeId, start, end);
+            revision = LabourRevision.entries(connection, null, start, end);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to load weekly labour", e);
         }
@@ -64,17 +68,21 @@ public class LabourDailyEntryDao {
                 .comparingInt(WeeklyLabourRow::getPositionSortOrder)
                 .thenComparing(row -> nullSafe(row.getPositionName()))
                 .thenComparing(row -> nullSafe(row.getEmployeeName())));
-        return new WeeklyLabourData(start, rows);
+        return new WeeklyLabourData(start, rows, revision);
     }
 
     public DailyLabourData loadDay(LocalDate workDate) {
         Map<Integer, WeeklyLabourRow> rowsByEmployeeId = new LinkedHashMap<>();
         LabourDailySales sales;
+        String revision;
 
         try (Connection connection = DatabaseManager.getConnection()) {
+            connection.setAutoCommit(false);
             loadCurrentRows(connection, rowsByEmployeeId, workDate, workDate);
             loadEntryRows(connection, rowsByEmployeeId, workDate, workDate);
             sales = loadDailySales(connection, workDate);
+            sales.captureLoadedAmounts();
+            revision = LabourRevision.day(connection, null, workDate);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to load daily labour", e);
         }
@@ -87,10 +95,14 @@ public class LabourDailyEntryDao {
         for (WeeklyLabourRow row : rows) {
             row.getOrCreateEntry(workDate);
         }
-        return new DailyLabourData(workDate, sales, rows);
+        return new DailyLabourData(workDate, sales, rows, revision);
     }
 
-    public void saveWeek(List<WeeklyLabourRow> rows, LocalDate weekStartDate) {
+    public void saveWeek(WeeklyLabourData data) {
+        if (data.revision() == null) throw new IllegalStateException("Reload this week before saving.");
+        saveWeek(data.rows(), data.weekStartDate(), data.revision());
+    }
+    private void saveWeek(List<WeeklyLabourRow> rows, LocalDate weekStartDate, String expectedRevision) {
         String sql = """
                 INSERT INTO labour_daily_entries (
                     work_date, employee_id, position_id, hourly_wage,
@@ -114,6 +126,10 @@ public class LabourDailyEntryDao {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                reserveWrite(connection);
+                if (!expectedRevision.equals(LabourRevision.entries(connection, null, weekStartDate, weekStartDate.plusDays(6)))) {
+                    throw conflict();
+                }
                 for (WeeklyLabourRow row : rows) {
                     for (int day = 0; day < 7; day++) {
                         LabourDailyEntry entry = row.getOrCreateEntry(weekStartDate.plusDays(day));
@@ -134,16 +150,14 @@ public class LabourDailyEntryDao {
         }
     }
 
-    public void saveNetSales(LocalDate date, BigDecimal amount) {
-        saveSalesAmount(date, amount, "net_sales");
+    public void saveNetSales(LocalDate date, BigDecimal amount, BigDecimal expected) {
+        saveSalesAmount(date, amount, "net_sales", expected);
     }
-
-    public void saveTipPool(LocalDate date, BigDecimal amount) {
-        saveSalesAmount(date, amount, "tip_out_pool");
+    public void saveTipPool(LocalDate date, BigDecimal amount, BigDecimal expected) {
+        saveSalesAmount(date, amount, "tip_out_pool", expected);
     }
-
-    private void saveSalesAmount(LocalDate date, BigDecimal amount, String column) {
-        if (date == null || amount == null || amount.signum() < 0) {
+    private void saveSalesAmount(LocalDate date, BigDecimal amount, String column, BigDecimal expected) {
+        if (date == null || amount == null || amount.signum() < 0 || expected == null || expected.signum() < 0) {
             throw new IllegalArgumentException("A date and non-negative amount are required.");
         }
         // The column is chosen only by the two methods above, never by user input.
@@ -151,15 +165,33 @@ public class LabourDailyEntryDao {
                 + "ON CONFLICT(sales_date) DO UPDATE SET " + column + " = excluded." + column;
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, date.toString());
-            statement.setBigDecimal(2, amount);
-            statement.executeUpdate();
+            connection.setAutoCommit(false);
+            try {
+                reserveWrite(connection);
+                LabourDailySales current = loadDailySales(connection, date);
+                BigDecimal currentAmount = column.equals("net_sales") ? current.getNetSales() : current.getTipOutPool();
+                if (currentAmount.compareTo(expected) != 0) {
+                    throw conflict();
+                }
+                statement.setString(1, date.toString());
+                statement.setBigDecimal(2, amount);
+                statement.executeUpdate();
+                connection.commit();
+            } catch (SQLException | RuntimeException e) { connection.rollback(); throw e; }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save " + column, e);
         }
     }
 
+    private void reserveWrite(Connection c) throws SQLException {
+        // Acquire SQLite's write reservation before comparing, even for an empty week.
+        try (PreparedStatement s = c.prepareStatement("UPDATE labour_daily_entries SET id = id WHERE 0 = 1")) { s.executeUpdate(); }
+    }
+    private RuntimeException conflict() {
+        return new LabourConflictException();
+    }
     public void saveDay(DailyLabourData data) {
+        if (data.revision() == null) throw new IllegalStateException("Reload this date before saving.");
         String salesSql = """
                 INSERT INTO labour_daily_sales (
                     sales_date, net_sales, tip_out_pool, finalized
@@ -196,6 +228,8 @@ public class LabourDailyEntryDao {
             connection.setAutoCommit(false);
             try (PreparedStatement salesStatement = connection.prepareStatement(salesSql);
                  PreparedStatement entryStatement = connection.prepareStatement(entrySql)) {
+                reserveWrite(connection);
+                if (!data.revision().equals(LabourRevision.day(connection, null, data.workDate()))) throw conflict();
                 applySalesStatement(salesStatement, data.sales(), data.workDate());
                 salesStatement.executeUpdate();
 

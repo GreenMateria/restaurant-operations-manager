@@ -222,10 +222,13 @@ class LabourRepository {
     String weeklyLabourJson(int locationId, String weekStart) throws SQLException {
         LocalDate weekStartDate = LocalDate.parse(weekStart);
         LocalDate weekEndDate = weekStartDate.plusDays(6);
+        String revision;
         StringBuilder rows = new StringBuilder();
         boolean[] first = {true};
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
+            connection.setAutoCommit(false);
+            connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT
                         le.id AS employee_id, le.name AS employee_name,
@@ -289,10 +292,12 @@ class LabourRepository {
                     }
                 }
             }
+            revision = LabourRevision.entries(connection, locationId, weekStartDate, weekEndDate);
         }
 
         return "{"
                 + "\"weekStartDate\":" + Json.nullableString(weekStartDate.toString()) + ","
+                + "\"revision\":" + Json.nullableString(revision) + ","
                 + "\"rows\":[" + rows + "]"
                 + "}";
     }
@@ -332,12 +337,13 @@ class LabourRepository {
     }
 
     @SuppressWarnings("unchecked")
-    void saveWeeklyLabour(int locationId, Map<String, Object> body) throws SQLException {
+    String saveWeeklyLabour(int locationId, Map<String, Object> body) throws SQLException {
         LocalDate weekStartDate = LocalDate.parse(requireString(body, "weekStartDate"));
         Object rowsValue = body.get("rows");
         if (!(rowsValue instanceof List<?> rows)) {
             throw new IllegalArgumentException("rows is required.");
         }
+        requireRevision(body);
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -360,6 +366,11 @@ class LabourRepository {
                         labour_group_snapshot = excluded.labour_group_snapshot,
                         finalized = excluded.finalized
                     """)) {
+                lockLocation(connection, locationId);
+                if (!LabourRevision.entries(connection, locationId, weekStartDate, weekStartDate.plusDays(6))
+                        .equals(body.get("expectedRevision"))) {
+                    throw new LabourConflictException();
+                }
                 for (Object rowValue : rows) {
                     if (!(rowValue instanceof Map<?, ?> row)) {
                         continue;
@@ -376,7 +387,9 @@ class LabourRepository {
                     }
                 }
                 statement.executeBatch();
+                String revision = LabourRevision.entries(connection, locationId, weekStartDate, weekStartDate.plusDays(6));
                 connection.commit();
+                return revision;
             } catch (SQLException | RuntimeException e) {
                 connection.rollback();
                 throw e;
@@ -392,6 +405,8 @@ class LabourRepository {
         boolean[] first = {true};
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
+            connection.setAutoCommit(false);
+            connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             try (PreparedStatement statement = connection.prepareStatement("""
                     SELECT
                         le.id AS employee_id, le.name AS employee_name,
@@ -443,6 +458,8 @@ class LabourRepository {
             }
 
             return "{"
+                    + "\"revision\":" + Json.nullableString(LabourRevision.day(connection, locationId, workDate)) + ","
+                    + "\"conflictProtection\":true,"
                     + "\"workDate\":" + Json.nullableString(workDate.toString()) + ","
                     + "\"sales\":" + dailySalesJson(connection, locationId, workDate) + ","
                     + "\"rows\":[" + rows + "]"
@@ -459,17 +476,45 @@ class LabourRepository {
         if (amount.signum() < 0) {
             throw new IllegalArgumentException("Amount cannot be negative.");
         }
+        if (!body.containsKey("expectedAmount")) {
+            throw new LabourPreconditionException();
+        }
+        if (body.get("expectedAmount") == null || decimalValue(body.get("expectedAmount")).signum() < 0) {
+            throw new IllegalArgumentException("expectedAmount must be non-negative.");
+        }
         String column = tipPool ? "tip_out_pool" : "net_sales";
-        // Atomically update only the requested field, preserving other managers' changes.
         String sql = "INSERT INTO labour_daily_sales (location_id, sales_date, " + column
                 + ") VALUES (?, ?, ?) ON CONFLICT(location_id, sales_date) DO UPDATE SET "
                 + column + " = excluded." + column;
-        try (Connection connection = PostgresConnectionProvider.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, locationId);
-            statement.setString(2, date.toString());
-            statement.setBigDecimal(3, amount);
-            statement.executeUpdate();
+        try (Connection connection = PostgresConnectionProvider.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                lockLocation(connection, locationId);
+                if (body.containsKey("expectedAmount")) {
+                    if (body.get("expectedAmount") == null) throw new IllegalArgumentException("expectedAmount is required.");
+                    BigDecimal current = BigDecimal.ZERO;
+                    try (PreparedStatement query = connection.prepareStatement("SELECT " + column + " FROM labour_daily_sales WHERE location_id = ? AND sales_date = ?")) {
+                        query.setInt(1, locationId); query.setString(2, date.toString());
+                        try (ResultSet r = query.executeQuery()) { if (r.next()) current = r.getBigDecimal(1); }
+                    }
+                    if (current.compareTo(decimalValue(body.get("expectedAmount"))) != 0) throw new LabourConflictException();
+                }
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setInt(1, locationId); statement.setString(2, date.toString()); statement.setBigDecimal(3, amount);
+                    statement.executeUpdate();
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException e) { connection.rollback(); throw e; }
+        }
+    }
+
+    private void requireRevision(Map<String, Object> body) {
+        if (!(body.get("expectedRevision") instanceof String revision) || revision.isBlank()) throw new LabourPreconditionException();
+    }
+    private void lockLocation(Connection connection, int locationId) throws SQLException {
+        try (PreparedStatement s = connection.prepareStatement("SELECT id FROM locations WHERE id = ? FOR UPDATE")) {
+            s.setInt(1, locationId);
+            try (ResultSet r = s.executeQuery()) { if (!r.next()) throw new IllegalArgumentException("Store not found."); }
         }
     }
 
@@ -484,6 +529,8 @@ class LabourRepository {
         if (!(rowsValue instanceof List<?> rows)) {
             throw new IllegalArgumentException("rows is required.");
         }
+
+        requireRevision(body);
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -517,6 +564,10 @@ class LabourRepository {
                         labour_group_snapshot = excluded.labour_group_snapshot,
                         finalized = excluded.finalized
                     """)) {
+                lockLocation(connection, locationId);
+                if (!LabourRevision.day(connection, locationId, workDate).equals(body.get("expectedRevision"))) {
+                    throw new LabourConflictException();
+                }
                 applyDailySales(salesStatement, locationId, (Map<String, Object>) sales, workDate);
                 salesStatement.executeUpdate();
 

@@ -177,7 +177,7 @@ public class DailyLabourView extends BorderPane {
         for (WeeklyLabourRow row : rows) {
             row.getOrCreateEntry(workDate);
         }
-        return new DailyLabourData(workDate, sales, rows);
+        return new DailyLabourData(workDate, sales, rows, data == null ? null : data.revision());
     }
 
     private void buildGrid() {
@@ -341,11 +341,13 @@ public class DailyLabourView extends BorderPane {
             @Override
             protected Void call() {
                 for (DailyLabourData data : dataByDate.values()) {
+                    if (data.sales().getNetSales().compareTo(data.sales().getLoadedNetSales()) == 0) continue;
                     if (DatabaseManager.isApiDatabase()) {
-                        apiClient.saveNetSales(data.workDate(), data.sales().getNetSales());
+                        apiClient.saveNetSales(data.workDate(), data.sales().getNetSales(), data.sales().getLoadedNetSales());
                     } else {
-                        labourDailyEntryDao.saveNetSales(data.workDate(), data.sales().getNetSales());
+                        labourDailyEntryDao.saveNetSales(data.workDate(), data.sales().getNetSales(), data.sales().getLoadedNetSales());
                     }
+                    data.sales().markNetSalesSaved();
                 }
                 return null;
             }
@@ -357,8 +359,10 @@ public class DailyLabourView extends BorderPane {
             loadRange(startDatePicker.getValue(), endDatePicker.getValue());
         });
         task.setOnFailed(event -> {
-            setReady("Save failed.");
-            showAlert(Alert.AlertType.ERROR, "Save Failed", rootCauseMessage(task.getException()));
+            boolean conflict = task.getException() instanceof ca.foodinventory.model.LabourConflictException;
+            setReady(conflict ? "Save blocked. Your entries are still on screen." : "Save failed.");
+            showAlert(conflict ? Alert.AlertType.WARNING : Alert.AlertType.ERROR,
+                    conflict ? "Data Changed" : "Save Failed", rootCauseMessage(task.getException()));
         });
         run(task, "daily-labour-cost-save");
     }

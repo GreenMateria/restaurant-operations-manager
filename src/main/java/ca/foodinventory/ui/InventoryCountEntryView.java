@@ -7,6 +7,7 @@ import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.InventoryCount;
 import ca.foodinventory.model.InventoryCountLine;
+import ca.foodinventory.model.InventoryCountSynchronizationResult;
 import ca.foodinventory.service.AlcoholProductProfileApiClient;
 import ca.foodinventory.service.InventoryApiClient;
 import javafx.concurrent.Task;
@@ -18,6 +19,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +40,7 @@ public class InventoryCountEntryView {
     private Button saveButton;
     private Button completeButton;
     private Button refreshButton;
+    private Button synchronizeButton;
 
     public InventoryCountEntryView(InventoryCount count) {
         this(count, null);
@@ -60,23 +63,27 @@ public class InventoryCountEntryView {
         saveButton = new Button("Save Quantities");
         completeButton = new Button("Complete Count");
         refreshButton = new Button("Refresh");
+        synchronizeButton = new Button("Synchronize with Template");
+        synchronizeButton.setDisable(count.isCompleted());
 
         saveButton.getStyleClass().add("primary-button");
         completeButton.getStyleClass().add("primary-button");
 
-        HBox buttons = new HBox(10, saveButton, completeButton, refreshButton);
+        HBox buttons = new HBox(10, saveButton, completeButton, synchronizeButton, refreshButton);
         VBox top = new VBox(10, title, dateLabel, buttons);
         top.setPadding(new Insets(15));
 
         rowsBox.setFillWidth(true);
 
         ScrollPane scrollPane = new ScrollPane(rowsBox);
+        scrollPane.getStyleClass().add("content-area");
         scrollPane.setFitToWidth(true);
         scrollPane.setPannable(true);
 
         saveButton.setOnAction(e -> saveQuantities());
         completeButton.setOnAction(e -> completeCount());
         refreshButton.setOnAction(e -> refreshRows());
+        synchronizeButton.setOnAction(e -> synchronizeWithTemplate());
 
         root.setTop(top);
         root.setCenter(scrollPane);
@@ -402,6 +409,77 @@ public class InventoryCountEntryView {
         );
     }
 
+    private void synchronizeWithTemplate() {
+        if (count.isCompleted()) return;
+        setSaving(true);
+        synchronizeButton.setText("Synchronizing...");
+        Task<SynchronizationData> task = new Task<>() {
+            @Override
+            protected SynchronizationData call() {
+                InventoryCountSynchronizationResult result = isMigratedDepartmentApiMode()
+                        ? apiClient.synchronizeCountWithTemplate(count.getId())
+                        : countDao.synchronizeWithTemplate(count.getId());
+                List<InventoryCountLine> lines = isMigratedDepartmentApiMode()
+                        ? apiClient.findCountLines(count.getId()) : lineDao.findByCount(count.getId());
+                return new SynchronizationData(result, lines, loadAlcoholProfilesIfNeeded());
+            }
+        };
+        task.setOnSucceeded(event -> {
+            mergeSynchronizedRows(task.getValue());
+            setSaving(false);
+            List<Integer> added = task.getValue().result().addedProductIds();
+            String message = added.isEmpty() ? "No missing products were found."
+                    : "Added " + added.size() + " product(s) at zero quantity:\n"
+                    + task.getValue().lines().stream().filter(line -> added.contains(line.getProductId()))
+                    .limit(20).map(line -> nullToBlank(line.getSku()) + " — " + nullToBlank(line.getProductDescription()))
+                    .collect(java.util.stream.Collectors.joining("\n"))
+                    + (added.size() > 20 ? "\nAnd " + (added.size() - 20) + " more." : "");
+            showAlert(Alert.AlertType.INFORMATION, "Template Synchronized", message
+                    + "\n\nExisting quantities and unsaved entries were preserved. Use Save Quantities to save your edits.");
+        });
+        task.setOnFailed(event -> {
+            setSaving(false);
+            showAlert(Alert.AlertType.ERROR, "Synchronization Failed", task.getException().getMessage());
+        });
+        Thread thread = new Thread(task, "inventory-count-synchronize");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void mergeSynchronizedRows(SynchronizationData data) {
+        // Reuse existing controls, including pending text and weighted alcohol inputs.
+        Map<Integer, RowBinding> existing = new LinkedHashMap<>();
+        rowBindings.forEach(binding -> existing.put(binding.line().getId(), binding));
+        List<RowBinding> merged = new ArrayList<>();
+        for (InventoryCountLine line : data.lines()) {
+            RowBinding binding = existing.remove(line.getId());
+            if (binding == null) {
+                binding = createDataRow(line, isAlcoholLayout() ? data.profiles().get(line.getProductId()) : null);
+            } else {
+                binding.line().setSectionName(line.getSectionName());
+            }
+            merged.add(binding);
+        }
+        merged.addAll(existing.values());
+        rowsBox.getChildren().clear();
+        rowBindings.clear();
+        navigationFields.clear();
+        rowsBox.getChildren().add(createHeaderRow());
+        String section = null;
+        for (RowBinding binding : merged) {
+            String nextSection = cleanSection(binding.line().getSectionName());
+            if (!nextSection.equals(section)) {
+                rowsBox.getChildren().add(createSectionRow(nextSection));
+                section = nextSection;
+            }
+            rowBindings.add(binding);
+            rowsBox.getChildren().add(binding.row());
+            if (binding.quantityField() != null) navigationFields.add(binding.quantityField());
+            if (binding.fullUnitsField() != null) navigationFields.add(binding.fullUnitsField());
+            if (binding.weightField() != null) navigationFields.add(binding.weightField());
+        }
+    }
+
     private void completeCount() {
         List<InventoryCountLine> lines = collectCommittedLines();
         runCountSaveTask(
@@ -414,11 +492,15 @@ public class InventoryCountEntryView {
                         countDao.markCompleted(count.getId());
                     }
                 },
-                () -> showAlert(
+                () -> {
+                    count.setCompleted(true);
+                    synchronizeButton.setDisable(true);
+                    showAlert(
                         Alert.AlertType.INFORMATION,
                         "Completed",
                         "Inventory count marked as completed."
-                )
+                    );
+                }
         );
     }
 
@@ -456,6 +538,8 @@ public class InventoryCountEntryView {
         saveButton.setDisable(saving);
         completeButton.setDisable(saving);
         refreshButton.setDisable(saving);
+        synchronizeButton.setDisable(saving || count.isCompleted());
+        if (!saving) synchronizeButton.setText("Synchronize with Template");
 
         if (!saving) {
             saveButton.setText("Save Quantities");
@@ -566,5 +650,10 @@ public class InventoryCountEntryView {
             TextField weightField,
             Label totalLabel
     ) {
+    }
+
+    private record SynchronizationData(InventoryCountSynchronizationResult result,
+                                       List<InventoryCountLine> lines,
+                                       Map<Integer, AlcoholProductProfile> profiles) {
     }
 }

@@ -10,6 +10,65 @@ import java.util.Map;
 
 class InventoryRepository {
 
+    String synchronizeCountWithTemplateJson(int locationId, int countId) throws SQLException {
+        String insertSql = """
+                INSERT INTO inventory_count_lines
+                    (count_id, product_id, quantity, count_unit, converted_quantity, conversion_factor, location_id)
+                SELECT ?, tl.product_id, 0, tl.count_unit, 0, tl.conversion_factor_to_base, tl.location_id
+                FROM inventory_count_template_lines tl
+                JOIN products p ON p.id = tl.product_id AND p.location_id = tl.location_id
+                WHERE tl.template_id = ? AND tl.location_id = ? AND tl.active = 1
+                  AND tl.id = (SELECT MIN(candidate.id) FROM inventory_count_template_lines candidate
+                               WHERE candidate.template_id = tl.template_id
+                                 AND candidate.location_id = tl.location_id
+                                 AND candidate.product_id = tl.product_id AND candidate.active = 1)
+                  AND NOT EXISTS (SELECT 1 FROM inventory_count_lines existing
+                                  WHERE existing.count_id = ? AND existing.location_id = ?
+                                    AND existing.product_id = tl.product_id)
+                RETURNING product_id
+                """;
+        try (Connection connection = PostgresConnectionProvider.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                int templateId;
+                try (PreparedStatement count = connection.prepareStatement("""
+                        SELECT c.template_id, c.completed FROM inventory_counts c
+                        JOIN inventory_count_templates t ON t.id = c.template_id AND t.location_id = c.location_id
+                        WHERE c.id = ? AND c.location_id = ? FOR UPDATE OF c
+                        """)) {
+                    count.setInt(1, countId);
+                    count.setInt(2, locationId);
+                    try (ResultSet result = count.executeQuery()) {
+                        if (!result.next()) { connection.rollback(); return null; }
+                        if (result.getInt("completed") != 0) throw new CountCompletedException();
+                        templateId = result.getInt("template_id");
+                    }
+                }
+                StringBuilder added = new StringBuilder("[");
+                int addedCount = 0;
+                try (PreparedStatement insert = connection.prepareStatement(insertSql)) {
+                    insert.setInt(1, countId);
+                    insert.setInt(2, templateId);
+                    insert.setInt(3, locationId);
+                    insert.setInt(4, countId);
+                    insert.setInt(5, locationId);
+                    try (ResultSet result = insert.executeQuery()) {
+                        while (result.next()) {
+                            if (addedCount++ > 0) added.append(',');
+                            added.append(result.getInt("product_id"));
+                        }
+                    }
+                }
+                connection.commit();
+                return "{\"status\":\"ok\",\"addedCount\":" + addedCount
+                        + ",\"addedProductIds\":" + added.append(']') + "}";
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        }
+    }
+
     String findActiveTemplatesJson(int locationId, String department) throws SQLException {
         String sql = """
                 SELECT id, name, active
@@ -468,14 +527,19 @@ class InventoryRepository {
                 JOIN inventory_counts c
                     ON l.count_id = c.id
                     AND c.location_id = l.location_id
-                JOIN inventory_count_template_lines tl
+                LEFT JOIN inventory_count_template_lines tl
                     ON c.template_id = tl.template_id
                     AND l.product_id = tl.product_id
                     AND tl.location_id = l.location_id
                     AND tl.active = 1
+                    AND tl.id = (SELECT MIN(candidate.id) FROM inventory_count_template_lines candidate
+                                 WHERE candidate.template_id = c.template_id
+                                   AND candidate.product_id = l.product_id
+                                   AND candidate.location_id = l.location_id
+                                   AND candidate.active = 1)
                 WHERE l.count_id = ?
                   AND l.location_id = ?
-                ORDER BY tl.sort_order
+                ORDER BY COALESCE(tl.sort_order, 2147483647), l.id
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();

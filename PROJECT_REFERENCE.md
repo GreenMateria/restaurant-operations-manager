@@ -1,6 +1,6 @@
 # StoreOps Manager — Project Reference
 
-_Last Updated: Friday, October 9, 2026_
+_Last Updated: Monday, October 12, 2026_
 
 This document is the primary reference for the **StoreOps Manager** project.
 
@@ -11,13 +11,15 @@ Read this first when starting a new development session, using Codex in IntelliJ
 
 This is the single current technical reference. It combines the former status, schema, coding standards, infrastructure, API, cloud-transition, and roadmap documentation. Update this file when behavior, schema, deployment, or priorities change. Read the implementation before making code changes; archived notes are historical, not current instructions.
 
-- **Desktop source version:** 4.1.5 in `pom.xml` at consolidation. The older v4.2.0 references below describe the planned release scope, not proof that v4.2.0 has been published.
+- **Desktop source version:** 4.1.6 in `pom.xml` when inspected October 12, 2026; this does not establish publication. The older v4.2.0 references below describe the planned release scope, not proof that v4.2.0 has been published.
 - **API source version:** use `api/pom.xml`; desktop and API versions may differ.
 - **Schema:** 23. Normal desktop use is Cloud API with store-scoped sessions; SQLite is a snapshot/recovery and development path.
 - **Latest accepted change (October 8, 2026):** finalized GFS LineItemList import, manual invoice number/date/shipping/HST/grand-total reconciliation, actual billed weighted costs, and product-based quantity conversion. The manager confirmed correct operation; 27 desktop tests passed. Actual delivered weight is absent from the export, so variable-weight base quantities remain approximate.
 - **Other current work:** zero-sales mapped wine category correction, admin launcher, and adopted AWS infrastructure with Secrets Manager and seven-day RDS backup retention. See the functional sections and release history for details.
 - **Deployment evidence:** infrastructure state was verified October 4, 2026; this documentation consolidation did not query or change live AWS resources.
-- **Latest Labour fix (October 9, 2026):** Save Net Sales and Save Tip Pool now update only their respective amount, preserving other sales fields, finalization, and saved hours. All 28 desktop tests and 11 API tests passed, including a stale-screen regression. The operator deployed through Admin Tools; AWS confirmed `esm-operations-api` at `UPDATE_COMPLETE` (11:30 a.m. Toronto), Lambda `Active` with update status `Successful`, and `/health` returned `status=ok`. The new authenticated save routes were not exercised against live store data. Updated desktop clients are still required; desktop publication/installation has not been verified.
+- **Pending count synchronization (October 12, 2026):** Synchronize with Template adds missing active template products to in-progress Food, Alcohol, and Supplies counts at zero quantity. Saved values and unsaved entry controls are retained, including weighted alcohol inputs; completed counts are rejected. Native database and authenticated JavaFX checks passed. No migration; desktop and API remain unreleased/undeployed.
+- **Pending Labour conflict protection (October 12, 2026):** hours and amount saves now check loaded values/revisions before writing; conflicts retain entered values. No migration. API deployment must be coordinated with updates on all desktops because older clients cannot save Labour data afterward. This work remains unreleased and undeployed; see Section 17 for behavior and verification limits.
+- **Latest deployed Labour fix (October 9, 2026):** Save Net Sales and Save Tip Pool now update only their respective amount, preserving other sales fields, finalization, and saved hours. All 28 desktop tests and 11 API tests passed, including a stale-screen regression. The operator deployed through Admin Tools; AWS confirmed `esm-operations-api` at `UPDATE_COMPLETE` (11:30 a.m. Toronto), Lambda `Active` with update status `Successful`, and `/health` returned `status=ok`. The new authenticated save routes were not exercised against live store data. Updated desktop clients are still required; desktop publication/installation has not been verified.
 
 | Information | Location in this reference |
 | --- | --- |
@@ -441,26 +443,15 @@ When a count is started, its count lines are created from the template at that t
 
 Changing the template afterward does not automatically add new items to the already-started count.
 
-Current workaround for a missing template item:
+**Pending release: Synchronize with Template (implemented October 12, 2026).** After adding a product to the template, open the existing incomplete count and click **Synchronize with Template**. Review the list of added products, enter their quantities, then use Save Quantities as usual. Deleting/restarting the count is no longer necessary after installing this update.
 
-1. Delete the incomplete count.
-2. Add the missing product to the template.
-3. Start the count again.
-4. Re-enter the quantities.
-
-Planned enhancement:
-
-```text
-Synchronize with Template
-```
-
-This future action should:
-
-- Add products now present in the template but missing from the count.
-- Preserve all existing quantities.
-- Never delete existing count lines.
-- Never overwrite entered quantities.
-- Work only as an additive synchronization.
+- Add only active template products missing from the count, with zero quantity and the template's current count unit/conversion factor. Existing lines retain quantities, converted quantities, count units, and conversion factors. Count dates, notes, and completion state are untouched.
+- Synchronization is additive and repeatable. Duplicate template product rows do not produce duplicate additions. Concurrent requests serialize on the count row in PostgreSQL; SQLite reserves the writer before checking.
+- The desktop retains existing controls and profiles rather than reloading quantities over typed edits. Both regular quantities and Full Units/Weight alcohol inputs survive synchronization without being saved automatically.
+- Existing count products remain visible if their template row is deactivated or removed; unmatched template metadata falls back to product description and the OTHER section. This does not delete or replace saved count lines.
+- Completed counts disable the action. The API checks completion again inside the transaction, so a screen opened before another manager completed the count cannot synchronize it.
+- Cloud API route: authenticated, store-scoped `POST /inventory-counts/{id}/synchronize-template`, with no body. Success returns `addedCount` and `addedProductIds`; completed counts return HTTP 409 and unavailable/other-store counts return HTTP 404. Local SQLite uses the equivalent DAO transaction.
+- No schema migration. The action requires the updated API in Cloud API mode; it is written/tested but not deployed or published. Coordinate this release with the Labour API/desktop rollout described in Section 17.
 
 Completed counts must remain historical snapshots and should not be modified by later template changes.
 
@@ -843,6 +834,20 @@ Freezer Pull:
 
 # 17. Labour Management
 
+## Pending release: Labour edit-conflict protection (October 12, 2026)
+
+- Labour Hours carries a fingerprint of the persisted week entries. A save checks it inside the same transaction as the complete week write; changed hours, snapshots, finalization, or newly created entries block the whole save. Sales and tip-pool changes do not invalidate an hours-only save.
+- Daily Labour Cost and Tip Pool retain the originally loaded amount for each date, skip unchanged amounts, and send `expectedAmount` with changed saves. The API compares only the edited field, preserving independent edits to other fields. Numeric scale differences do not create conflicts.
+- The API serializes operational Labour writes with a store row lock, including previously empty dates/weeks. Loads use a consistent transaction snapshot. SQLite fallback reserves its write transaction before checking. No schema migration is needed; schema remains 23.
+- A conflict returns HTTP 409 and retains the manager's entries on screen. The manager can review/copy their entries, then use Load Week (with the existing discard confirmation) and re-enter changes against current data. There is no automatic merge or overwrite action. Amount ranges save changed dates individually: a later conflict can leave earlier dates saved; successful dates retain their new baseline so retrying does not resubmit them. A weekly hours save is atomic.
+- `GET /labour/weekly/{date}` returns `revision`; `PUT /labour/weekly` requires `expectedRevision`. `GET /labour/daily/{date}` returns `revision` and `conflictProtection=true`; full-day `PUT /labour/daily` requires `expectedRevision` covering entries and sales. `PUT /labour/net-sales` and `PUT /labour/tip-pool` require `{ "workDate": "YYYY-MM-DD", "amount": 0, "expectedAmount": 0 }`. Missing preconditions return HTTP 428 before writing.
+- Coordinate the API deployment with installation of the updated desktop on all work PCs. Older desktops cannot save Labour data after this API deployment; the updated desktop also refuses unprotected saves against an older API. This work is written but has not been deployed or published.
+- Validation: all 38 default desktop regression tests and 22 API tests passed. The six optional authenticated JavaFX scenarios passed separately, bringing desktop coverage executed to 44 scenarios. Native repository verification repeated nine API scenarios on PostgreSQL 18.6.
+- Regression coverage includes stale same-field saves, independent fields/store scopes, empty-week conflicts, whole-week rollback, full-day conflicts, a waiting writer, client preconditions, retained edits, and rejection of older clients. October 12 verification passed nine repository scenarios against native PostgreSQL 18.6 and six actual JavaFX scenarios against an authenticated local API, including two screens editing the same hours/amounts and regular/weighted count synchronization.
+- The runtime checks found and fixed revision tokens being lost when the Labour screens normalize their loaded models. They also found and fixed overlapping API requests sharing a JDBC transaction: repositories now receive independently owned connections. Existing repositories already close their connections after use.
+- Repeat the integration checks with `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-OperationalIntegration.ps1 -PostgresBinDirectory '<complete PostgreSQL package>/bin'`. The script creates a disposable loopback-only PostgreSQL cluster/database, runs native repository and authenticated JavaFX tests, then stops/removes its test database. Logs are retained under ignored `.admin/operational-verification-*`. A complete PostgreSQL distribution (including share/postgres.bki), Java, and Maven are prerequisites; no production configuration is read or changed by these test fixtures.
+
+
 Labour Management is a top-level operational module replacing the accepted manager Excel workflow.
 
 Implemented Labour Management work includes:
@@ -864,7 +869,7 @@ Daily Labour Cost, Tip Pool, and Tip Pool Breakdown are implemented and accepted
 
 Daily Labour Cost UI notes:
 
-- Saving net sales updates only `labour_daily_sales.net_sales`; saving Tip Pool updates only `tip_out_pool`. Both preserve other sales fields, finalization, and labour hours, even when another manager changes them after the screen loads. The updated desktop requires the API's `PUT /labour/net-sales` and `PUT /labour/tip-pool` routes, each accepting `{ "workDate": "YYYY-MM-DD", "amount": 0 }`. The operator deployed the API through Admin Tools on October 9, 2026; stack/Lambda status and API health were verified afterward. Updated desktop clients are still required; older clients retain full-day saves. No schema migration is required. These saves do not resolve two users concurrently editing the same amount; the later save wins.
+- Saving net sales updates only `labour_daily_sales.net_sales`; saving Tip Pool updates only `tip_out_pool`. Both preserve other sales fields, finalization, and labour hours, even when another manager changes them after the screen loads. The updated desktop requires the API's `PUT /labour/net-sales` and `PUT /labour/tip-pool` routes, each accepting `{ "workDate": "YYYY-MM-DD", "amount": 0 }`. The operator deployed the API through Admin Tools on October 9, 2026; stack/Lambda status and API health were verified afterward. Updated desktop clients are still required; older clients retain full-day saves. No schema migration is required. The October 9 deployed API does not resolve two users concurrently editing the same amount; the later save wins. The pending October 12 changes above add conflict protection and require a coordinated API/desktop rollout.
 
 - Date selection loads one actual calendar day.
 - Manual `net_sales` and `tip_out_pool` values are stored in `labour_daily_sales`.
@@ -1142,7 +1147,6 @@ Primary unfinished areas:
 - Recipe costing
 - Yield tracking
 - Advanced reporting
-- Inventory count template synchronization
 
 ---
 
@@ -2228,7 +2232,7 @@ Notes:
 - `GET /labour/weeks` returns distinct saved Labour Hours week starts for the list-style Labour Hours screen.
 - `PUT /labour/weekly` saves a full week payload in bulk rather than issuing one request per edited cell.
 - Labour Hours data is stored by actual calendar date, not by relative "this week" columns.
-- Daily Labour Cost and Tip Pool use `workDate` / `salesDate` in `YYYY-MM-DD` format and save daily sales plus employee daily entries in one request.
+- Daily Labour Cost and Tip Pool use `workDate` in `YYYY-MM-DD` format and save only their own amount. In the pending conflict-protection release, amount saves require `expectedAmount`; weekly and full-day saves require `expectedRevision`. Full-day saves are retained for compatibility with callers supplying the new precondition, but normal amount-entry screens do not use them.
 - `tip_pool_eligible` and `uniform_deduction_applicable` are returned in labour row payloads so Tip Pool and Tip Pool Breakdown can calculate from the same API-loaded labour data.
 - The live AWS RDS Labour schema was applied on Sunday, September 6, 2026. Labour API route updates for Daily Labour Cost, Tip Pool, Tip Pool Breakdown, and Labour Hours saved-week listing were deployed on Monday, September 7, 2026. Later multi-location, protected-password, and pay-rate history migrations advanced the live RDS schema through version 23.
 
@@ -3003,11 +3007,10 @@ Use the in-app System workflow for cloud protected-password changes. Legacy loca
 
 # 32. Deferred Enhancements and Accepted Limits
 
-- Inventory count template synchronization: additive missing lines only, preserve quantities and completed history.
 - Supplier combo-case invoice splits: map one supplier SKU to child inventory products with quantity and cost allocation; do not double-count the original line. Proposed fields are supplier, supplier SKU, child product, quantity per imported unit, cost percentage/ratio, and active flag.
 - Food theoretical usage/variance, recipe costing, yield analysis, historical trends, and cross-location reporting remain future work.
 - A browser frontend is a future option over the existing Java API; no immediate JavaFX rewrite or repo restructure is planned.
-- Live screen refresh/edit-conflict handling, local backup status/export polish, updater retry polish, stronger per-user authentication, separate AWS environments, and a recovery drill require explicit future scope.
+- Automatic live screen refresh and edit-conflict handling outside the protected Labour operational saves, local backup status/export polish, updater retry polish, stronger per-user authentication, separate AWS environments, and a recovery drill require explicit future scope.
 - Full billed weighted purchase cost is accurate; quantities/cost per lb or kg are approximate because finalized exports lack actual weight. This is an accepted limit, not an unresolved importer bug.
 - Alcohol variance, Labour Management, multi-location Store Login, shared POS catalog/KDS handling, and Freezer Pull are implemented. Modify accepted workflows only for specific requested changes or observed issues.
 

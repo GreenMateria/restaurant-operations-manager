@@ -2,12 +2,67 @@ package ca.foodinventory.dao;
 
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.InventoryCount;
+import ca.foodinventory.model.InventoryCountSynchronizationResult;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class InventoryCountDao {
+
+    public InventoryCountSynchronizationResult synchronizeWithTemplate(int countId) {
+        String insertSql = """
+                INSERT INTO inventory_count_lines
+                    (count_id, product_id, quantity, count_unit, converted_quantity, conversion_factor)
+                SELECT ?, tl.product_id, 0, tl.count_unit, 0, tl.conversion_factor_to_base
+                FROM inventory_count_template_lines tl
+                WHERE tl.template_id = ? AND tl.active = 1
+                  AND tl.id = (SELECT MIN(candidate.id) FROM inventory_count_template_lines candidate
+                               WHERE candidate.template_id = tl.template_id
+                                 AND candidate.product_id = tl.product_id AND candidate.active = 1)
+                  AND NOT EXISTS (SELECT 1 FROM inventory_count_lines existing
+                                  WHERE existing.count_id = ? AND existing.product_id = tl.product_id)
+                RETURNING product_id
+                """;
+        try (Connection connection = DatabaseManager.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                // Reserve the SQLite writer before checking completion or missing products.
+                try (PreparedStatement lock = connection.prepareStatement(
+                        "UPDATE inventory_counts SET id = id WHERE 0 = 1")) {
+                    lock.executeUpdate();
+                }
+                int templateId;
+                try (PreparedStatement count = connection.prepareStatement(
+                        "SELECT template_id, completed FROM inventory_counts WHERE id = ?")) {
+                    count.setInt(1, countId);
+                    try (ResultSet result = count.executeQuery()) {
+                        if (!result.next()) throw new IllegalArgumentException("Inventory count not found.");
+                        if (result.getInt("completed") != 0) {
+                            throw new IllegalStateException("Completed counts cannot be synchronized with a template.");
+                        }
+                        templateId = result.getInt("template_id");
+                    }
+                }
+                List<Integer> added = new ArrayList<>();
+                try (PreparedStatement insert = connection.prepareStatement(insertSql)) {
+                    insert.setInt(1, countId);
+                    insert.setInt(2, templateId);
+                    insert.setInt(3, countId);
+                    try (ResultSet result = insert.executeQuery()) {
+                        while (result.next()) added.add(result.getInt("product_id"));
+                    }
+                }
+                connection.commit();
+                return new InventoryCountSynchronizationResult(added);
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to synchronize the count with its template.", e);
+        }
+    }
 
     public int createCount(
             int templateId,

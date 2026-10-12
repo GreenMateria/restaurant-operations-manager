@@ -16,11 +16,66 @@ import java.sql.Statement;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LabourDailyEntryDaoTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void rejectsStaleAmountsButAllowsIndependentFields() throws Exception {
+        TestDatabaseSupport.useTempSqliteDatabase(tempDir.resolve("sales-conflicts.db"));
+        LabourDailyEntryDao first = new LabourDailyEntryDao();
+        LabourDailyEntryDao second = new LabourDailyEntryDao();
+        LocalDate date = LocalDate.of(2026, 10, 5);
+        var loaded = first.loadDay(date).sales();
+        second.saveTipPool(date, new BigDecimal("300"), BigDecimal.ZERO);
+        first.saveNetSales(date, new BigDecimal("1000"), loaded.getLoadedNetSales());
+        assertThrows(RuntimeException.class, () -> first.saveTipPool(date, new BigDecimal("250"), loaded.getLoadedTipPool()));
+        assertMoney("300", first.loadDay(date).sales().getTipOutPool());
+        assertMoney("1000", first.loadDay(date).sales().getNetSales());
+        assertThrows(RuntimeException.class, () -> first.saveNetSales(date, new BigDecimal("900"), loaded.getLoadedNetSales()));
+        first.saveTipPool(date, new BigDecimal("310"), new BigDecimal("300.00"));
+        assertMoney("310", first.loadDay(date).sales().getTipOutPool());
+    }
+
+    @Test
+    void rejectsStaleEmptyWeekWithoutWritingAnyEntries() throws Exception {
+        TestDatabaseSupport.useTempSqliteDatabase(tempDir.resolve("hours-conflicts.db"));
+        int position = insertPosition();
+        insertEmployee(position, "18.00");
+        LabourDailyEntryDao dao = new LabourDailyEntryDao();
+        LocalDate date = LocalDate.of(2026, 10, 5);
+        var first = dao.loadWeek(date);
+        var second = dao.loadWeek(date);
+        first.rows().getFirst().getOrCreateEntry(date).setShift1Hours(new BigDecimal("8"));
+        dao.saveWeek(first);
+        second.rows().getFirst().getOrCreateEntry(date.plusDays(1)).setShift1Hours(new BigDecimal("5"));
+        assertThrows(RuntimeException.class, () -> dao.saveWeek(second));
+        var current = dao.loadWeek(date);
+        assertMoney("8", current.rows().getFirst().getOrCreateEntry(date).getShift1Hours());
+        assertMoney("0", current.rows().getFirst().getOrCreateEntry(date.plusDays(1)).getShift1Hours());
+        dao.saveNetSales(date, new BigDecimal("1000"), BigDecimal.ZERO);
+        // Independent sales edits must not invalidate an hours-only save.
+        dao.saveWeek(current);
+        var beforeFinalization = dao.loadWeek(date);
+        try (var c = DatabaseManager.getConnection(); var statement = c.createStatement()) {
+            statement.executeUpdate("UPDATE labour_daily_entries SET finalized = 1");
+        }
+        assertThrows(RuntimeException.class, () -> dao.saveWeek(beforeFinalization));
+    }
+
+    @Test
+    void rejectsStaleFullDaySave() throws Exception {
+        TestDatabaseSupport.useTempSqliteDatabase(tempDir.resolve("full-day-conflicts.db"));
+        LabourDailyEntryDao dao = new LabourDailyEntryDao();
+        LocalDate date = LocalDate.of(2026, 10, 5);
+        var day = dao.loadDay(date);
+        dao.saveNetSales(date, new BigDecimal("1000"), BigDecimal.ZERO);
+        assertThrows(RuntimeException.class, () -> dao.saveDay(day));
+        assertMoney("1000", dao.loadDay(date).sales().getNetSales());
+    }
 
     @Test
     void independentSalesSavesPreserveOtherAmountsHoursAndFinalization() throws Exception {
@@ -31,33 +86,33 @@ class LabourDailyEntryDaoTest {
         int employeeId = insertEmployee(positionId, "18.00");
         saveEntry(employeeId, positionId, date.toString(), "18.00", "4.00");
 
-        dao.saveNetSales(date, new BigDecimal("1000"));
-        dao.saveTipPool(date, new BigDecimal("240"));
+        dao.saveNetSales(date, new BigDecimal("1000"), BigDecimal.ZERO);
+        dao.saveTipPool(date, new BigDecimal("240"), BigDecimal.ZERO);
         var staleNetSalesScreen = dao.loadDay(date);
-        var staleTipPoolScreen = dao.loadDay(date);
         try (Connection connection = DatabaseManager.getConnection();
              Statement statement = connection.createStatement()) {
             statement.executeUpdate("UPDATE labour_daily_sales SET finalized = 1");
             statement.executeUpdate("UPDATE labour_daily_entries SET shift_1_hours = 8");
         }
-        dao.saveTipPool(date, new BigDecimal("300"));
+        dao.saveTipPool(date, new BigDecimal("300"), new BigDecimal("240"));
+        var staleTipPoolScreen = dao.loadDay(date);
         staleNetSalesScreen.sales().setNetSales(new BigDecimal("1200"));
-        dao.saveNetSales(date, staleNetSalesScreen.sales().getNetSales());
+        dao.saveNetSales(date, staleNetSalesScreen.sales().getNetSales(), staleNetSalesScreen.sales().getLoadedNetSales());
         var loaded = dao.loadDay(date);
         assertMoney("300", loaded.sales().getTipOutPool());
         assertMoney("1200", loaded.sales().getNetSales());
 
         staleTipPoolScreen.sales().setTipOutPool(new BigDecimal("310"));
-        dao.saveTipPool(date, staleTipPoolScreen.sales().getTipOutPool());
+        dao.saveTipPool(date, staleTipPoolScreen.sales().getTipOutPool(), staleTipPoolScreen.sales().getLoadedTipPool());
         loaded = dao.loadDay(date);
         assertMoney("1200", loaded.sales().getNetSales());
         assertMoney("310", loaded.sales().getTipOutPool());
         assertEquals(true, loaded.sales().isFinalized());
         assertMoney("8.00", loaded.rows().getFirst().getEntriesByDate().get(date).getShift1Hours());
 
-        dao.saveTipPool(date.plusDays(1), BigDecimal.ZERO);
+        dao.saveTipPool(date.plusDays(1), BigDecimal.ZERO, BigDecimal.ZERO);
         assertMoney("0", dao.loadDay(date.plusDays(1)).sales().getNetSales());
-        dao.saveNetSales(date, BigDecimal.ZERO);
+        dao.saveNetSales(date, BigDecimal.ZERO, new BigDecimal("1200"));
         assertMoney("310", dao.loadDay(date).sales().getTipOutPool());
     }
 

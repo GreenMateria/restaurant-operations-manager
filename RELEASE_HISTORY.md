@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added Synchronize with Template to in-progress Food, Alcohol, and Supplies counts. Adds missing active template products at zero quantity, preserves saved quantities/units/conversions and unsaved regular or weighted entries, and lists added products. Repeat/concurrent synchronization does not add duplicates; completed counts and other stores are rejected. Existing count lines stay visible when their template rows are removed. No schema migration; updated desktop and API required. Not deployed or published.
+- Verification passed: 38 default desktop tests, 22 API tests, and six optional authenticated JavaFX scenarios (44 desktop scenarios executed in total).
+- Completed native PostgreSQL and authenticated JavaFX verification: nine repository scenarios and six screen scenarios passed. The runtime checks fixed Labour revision tokens lost during screen normalization and overlapping API requests sharing a JDBC transaction. Added scripts/Test-OperationalIntegration.ps1 for repeatable isolated checks.
+
+- Added Labour edit-conflict protection: stale Labour Hours, Net Sales, Tip Pool, and full-day saves are blocked before overwriting newer data. Entries remain on screen for review before reloading; unchanged amount dates are skipped, and weekly hours saves are atomic.
+- Labour APIs now require loaded-value/revision preconditions (HTTP 428 if missing; HTTP 409 on conflict). No schema migration. Coordinate API deployment and all desktop installations: older desktops cannot save Labour data after the API update. This change has not been deployed or published.
+- Added regression coverage for conflicting/independent edits, store isolation, empty weeks, rollback, waiting writers, client requests, and retained edits. Default API SQL tests run using a disposable SQLite lock adapter; native PostgreSQL and actual authenticated two-screen checks also passed on October 12.
+
 - Fixed stale Daily Labour Cost saves overwriting newer Tip Pool amounts. Save Net Sales and Save Tip Pool now update only their respective amount, preserving other amounts, saved hours, and finalization. All 28 desktop tests and 11 API tests passed, including stale-screen regression coverage. No schema migration. Older desktop versions retain the previous full-day save behavior.
 - Operator deployed the updated API through Admin Tools on October 9, 2026. Verified `esm-operations-api` at UPDATE_COMPLETE, Lambda Active with Successful update status, and API health OK at approximately 11:30 a.m. Toronto. Live authenticated amount saves were not exercised. Updated desktop publication/installation remains pending verification; API deployment alone does not update client behavior.
 
