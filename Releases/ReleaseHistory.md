@@ -304,3 +304,8 @@ Date: 2026-10-12 12:42
 Date: 2026-10-24 12:29
 
 - Updated invoicing, added split take out packaging. Fixed catch weight calculation. Added user confirmation for split qtys and catch weights
+
+## v4.1.8
+Date: 2026-10-24 12:41
+
+- 
