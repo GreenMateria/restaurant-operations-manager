@@ -309,6 +309,7 @@ public class InventoryCountsView {
 
         stage.setScene(scene);
         WindowSizing.fitAndCenter(stage, 1200, 800);
+        stage.setOnHiding(event -> view.flushDraft());
         stage.show();
     }
 

@@ -8,6 +8,9 @@ public class InventoryCountLine {
     private double quantity;
     private String countUnit;
     private double convertedQuantity;
+    private Double bottomSleeves;
+    private Double lidSleeves;
+    private boolean pairedPackaging;
 
     private String sku;
     private String productDescription;
@@ -47,6 +50,30 @@ public class InventoryCountLine {
 
     public double getConvertedQuantity() {
         return convertedQuantity;
+    }
+
+    public Double getBottomSleeves() {
+        return bottomSleeves;
+    }
+
+    public void setBottomSleeves(Double bottomSleeves) {
+        this.bottomSleeves = bottomSleeves;
+    }
+
+    public Double getLidSleeves() {
+        return lidSleeves;
+    }
+
+    public void setLidSleeves(Double lidSleeves) {
+        this.lidSleeves = lidSleeves;
+    }
+
+    public boolean isPairedPackaging() {
+        return pairedPackaging;
+    }
+
+    public void setPairedPackaging(boolean pairedPackaging) {
+        this.pairedPackaging = pairedPackaging;
     }
 
     public String getSku() {

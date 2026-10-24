@@ -475,6 +475,8 @@ If the product is missing:
 8. Save the template line.
 9. Save the template.
 
+For a takeout container sold as one case of lids and bottoms, edit its Supplies count-template line and select **Count bottom and lid sleeves separately**. Keep the count unit as **SLEEVE** and the existing conversion that makes total sleeves count toward valuation. On the order guide, set the Case description to something clear such as **3 bottom + 3 lid sleeves**. A previously saved total cannot be divided into components automatically; enter both sleeve counts on the next count.
+
 ![Supplies count template](docs/images/supplies-count-template.png)
 
 ## SUPPLIES 3 - Print The Supplies Count Sheet
@@ -498,6 +500,7 @@ If the product is missing:
 6. Enter period end date.
 7. Start the count.
 8. Enter counted quantities from the paper count sheet.
+   For a paired packaging item, enter **Bottom** and **Lid** sleeves separately. The screen adds them for the existing total quantity; enter 0 explicitly when one side is empty.
 9. Save.
 10. Review for blanks or mistakes.
 11. Save again if changes were made.
@@ -515,6 +518,8 @@ If the product is missing:
 6. Enter order quantities.
 7. Print the guide.
 
+For paired packaging, **Bottom / Lid sleeves** shows the two closing counts. For example, `2 / 4` means two bottom sleeves and four lid sleeves even though the total count is six. Blank means no separate breakdown was recorded for that historical count.
+
 ![Supplies order guide](docs/images/supplies-order-guide.png)
 
 Supplies are usually compared against total revenue in reporting.
@@ -529,12 +534,18 @@ Use the department menus for food, alcohol, and supplies invoices. Invoices keep
 
 1. From the dashboard, click **Food Department**.
 2. Click **Import Invoice**.
-3. Select the finalized GFS **LineItemList.csv** invoice export. Delivery-order CSV files are no longer used for this workflow.
+3. Select a finalized GFS **InvoicesList.csv** export for one invoice. The older **LineItemList.csv** export also remains supported. Delivery-order CSV files are not supported.
 4. Wait for the invoice preview to load.
 5. Review the imported merchandise subtotal.
 6. Confirm delivered quantities and line totals; zero-quantity, zero-value items are skipped, and weighted item costs use the supplier's billed line total.
 7. Review the supplier.
 8. Scroll through the invoice lines.
+
+If a billed CSV row shows **0** received cases or splits, the app pauses and shows the item, CSV row, and billed amount. Check the paper invoice, enter the actual received quantity, and continue. InvoicesList may suggest its original ordered quantity, but you must verify it before accepting. The billed line total stays unchanged. Cancel stops the import without saving any of its lines. For other import errors, click **Copy Error Details** and share the copied text for diagnosis.
+
+InvoicesList pre-fills the invoice number, date, item tax, and original grand total in the save dialog. Check those values against the paper invoice. Shipping and other charges are not identified by this CSV and must still be entered manually so the invoice balances. The **Billed Weight** column shows the supplier's weight for reference; inventory quantity conversion still uses product setup.
+
+Catch-weight line totals come from the supplier CSV automatically, even when cases have different prices. If the imported total matches the paper invoice, no case-price entry is needed. If a line differs, select it and click **Enter Case Prices**. Enter the billed amount printed for each case. The dialog shows their total next to the imported line amount. Click **Apply Case Prices** to use the exact sum as **Extended Cost** and its average as **Case Cost**, then compare **Current Merchandise** with the paper invoice. If the CSV lists the cases on separate rows, select and correct each row as needed. The individual case amounts are used to calculate the line total; the saved invoice retains the combined line and its total, while the paper invoice retains the per-case detail.
 
 ![Import invoice](docs/images/import-invoice.png)
 
@@ -544,7 +555,7 @@ If every line is matched:
 2. Review the category breakdown.
 3. Click **Save Invoice**.
 
-In the save dialog, enter the invoice number, invoice date, shipping, HST, and **Paper Invoice Grand Total** manually from the paper copy. The calculated grand total is merchandise plus shipping, HST, and any other adjustments. Save is enabled only when the difference is zero. Item tax values from the CSV are not added automatically. For variable-weight items, the CSV provides actual billed cost but not actual delivered weight.
+In the save dialog, verify the invoice number, invoice date, HST, and **Paper Invoice Grand Total** against the paper copy. InvoicesList pre-fills these fields; LineItemList requires manual entry. Enter shipping and any other charges from the paper invoice. The calculated grand total is merchandise plus those adjustments. Save is enabled only when the difference is zero. The InvoicesList billed weight is shown for reference and does not yet replace product-based inventory quantity conversion.
 
 The preview labels mean:
 

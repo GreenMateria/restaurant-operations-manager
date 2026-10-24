@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 23;
+    public static final int CURRENT_SCHEMA_VERSION = 24;
 
     private static final String[] STORE_OWNED_TABLES = {
             "products",
@@ -88,6 +88,9 @@ public class PostgresSchemaInitializer {
         requireColumn(connection, "labour_daily_entries", "position_name_snapshot");
         requireColumn(connection, "labour_daily_entries", "labour_group_snapshot");
         requireColumn(connection, "inventory_count_template_lines", "order_guide_case_size");
+        requireColumn(connection, "inventory_count_template_lines", "paired_packaging");
+        requireColumn(connection, "inventory_count_lines", "bottom_sleeves");
+        requireColumn(connection, "inventory_count_lines", "lid_sleeves");
         requireColumn(connection, "production_items", "yield_factor");
         requireColumn(connection, "production_profile_lines", "yield_factor");
         requireColumn(connection, "sales_periods", "food_net_sales");
@@ -188,6 +191,7 @@ public class PostgresSchemaInitializer {
                     conversion_factor_to_base DOUBLE PRECISION DEFAULT 1,
                     display_name TEXT,
                     order_guide_case_size TEXT,
+                    paired_packaging INTEGER NOT NULL DEFAULT 0,
                     active INTEGER DEFAULT 1
                 )
                 """);
@@ -212,6 +216,8 @@ public class PostgresSchemaInitializer {
                     quantity DOUBLE PRECISION NOT NULL DEFAULT 0,
                     count_unit TEXT,
                     converted_quantity DOUBLE PRECISION DEFAULT 0,
+                    bottom_sleeves DOUBLE PRECISION,
+                    lid_sleeves DOUBLE PRECISION,
                     conversion_factor DOUBLE PRECISION DEFAULT 1
                 )
                 """);

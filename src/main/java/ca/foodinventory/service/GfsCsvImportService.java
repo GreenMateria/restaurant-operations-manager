@@ -14,11 +14,17 @@ import java.util.List;
 public class GfsCsvImportService {
 
     public InvoiceImportResult readInvoice(File file) {
+        return readInvoice(file, null);
+    }
+
+    public InvoiceImportResult readInvoice(File file, QuantityCorrection quantityCorrection) {
         List<InvoiceLine> lines = new ArrayList<>();
 
         String invoiceNumber = "";
         String invoiceDate = "";
         BigDecimal invoiceTotal = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxTotal = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal supplierTotal = null;
 
         try (BufferedReader reader = new BufferedReader(new FileReader(file, StandardCharsets.UTF_8))) {
             String header = reader.readLine();
@@ -26,11 +32,16 @@ public class GfsCsvImportService {
                 throw new IllegalArgumentException("The invoice CSV is empty.");
             }
             List<String> headers = parseCsvLine(header);
-            String[] required = {"Item Description", "Current Quantity", "Unit Price", "Line Total",
+            boolean invoicesList = headers.contains("Invoice") && headers.contains("Line Item");
+            String[] required = invoicesList
+                    ? new String[]{"Invoice", "Invoice Date", "Original Amount", "Line Item", "Item Description",
+                    "Original Quantity", "Current Quantity", "Unit Price", "Total Amount", "Tax Amount",
+                    "Unit of Measure", "Weight", "Split Item Indicator"}
+                    : new String[]{"Item Description", "Current Quantity", "Unit Price", "Line Total",
                     "Unit of Measure", "Split Item Indicator", "Item Code"};
             for (String name : required) {
                 if (!headers.contains(name)) {
-                    throw new IllegalArgumentException("Choose the finalized invoice LineItemList CSV. Missing column: " + name);
+                    throw new IllegalArgumentException("Choose a finalized LineItemList or InvoicesList CSV. Missing column: " + name);
                 }
             }
             String row;
@@ -42,26 +53,60 @@ public class GfsCsvImportService {
                     continue;
                 }
                 List<String> columns = parseCsvLine(row);
-                String sku = get(columns, headers.indexOf("Item Code"));
+                if (invoicesList) {
+                    String rowInvoice = get(columns, headers.indexOf("Invoice"));
+                    String rowDate = get(columns, headers.indexOf("Invoice Date"));
+                    BigDecimal rowTotal = readNumber(columns, headers, "Original Amount", rowNumber)
+                            .setScale(2, RoundingMode.HALF_UP);
+                    if (rowInvoice.isBlank() || rowDate.isBlank() || rowTotal.signum() < 0) {
+                        throw new IllegalArgumentException("Invalid invoice details on CSV row " + rowNumber);
+                    }
+                    if (supplierTotal == null) {
+                        invoiceNumber = rowInvoice;
+                        invoiceDate = rowDate;
+                        supplierTotal = rowTotal;
+                    } else if (!invoiceNumber.equals(rowInvoice) || !invoiceDate.equals(rowDate)
+                            || supplierTotal.compareTo(rowTotal) != 0) {
+                        throw new IllegalArgumentException("InvoicesList CSV contains multiple invoices or inconsistent totals on row " + rowNumber);
+                    }
+                }
+                String sku = get(columns, headers.indexOf(invoicesList ? "Line Item" : "Item Code"));
                 String description = get(columns, headers.indexOf("Item Description"));
                 BigDecimal quantity = readNumber(columns, headers, "Current Quantity", rowNumber);
-                BigDecimal extendedCost = readNumber(columns, headers, "Line Total", rowNumber)
+                BigDecimal extendedCost = readNumber(columns, headers, invoicesList ? "Total Amount" : "Line Total", rowNumber)
                         .setScale(2, RoundingMode.HALF_UP);
+                if (invoicesList) {
+                    taxTotal = taxTotal.add(readNumber(columns, headers, "Tax Amount", rowNumber));
+                }
                 if (quantity.signum() == 0 && extendedCost.signum() == 0) {
                     continue;
                 }
-                if (sku.isBlank() || description.isBlank() || quantity.signum() <= 0 || extendedCost.signum() < 0) {
-                    throw new IllegalArgumentException("Invalid item or received quantity on CSV row " + rowNumber);
-                }
                 String splitFlag = get(columns, headers.indexOf("Split Item Indicator"));
                 String weightFlag = get(columns, headers.indexOf("Unit of Measure"));
-                if ((!splitFlag.equalsIgnoreCase("Y") && !splitFlag.equalsIgnoreCase("N"))
-                        || (!weightFlag.equalsIgnoreCase("Y") && !weightFlag.equalsIgnoreCase("N"))) {
-                    throw new IllegalArgumentException("Unrecognized split/weight indicator on CSV row " + rowNumber);
+                boolean split = readIndicator(splitFlag, "Split Item Indicator", rowNumber);
+                boolean weighted = readIndicator(weightFlag, "Unit of Measure", rowNumber);
+                BigDecimal billedWeight = invoicesList
+                        ? readNumber(columns, headers, "Weight", rowNumber) : BigDecimal.ZERO;
+                if (billedWeight.signum() < 0) {
+                    throw new IllegalArgumentException("Negative Weight on CSV row " + rowNumber);
                 }
-                boolean split = splitFlag.equalsIgnoreCase("Y");
+                if (quantity.signum() == 0 && extendedCost.signum() > 0 && quantityCorrection != null) {
+                    BigDecimal suggested = invoicesList
+                            ? readNumber(columns, headers, "Original Quantity", rowNumber) : null;
+                    quantity = quantityCorrection.correct(rowNumber, sku, description, extendedCost, split, suggested);
+                    if (quantity == null) {
+                        throw new ImportCancelledException();
+                    }
+                }
+                if (quantity.signum() <= 0) {
+                    throw new IllegalArgumentException("Invalid Current Quantity on CSV row " + rowNumber
+                            + ": " + quantity + " (Line Total: " + extendedCost + ")");
+                }
+                if (sku.isBlank() || description.isBlank() || extendedCost.signum() < 0) {
+                    throw new IllegalArgumentException("Invalid item or Line Total on CSV row " + rowNumber);
+                }
                 BigDecimal unitCost = readNumber(columns, headers, "Unit Price", rowNumber);
-                if (weightFlag.equalsIgnoreCase("Y")) {
+                if (weighted) {
                     // Store the billed cost per received case/each, rather than the per-pound price.
                     unitCost = extendedCost.divide(quantity, 4, RoundingMode.HALF_UP);
                 }
@@ -74,7 +119,7 @@ public class GfsCsvImportService {
                 BigDecimal eachCost = split ? unitCost : BigDecimal.ZERO;
                 invoiceTotal = invoiceTotal.add(extendedCost);
 
-                lines.add(new InvoiceLine(
+                InvoiceLine line = new InvoiceLine(
                         sku,
                         description,
                         caseQty,
@@ -83,19 +128,21 @@ public class GfsCsvImportService {
                         caseCost,
                         eachCost,
                         extendedCost
-                ));
+                );
+                if (weighted && billedWeight.signum() > 0) {
+                    line.setBilledWeight(billedWeight);
+                }
+                lines.add(line);
             }
 
+        } catch (ImportCancelledException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to import finalized GFS invoice CSV: " + e.getMessage(), e);
         }
 
-        return new InvoiceImportResult(
-                invoiceNumber,
-                invoiceDate,
-                invoiceTotal,
-                lines
-        );
+        return new InvoiceImportResult(invoiceNumber, invoiceDate, invoiceTotal,
+                taxTotal.setScale(2, RoundingMode.HALF_UP), supplierTotal, lines);
     }
 
     private BigDecimal readNumber(List<String> columns, List<String> headers, String name, int row) {
@@ -105,6 +152,25 @@ public class GfsCsvImportService {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid " + name + " on CSV row " + row + ": " + value);
         }
+    }
+
+    private boolean readIndicator(String value, String name, int row) {
+        if (value.equalsIgnoreCase("Y") || value.equals("1")) {
+            return true;
+        }
+        if (value.equalsIgnoreCase("N") || value.equals("0")) {
+            return false;
+        }
+        throw new IllegalArgumentException("Unrecognized " + name + " on CSV row " + row + ": " + value);
+    }
+
+    @FunctionalInterface
+    public interface QuantityCorrection {
+        BigDecimal correct(int row, String sku, String description, BigDecimal lineTotal,
+                           boolean split, BigDecimal suggestedQuantity);
+    }
+
+    public static class ImportCancelledException extends RuntimeException {
     }
 
     public List<InvoiceLine> readInvoiceLines(File file) {
@@ -157,17 +223,23 @@ public class GfsCsvImportService {
         private final String invoiceNumber;
         private final String invoiceDate;
         private final BigDecimal invoiceTotal;
+        private final BigDecimal taxTotal;
+        private final BigDecimal supplierTotal;
         private final List<InvoiceLine> lines;
 
         public InvoiceImportResult(
                 String invoiceNumber,
                 String invoiceDate,
                 BigDecimal invoiceTotal,
+                BigDecimal taxTotal,
+                BigDecimal supplierTotal,
                 List<InvoiceLine> lines
         ) {
             this.invoiceNumber = invoiceNumber;
             this.invoiceDate = invoiceDate;
             this.invoiceTotal = invoiceTotal;
+            this.taxTotal = taxTotal;
+            this.supplierTotal = supplierTotal;
             this.lines = lines;
         }
 
@@ -181,6 +253,14 @@ public class GfsCsvImportService {
 
         public BigDecimal getInvoiceTotal() {
             return invoiceTotal;
+        }
+
+        public BigDecimal getTaxTotal() {
+            return taxTotal;
+        }
+
+        public BigDecimal getSupplierTotal() {
+            return supplierTotal;
         }
 
         public List<InvoiceLine> getLines() {

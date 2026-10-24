@@ -10,6 +10,9 @@ import ca.foodinventory.model.InventoryCountLine;
 import ca.foodinventory.model.InventoryCountSynchronizationResult;
 import ca.foodinventory.service.AlcoholProductProfileApiClient;
 import ca.foodinventory.service.InventoryApiClient;
+import ca.foodinventory.service.InventoryCountConflictException;
+import ca.foodinventory.service.LocalDraftStore;
+import javafx.animation.PauseTransition;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -17,11 +20,13 @@ import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
+import javafx.util.Duration;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 public class InventoryCountEntryView {
 
@@ -36,6 +41,13 @@ public class InventoryCountEntryView {
 
     private final VBox rowsBox = new VBox(0);
     private final List<RowBinding> rowBindings = new ArrayList<>();
+    private final Map<Integer, double[]> loadedValues = new LinkedHashMap<>();
+    private final LocalDraftStore draftStore = new LocalDraftStore();
+    private final String localDraftStoreCode = DatabaseManager.getConfiguredLocationCode();
+    private final PauseTransition draftDelay = new PauseTransition(Duration.seconds(1));
+    private final Label draftStatus = new Label("");
+    private boolean restoringDraft;
+    private boolean dirtyDraft;
     private final List<TextField> navigationFields = new ArrayList<>();
     private Button saveButton;
     private Button completeButton;
@@ -49,6 +61,7 @@ public class InventoryCountEntryView {
     public InventoryCountEntryView(InventoryCount count, String department) {
         this.count = count;
         this.department = department;
+        draftDelay.setOnFinished(event -> flushDraft());
     }
 
     public BorderPane getView() {
@@ -70,7 +83,7 @@ public class InventoryCountEntryView {
         completeButton.getStyleClass().add("primary-button");
 
         HBox buttons = new HBox(10, saveButton, completeButton, synchronizeButton, refreshButton);
-        VBox top = new VBox(10, title, dateLabel, buttons);
+        VBox top = new VBox(10, title, dateLabel, buttons, draftStatus);
         top.setPadding(new Insets(15));
 
         rowsBox.setFillWidth(true);
@@ -93,8 +106,11 @@ public class InventoryCountEntryView {
     }
 
     private void refreshRows() {
+        flushDraft();
         rowsBox.getChildren().clear();
         rowBindings.clear();
+        loadedValues.clear();
+        dirtyDraft = false;
         navigationFields.clear();
 
         rowsBox.getChildren().add(createHeaderRow());
@@ -106,6 +122,7 @@ public class InventoryCountEntryView {
         String currentSection = null;
 
         for (InventoryCountLine line : lines) {
+            loadedValues.put(line.getId(), loadedSnapshot(line));
             String section = cleanSection(line.getSectionName());
 
             if (!section.equals(currentSection)) {
@@ -125,6 +142,7 @@ public class InventoryCountEntryView {
             navigationFields.get(0).requestFocus();
             navigationFields.get(0).selectAll();
         }
+        restoreDraft();
     }
 
     private GridPane createHeaderRow() {
@@ -133,7 +151,7 @@ public class InventoryCountEntryView {
 
         addHeader(grid, "SKU", 0);
         addHeader(grid, "Product", 1);
-        addHeader(grid, isAlcoholLayout() ? "Quantity / Total" : "Quantity", 2);
+        addHeader(grid, isAlcoholLayout() ? "Quantity / Total" : "SUPPLIES".equals(department) ? "Quantity / Bottom + Lid" : "Quantity", 2);
 
         if (isAlcoholLayout()) {
             addHeader(grid, "Full Units", 3);
@@ -187,6 +205,8 @@ public class InventoryCountEntryView {
         TextField quantityField = null;
         TextField fullUnitsField = null;
         TextField weightField = null;
+        TextField bottomField = null;
+        TextField lidField = null;
         Label totalLabel = new Label(formatQuantity(line.getQuantity()));
 
         totalLabel.setMaxWidth(Double.MAX_VALUE);
@@ -218,6 +238,16 @@ public class InventoryCountEntryView {
             grid.add(unitLabel, 5, 0);
 
             navigationFields.add(quantityField);
+        } else if (line.isPairedPackaging() && "SUPPLIES".equals(department)) {
+            bottomField = createNumericField(line.getBottomSleeves() == null ? "" : formatEditable(line.getBottomSleeves()));
+            lidField = createNumericField(line.getLidSleeves() == null ? "" : formatEditable(line.getLidSleeves()));
+            bottomField.setPrefWidth(65);
+            lidField.setPrefWidth(65);
+            totalLabel.setText("Total " + formatQuantity(line.getQuantity()));
+            grid.add(new HBox(5, new Label("Bottom"), bottomField, new Label("Lid"), lidField, totalLabel), 2, 0);
+            grid.add(unitLabel, 3, 0);
+            navigationFields.add(bottomField);
+            navigationFields.add(lidField);
         } else {
             quantityField = createNumericField(formatEditable(line.getQuantity()));
 
@@ -234,6 +264,8 @@ public class InventoryCountEntryView {
                 quantityField,
                 fullUnitsField,
                 weightField,
+                bottomField,
+                lidField,
                 totalLabel
         );
 
@@ -247,6 +279,10 @@ public class InventoryCountEntryView {
 
         if (weightField != null) {
             configureNavigation(weightField, () -> commitWeighted(binding));
+        }
+        if (bottomField != null) {
+            configureNavigation(bottomField, () -> previewPaired(binding));
+            configureNavigation(lidField, () -> previewPaired(binding));
         }
 
         return binding;
@@ -262,7 +298,7 @@ public class InventoryCountEntryView {
         product.setHgrow(Priority.ALWAYS);
         product.setMinWidth(260);
 
-        ColumnConstraints quantity = new ColumnConstraints(130);
+        ColumnConstraints quantity = new ColumnConstraints("SUPPLIES".equals(department) ? 350 : 130);
         ColumnConstraints unit = new ColumnConstraints(70);
 
         if (isAlcoholLayout()) {
@@ -299,6 +335,12 @@ public class InventoryCountEntryView {
     }
 
     private void configureNavigation(TextField field, Runnable commitAction) {
+        field.textProperty().addListener((obs, oldText, newText) -> {
+            if (!restoringDraft && draftEnabled()) {
+                dirtyDraft = true;
+                draftDelay.playFromStart();
+            }
+        });
         field.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.TAB) {
                 commitAction.run();
@@ -344,6 +386,34 @@ public class InventoryCountEntryView {
         }
     }
 
+    private void previewPaired(RowBinding binding) {
+        try {
+            double bottom = parseSleeves(binding.bottomField().getText(), "Bottom sleeves");
+            double lids = parseSleeves(binding.lidField().getText(), "Lid sleeves");
+            binding.totalLabel().setText("Total " + formatQuantity(bottom + lids));
+        } catch (IllegalArgumentException e) {
+            binding.totalLabel().setText("Enter both counts");
+        }
+    }
+
+    private void commitPaired(RowBinding binding) {
+        double bottom = parseSleeves(binding.bottomField().getText(), "Bottom sleeves");
+        double lids = parseSleeves(binding.lidField().getText(), "Lid sleeves");
+        double total = bottom + lids;
+        binding.line().setBottomSleeves(bottom);
+        binding.line().setLidSleeves(lids);
+        binding.line().setQuantity(total);
+        binding.line().setConvertedQuantity(total * binding.line().getConversionFactor());
+        binding.totalLabel().setText("Total " + formatQuantity(total));
+    }
+
+    private double parseSleeves(String raw, String name) {
+        if (raw == null || raw.isBlank()) throw new IllegalArgumentException(name + " must be entered, even when zero.");
+        double value = parseNonNegative(raw, name);
+        if (!Double.isFinite(value)) throw new IllegalArgumentException(name + " must be a finite number.");
+        return value;
+    }
+
     private void commitWeighted(RowBinding binding) {
         try {
             double fullUnits = parseNonNegative(binding.fullUnitsField().getText(), "Full Units");
@@ -378,11 +448,20 @@ public class InventoryCountEntryView {
         }
     }
 
-    private List<InventoryCountLine> collectCommittedLines() {
+    private List<InventoryCountLine> collectCommittedLines(boolean completing) {
         List<InventoryCountLine> lines = new ArrayList<>();
 
         for (RowBinding binding : rowBindings) {
-            if (isWeightedAlcohol(binding.profile())) {
+            if (binding.bottomField() != null) {
+                boolean bottomBlank = binding.bottomField().getText().isBlank();
+                boolean lidBlank = binding.lidField().getText().isBlank();
+                if (bottomBlank && lidBlank && !completing
+                        && binding.line().getBottomSleeves() == null && binding.line().getLidSleeves() == null) {
+                    // A draft count may keep an older total until this product is counted again.
+                } else {
+                    commitPaired(binding);
+                }
+            } else if (isWeightedAlcohol(binding.profile())) {
                 commitWeighted(binding);
             } else {
                 commitNormal(binding);
@@ -395,17 +474,29 @@ public class InventoryCountEntryView {
     }
 
     private void saveQuantities() {
-        List<InventoryCountLine> lines = collectCommittedLines();
+        draftDelay.stop();
+        flushDraft();
+        List<InventoryCountLine> lines;
+        try {
+            lines = collectCommittedLines(false);
+        } catch (IllegalArgumentException e) {
+            showAlert(Alert.AlertType.WARNING, "Check Packaging Counts", e.getMessage());
+            return;
+        }
         runCountSaveTask(
                 "Saving inventory quantities...",
                 () -> {
                     if (isMigratedDepartmentApiMode()) {
-                        apiClient.updateCountLines(count.getId(), lines);
+                        apiClient.updateCountLines(count.getId(), lines, loadedValues);
                     } else {
                         lineDao.updateQuantities(lines);
                     }
                 },
-                () -> showAlert(Alert.AlertType.INFORMATION, "Saved", "Inventory quantities saved.")
+                () -> {
+                    updateLoadedValues(lines);
+                    deleteDraft();
+                    showAlert(Alert.AlertType.INFORMATION, "Saved", "Inventory quantities saved.");
+                }
         );
     }
 
@@ -454,6 +545,7 @@ public class InventoryCountEntryView {
         for (InventoryCountLine line : data.lines()) {
             RowBinding binding = existing.remove(line.getId());
             if (binding == null) {
+                loadedValues.put(line.getId(), loadedSnapshot(line));
                 binding = createDataRow(line, isAlcoholLayout() ? data.profiles().get(line.getProductId()) : null);
             } else {
                 binding.line().setSectionName(line.getSectionName());
@@ -477,16 +569,26 @@ public class InventoryCountEntryView {
             if (binding.quantityField() != null) navigationFields.add(binding.quantityField());
             if (binding.fullUnitsField() != null) navigationFields.add(binding.fullUnitsField());
             if (binding.weightField() != null) navigationFields.add(binding.weightField());
+            if (binding.bottomField() != null) navigationFields.add(binding.bottomField());
+            if (binding.lidField() != null) navigationFields.add(binding.lidField());
         }
     }
 
     private void completeCount() {
-        List<InventoryCountLine> lines = collectCommittedLines();
+        draftDelay.stop();
+        flushDraft();
+        List<InventoryCountLine> lines;
+        try {
+            lines = collectCommittedLines(true);
+        } catch (IllegalArgumentException e) {
+            showAlert(Alert.AlertType.WARNING, "Check Packaging Counts", e.getMessage());
+            return;
+        }
         runCountSaveTask(
                 "Completing inventory count...",
                 () -> {
                     if (isMigratedDepartmentApiMode()) {
-                        apiClient.completeCount(count.getId(), lines);
+                        apiClient.completeCount(count.getId(), lines, loadedValues);
                     } else {
                         lineDao.updateQuantities(lines);
                         countDao.markCompleted(count.getId());
@@ -494,6 +596,8 @@ public class InventoryCountEntryView {
                 },
                 () -> {
                     count.setCompleted(true);
+                    updateLoadedValues(lines);
+                    deleteDraft();
                     synchronizeButton.setDisable(true);
                     showAlert(
                         Alert.AlertType.INFORMATION,
@@ -522,7 +626,9 @@ public class InventoryCountEntryView {
 
         task.setOnFailed(event -> {
             setSaving(false);
-            showAlert(Alert.AlertType.ERROR, "Save Failed", task.getException().getMessage());
+            boolean conflict = task.getException() instanceof InventoryCountConflictException;
+            showAlert(conflict ? Alert.AlertType.WARNING : Alert.AlertType.ERROR,
+                    conflict ? "Count Changed" : "Save Failed", task.getException().getMessage());
         });
 
         rowsBox.setDisable(true);
@@ -531,6 +637,119 @@ public class InventoryCountEntryView {
         Thread thread = new Thread(task, "inventory-count-save");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private void updateLoadedValues(List<InventoryCountLine> lines) {
+        for (InventoryCountLine line : lines) {
+            loadedValues.put(line.getId(), loadedSnapshot(line));
+        }
+    }
+
+    private double[] loadedSnapshot(InventoryCountLine line) {
+        return new double[]{line.getQuantity(), line.getConvertedQuantity(),
+                line.getBottomSleeves() == null ? Double.NaN : line.getBottomSleeves(),
+                line.getLidSleeves() == null ? Double.NaN : line.getLidSleeves()};
+    }
+
+    public void flushDraft() {
+        if (!draftEnabled() || !dirtyDraft || rowBindings.isEmpty() || restoringDraft) return;
+        Properties values = new Properties();
+        for (RowBinding binding : rowBindings) {
+            String prefix = "line." + binding.line().getId() + ".";
+            if (binding.quantityField() != null) values.setProperty(prefix + "quantity", binding.quantityField().getText());
+            if (binding.fullUnitsField() != null) values.setProperty(prefix + "full", binding.fullUnitsField().getText());
+            if (binding.weightField() != null) values.setProperty(prefix + "weight", binding.weightField().getText());
+            if (binding.bottomField() != null) values.setProperty(prefix + "bottom", binding.bottomField().getText());
+            if (binding.lidField() != null) values.setProperty(prefix + "lid", binding.lidField().getText());
+            double[] loaded = loadedValues.get(binding.line().getId());
+            if (loaded != null) {
+                values.setProperty(prefix + "expectedQuantity", Double.toString(loaded[0]));
+                values.setProperty(prefix + "expectedConvertedQuantity", Double.toString(loaded[1]));
+                if (loaded.length > 2) values.setProperty(prefix + "expectedBottomSleeves", Double.toString(loaded[2]));
+                if (loaded.length > 3) values.setProperty(prefix + "expectedLidSleeves", Double.toString(loaded[3]));
+            }
+        }
+        try {
+            draftStore.save(draftStoreCode(), "count", Integer.toString(count.getId()), values);
+            draftStatus.setText("Unsaved draft kept on this PC.");
+        } catch (RuntimeException e) {
+            draftStatus.setText("Local draft could not be saved: " + e.getMessage());
+        }
+    }
+
+    private void restoreDraft() {
+        if (!draftEnabled()) return;
+        Properties values;
+        try {
+            values = draftStore.load(draftStoreCode(), "count", Integer.toString(count.getId()));
+        } catch (RuntimeException e) {
+            draftStatus.setText(e.getMessage());
+            return;
+        }
+        if (values == null) return;
+        ButtonType restore = new ButtonType("Restore Draft", ButtonBar.ButtonData.OK_DONE);
+        ButtonType discard = new ButtonType("Discard Draft", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert prompt = new Alert(Alert.AlertType.CONFIRMATION,
+                "Unsaved quantities from this PC were found for this count. Restore them for review?",
+                restore, discard);
+        prompt.setTitle("Unsaved Inventory Draft");
+        if (prompt.showAndWait().orElse(discard) != restore) {
+            deleteDraft();
+            return;
+        }
+        restoringDraft = true;
+        try {
+            for (RowBinding binding : rowBindings) {
+                String prefix = "line." + binding.line().getId() + ".";
+                if (binding.quantityField() != null && values.containsKey(prefix + "quantity"))
+                    binding.quantityField().setText(values.getProperty(prefix + "quantity"));
+                if (binding.fullUnitsField() != null && values.containsKey(prefix + "full"))
+                    binding.fullUnitsField().setText(values.getProperty(prefix + "full"));
+                if (binding.weightField() != null && values.containsKey(prefix + "weight"))
+                    binding.weightField().setText(values.getProperty(prefix + "weight"));
+                if (binding.bottomField() != null && values.containsKey(prefix + "bottom"))
+                    binding.bottomField().setText(values.getProperty(prefix + "bottom"));
+                if (binding.lidField() != null && values.containsKey(prefix + "lid"))
+                    binding.lidField().setText(values.getProperty(prefix + "lid"));
+                if (values.containsKey(prefix + "expectedQuantity")
+                        && values.containsKey(prefix + "expectedConvertedQuantity")) {
+                    double[] existing = loadedValues.get(binding.line().getId());
+                    loadedValues.put(binding.line().getId(), new double[]{
+                            Double.parseDouble(values.getProperty(prefix + "expectedQuantity")),
+                            Double.parseDouble(values.getProperty(prefix + "expectedConvertedQuantity")),
+                            values.containsKey(prefix + "expectedBottomSleeves")
+                                    ? Double.parseDouble(values.getProperty(prefix + "expectedBottomSleeves")) : existing[2],
+                            values.containsKey(prefix + "expectedLidSleeves")
+                                    ? Double.parseDouble(values.getProperty(prefix + "expectedLidSleeves")) : existing[3]});
+                }
+            }
+            draftStatus.setText("Local draft restored. Review before saving; changed cloud data will block the save.");
+            dirtyDraft = true;
+        } catch (NumberFormatException e) {
+            draftStatus.setText("Draft values could not be read. The cloud count was left loaded.");
+        } finally {
+            restoringDraft = false;
+        }
+    }
+
+    private void deleteDraft() {
+        if (!isMigratedDepartmentApiMode() || draftStoreCode().isBlank()) return;
+        draftDelay.stop();
+        dirtyDraft = false;
+        try {
+            draftStore.delete(draftStoreCode(), "count", Integer.toString(count.getId()));
+            draftStatus.setText("");
+        } catch (RuntimeException e) {
+            draftStatus.setText(e.getMessage());
+        }
+    }
+
+    private boolean draftEnabled() {
+        return isMigratedDepartmentApiMode() && !draftStoreCode().isBlank() && !count.isCompleted();
+    }
+
+    private String draftStoreCode() {
+        return localDraftStoreCode;
     }
 
     private void setSaving(boolean saving) {
@@ -648,6 +867,8 @@ public class InventoryCountEntryView {
             TextField quantityField,
             TextField fullUnitsField,
             TextField weightField,
+            TextField bottomField,
+            TextField lidField,
             Label totalLabel
     ) {
     }

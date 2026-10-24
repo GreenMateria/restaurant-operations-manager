@@ -20,7 +20,8 @@ public class InventoryCountLineDao {
                     p.description AS product_description,
                     tl.display_name,
                     tl.section_name,
-                    tl.sort_order
+                    tl.sort_order,
+                    COALESCE(tl.paired_packaging, 0) AS paired_packaging
                 FROM inventory_count_lines l
                 JOIN products p
                     ON l.product_id = p.id
@@ -57,6 +58,11 @@ public class InventoryCountLineDao {
                 line.setCountUnit(rs.getString("count_unit"));
                 line.setConvertedQuantity(rs.getDouble("converted_quantity"));
                 line.setConversionFactor(rs.getDouble("conversion_factor"));
+                Number bottom = (Number) rs.getObject("bottom_sleeves");
+                Number lid = (Number) rs.getObject("lid_sleeves");
+                line.setBottomSleeves(bottom == null ? null : bottom.doubleValue());
+                line.setLidSleeves(lid == null ? null : lid.doubleValue());
+                line.setPairedPackaging(rs.getBoolean("paired_packaging"));
 
                 line.setSku(rs.getString("sku"));
                 line.setProductDescription(rs.getString("product_description"));
@@ -107,7 +113,9 @@ public class InventoryCountLineDao {
         String sql = """
                 UPDATE inventory_count_lines
                 SET quantity = ?,
-                    converted_quantity = ?
+                    converted_quantity = ?,
+                    bottom_sleeves = ?,
+                    lid_sleeves = ?
                 WHERE id = ?
                 """;
 
@@ -119,7 +127,11 @@ public class InventoryCountLineDao {
                 for (InventoryCountLine line : lines) {
                     ps.setDouble(1, line.getQuantity());
                     ps.setDouble(2, line.getConvertedQuantity());
-                    ps.setInt(3, line.getId());
+                    if (line.getBottomSleeves() == null) ps.setNull(3, Types.REAL);
+                    else ps.setDouble(3, line.getBottomSleeves());
+                    if (line.getLidSleeves() == null) ps.setNull(4, Types.REAL);
+                    else ps.setDouble(4, line.getLidSleeves());
+                    ps.setInt(5, line.getId());
                     ps.addBatch();
                 }
 

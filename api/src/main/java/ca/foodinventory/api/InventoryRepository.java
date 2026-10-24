@@ -1,5 +1,6 @@
 package ca.foodinventory.api;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -191,10 +192,11 @@ class InventoryRepository {
                     count_unit,
                     conversion_factor_to_base,
                     display_name,
+                    paired_packaging,
                     location_id,
                     active
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """;
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
@@ -206,7 +208,8 @@ class InventoryRepository {
             statement.setString(5, stringValue(body.get("countUnit")));
             statement.setDouble(6, requireDouble(body, "conversionFactorToBase"));
             statement.setString(7, stringValue(body.get("displayName")));
-            statement.setInt(8, locationId);
+            statement.setBoolean(8, Boolean.TRUE.equals(body.get("pairedPackaging")));
+            statement.setInt(9, locationId);
             statement.executeUpdate();
         }
     }
@@ -218,7 +221,8 @@ class InventoryRepository {
                     sort_order = ?,
                     count_unit = ?,
                     conversion_factor_to_base = ?,
-                    display_name = ?
+                    display_name = ?,
+                    paired_packaging = ?
                 WHERE id = ?
                   AND location_id = ?
                 """;
@@ -230,8 +234,9 @@ class InventoryRepository {
             statement.setString(3, stringValue(body.get("countUnit")));
             statement.setDouble(4, requireDouble(body, "conversionFactorToBase"));
             statement.setString(5, stringValue(body.get("displayName")));
-            statement.setInt(6, lineId);
-            statement.setInt(7, locationId);
+            statement.setBoolean(6, Boolean.TRUE.equals(body.get("pairedPackaging")));
+            statement.setInt(7, lineId);
+            statement.setInt(8, locationId);
             return statement.executeUpdate() > 0;
         }
     }
@@ -519,7 +524,8 @@ class InventoryRepository {
                     p.description AS product_description,
                     tl.display_name,
                     tl.section_name,
-                    tl.sort_order
+                    tl.sort_order,
+                    COALESCE(tl.paired_packaging, 0) AS paired_packaging
                 FROM inventory_count_lines l
                 JOIN products p
                     ON l.product_id = p.id
@@ -564,57 +570,140 @@ class InventoryRepository {
         }
     }
 
-    void updateCountLines(int locationId, List<Map<String, Object>> lines) throws SQLException {
-        if (lines == null || lines.isEmpty()) {
-            return;
+    void updateCountLines(int locationId, int countId, List<Map<String, Object>> lines) throws SQLException {
+        saveCountLines(locationId, countId, lines, false);
+    }
+
+    void completeCount(int locationId, int countId, List<Map<String, Object>> lines) throws SQLException {
+        saveCountLines(locationId, countId, lines, true);
+    }
+
+    private void saveCountLines(int locationId, int countId,
+                                List<Map<String, Object>> lines, boolean complete) throws SQLException {
+        if (lines == null) {
+            throw new IllegalArgumentException("Count lines are required.");
         }
-
-        String sql = """
-                UPDATE inventory_count_lines
-                SET quantity = ?,
-                    converted_quantity = ?
-                WHERE id = ?
-                  AND location_id = ?
-                """;
-
+        // Reject old clients before starting a write transaction.
+        for (Map<String, Object> line : lines) {
+            if (!line.containsKey("expectedQuantity") || !line.containsKey("expectedConvertedQuantity")) {
+                throw new CountPreconditionException();
+            }
+            if (!line.containsKey("expectedBottomSleeves") || !line.containsKey("expectedLidSleeves")) {
+                throw new CountPreconditionException();
+            }
+        }
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
-
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                for (Map<String, Object> line : lines) {
-                    statement.setDouble(1, requireDouble(line, "quantity"));
-                    statement.setDouble(2, requireDouble(line, "convertedQuantity"));
-                    statement.setInt(3, requireInt(line, "id"));
-                    statement.setInt(4, locationId);
-                    statement.addBatch();
+            try {
+                try (PreparedStatement count = connection.prepareStatement("""
+                        SELECT completed FROM inventory_counts
+                        WHERE id = ? AND location_id = ? FOR UPDATE
+                        """)) {
+                    count.setInt(1, countId);
+                    count.setInt(2, locationId);
+                    try (ResultSet result = count.executeQuery()) {
+                        if (!result.next()) throw new CountConflictException("This count no longer exists.");
+                        if (result.getInt(1) != 0) throw new CountConflictException("This count was already completed.");
+                    }
                 }
-
-                statement.executeBatch();
+                int storedLines;
+                try (PreparedStatement count = connection.prepareStatement(
+                        "SELECT COUNT(*) FROM inventory_count_lines WHERE count_id = ? AND location_id = ?")) {
+                    count.setInt(1, countId);
+                    count.setInt(2, locationId);
+                    try (ResultSet result = count.executeQuery()) {
+                        result.next();
+                        storedLines = result.getInt(1);
+                    }
+                }
+                if (storedLines != lines.size()) {
+                    throw new CountConflictException("Count lines changed since loading. Your entries were not saved.");
+                }
+                try (PreparedStatement update = connection.prepareStatement("""
+                        UPDATE inventory_count_lines
+                        SET quantity = ?, converted_quantity = ?, bottom_sleeves = ?, lid_sleeves = ?
+                        WHERE id = ? AND count_id = ? AND location_id = ?
+                          AND quantity = ? AND converted_quantity = ?
+                          AND bottom_sleeves IS NOT DISTINCT FROM ?
+                          AND lid_sleeves IS NOT DISTINCT FROM ?
+                        """)) {
+                    for (Map<String, Object> line : lines) {
+                        BigDecimal quantity = BigDecimal.valueOf(requireDouble(line, "quantity"));
+                        BigDecimal converted = BigDecimal.valueOf(requireDouble(line, "convertedQuantity"));
+                        BigDecimal expectedQuantity = BigDecimal.valueOf(requireDouble(line, "expectedQuantity"));
+                        BigDecimal expectedConverted = BigDecimal.valueOf(requireDouble(line, "expectedConvertedQuantity"));
+                        BigDecimal bottom = nullableNonNegative(line.get("bottomSleeves"), "bottomSleeves");
+                        BigDecimal lid = nullableNonNegative(line.get("lidSleeves"), "lidSleeves");
+                        BigDecimal expectedBottom = nullableNonNegative(line.get("expectedBottomSleeves"), "expectedBottomSleeves");
+                        BigDecimal expectedLid = nullableNonNegative(line.get("expectedLidSleeves"), "expectedLidSleeves");
+                        if ((bottom == null) != (lid == null)) {
+                            throw new IllegalArgumentException("Enter both bottom and lid sleeves.");
+                        }
+                        if (bottom != null && bottom.add(lid).compareTo(quantity) != 0) {
+                            throw new IllegalArgumentException("Bottom and lid sleeves must equal total quantity.");
+                        }
+                        if (!complete && quantity.compareTo(expectedQuantity) == 0
+                                && converted.compareTo(expectedConverted) == 0
+                                && equalNumbers(bottom, expectedBottom) && equalNumbers(lid, expectedLid)) continue;
+                        update.setBigDecimal(1, quantity);
+                        update.setBigDecimal(2, converted);
+                        if (bottom == null) update.setNull(3, java.sql.Types.NUMERIC);
+                        else update.setBigDecimal(3, bottom);
+                        if (lid == null) update.setNull(4, java.sql.Types.NUMERIC);
+                        else update.setBigDecimal(4, lid);
+                        update.setInt(5, requireInt(line, "id"));
+                        update.setInt(6, countId);
+                        update.setInt(7, locationId);
+                        update.setBigDecimal(8, expectedQuantity);
+                        update.setBigDecimal(9, expectedConverted);
+                        if (expectedBottom == null) update.setNull(10, java.sql.Types.NUMERIC);
+                        else update.setBigDecimal(10, expectedBottom);
+                        if (expectedLid == null) update.setNull(11, java.sql.Types.NUMERIC);
+                        else update.setBigDecimal(11, expectedLid);
+                        if (update.executeUpdate() != 1) {
+                            throw new CountConflictException("Another manager changed this count. Your entries were not saved.");
+                        }
+                    }
+                }
+                if (complete) {
+                    try (PreparedStatement missing = connection.prepareStatement("""
+                            SELECT COUNT(*)
+                            FROM inventory_count_lines l
+                            JOIN inventory_counts c ON c.id = l.count_id AND c.location_id = l.location_id
+                            WHERE l.count_id = ? AND l.location_id = ?
+                              AND EXISTS (
+                                  SELECT 1 FROM inventory_count_template_lines tl
+                                  WHERE tl.template_id = c.template_id AND tl.product_id = l.product_id
+                                    AND tl.location_id = l.location_id AND tl.active = 1
+                                    AND tl.paired_packaging = 1
+                              )
+                              AND (l.bottom_sleeves IS NULL OR l.lid_sleeves IS NULL)
+                            """)) {
+                        missing.setInt(1, countId);
+                        missing.setInt(2, locationId);
+                        try (ResultSet result = missing.executeQuery()) {
+                            result.next();
+                            if (result.getInt(1) > 0) {
+                                throw new IllegalArgumentException(
+                                        "Enter both bottom and lid sleeves for every paired packaging item before completing the count.");
+                            }
+                        }
+                    }
+                    try (PreparedStatement update = connection.prepareStatement(
+                            "UPDATE inventory_counts SET completed = 1 WHERE id = ? AND location_id = ?")) {
+                        update.setInt(1, countId);
+                        update.setInt(2, locationId);
+                        update.executeUpdate();
+                    }
+                }
                 connection.commit();
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
                 connection.rollback();
                 throw e;
             } finally {
                 connection.setAutoCommit(autoCommit);
             }
-        }
-    }
-
-    void completeCount(int locationId, int countId, List<Map<String, Object>> lines) throws SQLException {
-        String updateCountSql = """
-                UPDATE inventory_counts
-                SET completed = 1
-                WHERE id = ?
-                  AND location_id = ?
-                """;
-        updateCountLines(locationId, lines);
-
-        try (Connection connection = PostgresConnectionProvider.getConnection();
-            PreparedStatement statement = connection.prepareStatement(updateCountSql)) {
-            statement.setInt(1, countId);
-            statement.setInt(2, locationId);
-            statement.executeUpdate();
         }
     }
 
@@ -633,7 +722,9 @@ class InventoryRepository {
                     COALESCE(tl.sort_order, 9999) AS sort_order,
                     COALESCE(opening.converted_quantity, 0) AS opening_quantity,
                     COALESCE(purchases.purchased_quantity, 0) AS purchased_quantity,
-                    COALESCE(closing.converted_quantity, 0) AS closing_quantity
+                    COALESCE(closing.converted_quantity, 0) AS closing_quantity,
+                    closing.bottom_sleeves AS closing_bottom_sleeves,
+                    closing.lid_sleeves AS closing_lid_sleeves
                 FROM inventory_count_template_lines tl
                 JOIN products p
                     ON tl.product_id = p.id
@@ -778,6 +869,9 @@ class InventoryRepository {
                 .append("\"quantity\":").append(resultSet.getDouble("quantity")).append(',')
                 .append("\"countUnit\":").append(Json.nullableString(resultSet.getString("count_unit"))).append(',')
                 .append("\"convertedQuantity\":").append(resultSet.getDouble("converted_quantity")).append(',')
+                .append("\"bottomSleeves\":").append(nullableNumber(resultSet, "bottom_sleeves")).append(',')
+                .append("\"lidSleeves\":").append(nullableNumber(resultSet, "lid_sleeves")).append(',')
+                .append("\"pairedPackaging\":").append(resultSet.getBoolean("paired_packaging")).append(',')
                 .append("\"conversionFactor\":").append(resultSet.getDouble("conversion_factor")).append(',')
                 .append("\"sku\":").append(Json.nullableString(resultSet.getString("sku"))).append(',')
                 .append("\"productDescription\":").append(Json.nullableString(resultSet.getString("product_description"))).append(',')
@@ -786,6 +880,23 @@ class InventoryRepository {
                 .append("\"sortOrder\":").append(resultSet.getInt("sort_order"))
                 .append('}')
                 .toString();
+    }
+
+    private String nullableNumber(ResultSet resultSet, String column) throws SQLException {
+        Object value = resultSet.getObject(column);
+        return value == null ? "null" : value.toString();
+    }
+
+    private BigDecimal nullableNonNegative(Object value, String field) {
+        if (value == null) return null;
+        if (!(value instanceof Number number)) throw new IllegalArgumentException("Invalid " + field);
+        BigDecimal result = new BigDecimal(number.toString());
+        if (result.signum() < 0) throw new IllegalArgumentException(field + " cannot be negative.");
+        return result;
+    }
+
+    private boolean equalNumbers(BigDecimal first, BigDecimal second) {
+        return first == null ? second == null : second != null && first.compareTo(second) == 0;
     }
 
     private String templateLineJson(ResultSet resultSet) throws SQLException {
@@ -798,6 +909,7 @@ class InventoryRepository {
                 .append("\"countUnit\":").append(Json.nullableString(resultSet.getString("count_unit"))).append(',')
                 .append("\"conversionFactorToBase\":").append(resultSet.getDouble("conversion_factor_to_base")).append(',')
                 .append("\"displayName\":").append(Json.nullableString(resultSet.getString("display_name"))).append(',')
+                .append("\"pairedPackaging\":").append(resultSet.getBoolean("paired_packaging")).append(',')
                 .append("\"active\":").append(resultSet.getBoolean("active")).append(',')
                 .append("\"sku\":").append(Json.nullableString(resultSet.getString("sku"))).append(',')
                 .append("\"productDescription\":").append(Json.nullableString(resultSet.getString("product_description")))
@@ -820,6 +932,8 @@ class InventoryRepository {
                 .append("\"caseSize\":").append(Json.nullableString(resultSet.getString("case_size"))).append(',')
                 .append("\"sectionName\":").append(Json.nullableString(resultSet.getString("section_name"))).append(',')
                 .append("\"closingQuantity\":").append(round2(closing)).append(',')
+                .append("\"closingBottomSleeves\":").append(nullableNumber(resultSet, "closing_bottom_sleeves")).append(',')
+                .append("\"closingLidSleeves\":").append(nullableNumber(resultSet, "closing_lid_sleeves")).append(',')
                 .append("\"usageQuantity\":").append(round2(usage)).append(',')
                 .append("\"orderQuantity\":null")
                 .append('}')

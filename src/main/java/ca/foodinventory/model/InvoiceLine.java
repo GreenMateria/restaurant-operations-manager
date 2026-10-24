@@ -12,6 +12,7 @@ public class InvoiceLine {
     private BigDecimal caseCost;
     private BigDecimal eachCost;
     private BigDecimal extendedCost;
+    private BigDecimal billedWeight;
 
     public InvoiceLine(
             String sku,
@@ -68,6 +69,14 @@ public class InvoiceLine {
 
     public BigDecimal getExtendedCost() {
         return extendedCost;
+    }
+
+    public BigDecimal getBilledWeight() {
+        return billedWeight;
+    }
+
+    public void setBilledWeight(BigDecimal billedWeight) {
+        this.billedWeight = billedWeight;
     }
 
     public boolean hasManualExtendedCost() {

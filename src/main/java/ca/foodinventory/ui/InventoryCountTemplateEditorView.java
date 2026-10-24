@@ -123,6 +123,10 @@ public class InventoryCountTemplateEditorView {
         factorCol.setCellValueFactory(new PropertyValueFactory<>("conversionFactorToBase"));
         factorCol.setPrefWidth(150);
 
+        TableColumn<InventoryCountTemplateLine, Boolean> pairedCol = new TableColumn<>("Lids + Bottoms");
+        pairedCol.setCellValueFactory(new PropertyValueFactory<>("pairedPackaging"));
+        pairedCol.setPrefWidth(130);
+
         TableColumn<InventoryCountTemplateLine, Integer> sortCol = new TableColumn<>("Sort Order");
         sortCol.setCellValueFactory(new PropertyValueFactory<>("sortOrder"));
         sortCol.setPrefWidth(100);
@@ -134,6 +138,7 @@ public class InventoryCountTemplateEditorView {
                 displayCol,
                 unitCol,
                 factorCol,
+                pairedCol,
                 sortCol
         );
     }
@@ -226,6 +231,9 @@ public class InventoryCountTemplateEditorView {
         countUnitField.setPromptText("EA, KG, LB, CASE, BAG");
 
         TextField conversionFactorField = new TextField("1");
+        CheckBox pairedPackagingBox = new CheckBox("Count bottom and lid sleeves separately");
+        pairedPackagingBox.setVisible(isSuppliesTemplateName());
+        pairedPackagingBox.setManaged(isSuppliesTemplateName());
 
         TextField sortOrderField = new TextField(String.valueOf(table.getItems().size() + 1));
 
@@ -263,6 +271,7 @@ public class InventoryCountTemplateEditorView {
 
         grid.add(new Label("Sort Order:"), 0, 6);
         grid.add(sortOrderField, 1, 6);
+        grid.add(pairedPackagingBox, 1, 7);
 
         dialog.getDialogPane().setContent(grid);
 
@@ -284,6 +293,7 @@ public class InventoryCountTemplateEditorView {
                 line.setConversionFactorToBase(Double.parseDouble(conversionFactorField.getText()));
                 line.setSortOrder(Integer.parseInt(sortOrderField.getText()));
                 line.setActive(true);
+                line.setPairedPackaging(isSuppliesTemplateName() && pairedPackagingBox.isSelected());
 
                 return line;
             }
@@ -390,6 +400,10 @@ public class InventoryCountTemplateEditorView {
         TextField displayNameField = new TextField(selected.getDisplayName());
         TextField countUnitField = new TextField(selected.getCountUnit());
         TextField conversionFactorField = new TextField(String.valueOf(selected.getConversionFactorToBase()));
+        CheckBox pairedPackagingBox = new CheckBox("Count bottom and lid sleeves separately");
+        pairedPackagingBox.setSelected(selected.isPairedPackaging());
+        pairedPackagingBox.setVisible(isSuppliesTemplateName());
+        pairedPackagingBox.setManaged(isSuppliesTemplateName());
         TextField sortOrderField = new TextField(String.valueOf(selected.getSortOrder()));
 
         GridPane grid = new GridPane();
@@ -414,6 +428,7 @@ public class InventoryCountTemplateEditorView {
 
         grid.add(new Label("Sort Order:"), 0, 5);
         grid.add(sortOrderField, 1, 5);
+        grid.add(pairedPackagingBox, 1, 6);
 
         dialog.getDialogPane().setContent(grid);
 
@@ -424,6 +439,7 @@ public class InventoryCountTemplateEditorView {
                 selected.setCountUnit(countUnitField.getText().trim());
                 selected.setConversionFactorToBase(Double.parseDouble(conversionFactorField.getText().trim()));
                 selected.setSortOrder(Integer.parseInt(sortOrderField.getText().trim()));
+                selected.setPairedPackaging(isSuppliesTemplateName() && pairedPackagingBox.isSelected());
 
                 return selected;
             }
@@ -658,8 +674,8 @@ public class InventoryCountTemplateEditorView {
         addTemplatePrintCell(tableHeader, "Product", 0, true, Pos.CENTER_LEFT);
         addTemplatePrintCell(tableHeader, "Unit", 1, true, Pos.CENTER);
         addTemplatePrintCell(tableHeader, "Quantity", 2, true, Pos.CENTER);
-        addTemplatePrintCell(tableHeader, "Full", 3, true, Pos.CENTER);
-        addTemplatePrintCell(tableHeader, "Weight", 4, true, Pos.CENTER);
+        addTemplatePrintCell(tableHeader, isSuppliesTemplateName() ? "Bottom" : "Full", 3, true, Pos.CENTER);
+        addTemplatePrintCell(tableHeader, isSuppliesTemplateName() ? "Lid" : "Weight", 4, true, Pos.CENTER);
 
         VBox body = new VBox(0);
         Map<Integer, AlcoholProductProfile> profilesByProductId = loadAlcoholProfilesIfNeeded();
@@ -703,9 +719,9 @@ public class InventoryCountTemplateEditorView {
 
             addTemplatePrintCell(row, name, 0, false, Pos.CENTER_LEFT);
             addTemplatePrintCell(row, unit, 1, false, Pos.CENTER);
-            addTemplatePrintCell(row, weighted ? "" : "____________", 2, false, Pos.CENTER);
-            addTemplatePrintCell(row, weighted ? "________" : "", 3, false, Pos.CENTER);
-            addTemplatePrintCell(row, weighted ? "________" : "", 4, false, Pos.CENTER);
+            addTemplatePrintCell(row, weighted || line.isPairedPackaging() ? "" : "____________", 2, false, Pos.CENTER);
+            addTemplatePrintCell(row, weighted || line.isPairedPackaging() ? "________" : "", 3, false, Pos.CENTER);
+            addTemplatePrintCell(row, weighted || line.isPairedPackaging() ? "________" : "", 4, false, Pos.CENTER);
 
             body.getChildren().add(row);
         }
@@ -742,6 +758,10 @@ public class InventoryCountTemplateEditorView {
     private boolean isAlcoholTemplateName() {
         String templateName = template.getName() == null ? "" : template.getName().toUpperCase();
         return templateName.contains("ALCOHOL");
+    }
+
+    private boolean isSuppliesTemplateName() {
+        return template.getName() != null && template.getName().toUpperCase().contains("SUPPLIES");
     }
 
     private void addTemplatePrintCell(

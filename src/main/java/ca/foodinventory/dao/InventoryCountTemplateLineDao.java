@@ -21,10 +21,11 @@ public class InventoryCountTemplateLineDao {
                     count_unit,
                     conversion_factor_to_base,
                     display_name,
+                    paired_packaging,
                     active
                 )
                 VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
         try (
@@ -39,7 +40,8 @@ public class InventoryCountTemplateLineDao {
             ps.setString(5, line.getCountUnit());
             ps.setDouble(6, line.getConversionFactorToBase());
             ps.setString(7, line.getDisplayName());
-            ps.setInt(8, line.isActive() ? 1 : 0);
+            ps.setInt(8, line.isPairedPackaging() ? 1 : 0);
+            ps.setInt(9, line.isActive() ? 1 : 0);
 
             ps.executeUpdate();
 
@@ -87,6 +89,7 @@ public class InventoryCountTemplateLineDao {
                 line.setConversionFactorToBase(rs.getDouble("conversion_factor_to_base"));
                 line.setDisplayName(rs.getString("display_name"));
                 line.setActive(rs.getBoolean("active"));
+                line.setPairedPackaging(rs.getBoolean("paired_packaging"));
 
                 line.setSku(rs.getString("sku"));
                 line.setProductDescription(rs.getString("product_description"));
@@ -187,7 +190,8 @@ public class InventoryCountTemplateLineDao {
                 sort_order = ?,
                 count_unit = ?,
                 conversion_factor_to_base = ?,
-                display_name = ?
+                display_name = ?,
+                paired_packaging = ?
             WHERE id = ?
             """;
 
@@ -201,7 +205,8 @@ public class InventoryCountTemplateLineDao {
             ps.setString(3, line.getCountUnit());
             ps.setDouble(4, line.getConversionFactorToBase());
             ps.setString(5, line.getDisplayName());
-            ps.setInt(6, line.getId());
+            ps.setInt(6, line.isPairedPackaging() ? 1 : 0);
+            ps.setInt(7, line.getId());
 
             ps.executeUpdate();
 

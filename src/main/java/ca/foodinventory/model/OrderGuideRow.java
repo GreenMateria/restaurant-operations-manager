@@ -10,6 +10,8 @@ public class OrderGuideRow {
     private String unit;
     private String caseSize;
     private double closingQuantity;
+    private Double closingBottomSleeves;
+    private Double closingLidSleeves;
     private double usageQuantity;
     private Double orderQuantity;
 
@@ -46,6 +48,31 @@ public class OrderGuideRow {
 
     public double getClosingQuantity() {
         return closingQuantity;
+    }
+
+    public Double getClosingBottomSleeves() {
+        return closingBottomSleeves;
+    }
+
+    public void setClosingBottomSleeves(Double closingBottomSleeves) {
+        this.closingBottomSleeves = closingBottomSleeves;
+    }
+
+    public Double getClosingLidSleeves() {
+        return closingLidSleeves;
+    }
+
+    public String getPackagingBreakdown() {
+        if (closingBottomSleeves == null || closingLidSleeves == null) return "";
+        return formatSleeves(closingBottomSleeves) + " / " + formatSleeves(closingLidSleeves);
+    }
+
+    private String formatSleeves(double value) {
+        return value == Math.rint(value) ? Long.toString((long) value) : Double.toString(value);
+    }
+
+    public void setClosingLidSleeves(Double closingLidSleeves) {
+        this.closingLidSleeves = closingLidSleeves;
     }
 
     public double getUsageQuantity() {

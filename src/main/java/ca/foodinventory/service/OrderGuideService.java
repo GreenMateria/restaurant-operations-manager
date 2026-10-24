@@ -27,7 +27,9 @@ public class OrderGuideService {
 
                     COALESCE(opening.converted_quantity, 0) AS opening_quantity,
                     COALESCE(purchases.purchased_quantity, 0) AS purchased_quantity,
-                    COALESCE(closing.converted_quantity, 0) AS closing_quantity
+                    COALESCE(closing.converted_quantity, 0) AS closing_quantity,
+                    closing.bottom_sleeves AS closing_bottom_sleeves,
+                    closing.lid_sleeves AS closing_lid_sleeves
 
                 FROM inventory_count_template_lines tl
 
@@ -90,6 +92,10 @@ public class OrderGuideService {
                     row.setCaseSize(rs.getString("case_size"));
                     row.setSectionName(rs.getString("section_name"));
                     row.setClosingQuantity(round2(closing));
+                    Number bottom = (Number) rs.getObject("closing_bottom_sleeves");
+                    Number lid = (Number) rs.getObject("closing_lid_sleeves");
+                    row.setClosingBottomSleeves(bottom == null ? null : round2(bottom.doubleValue()));
+                    row.setClosingLidSleeves(lid == null ? null : round2(lid.doubleValue()));
                     row.setUsageQuantity(round2(usage));
                     row.setOrderQuantity(null);
 

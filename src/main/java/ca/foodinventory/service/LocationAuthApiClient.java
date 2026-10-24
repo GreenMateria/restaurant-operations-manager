@@ -53,6 +53,29 @@ public class LocationAuthApiClient {
         }
     }
 
+    public void logout(String token) {
+        if (token == null || token.isBlank()) {
+            return;
+        }
+        HttpRequest request = HttpRequest.newBuilder(endpoint("/auth/logout"))
+                .timeout(Duration.ofSeconds(10))
+                .header("x-api-key", DatabaseManager.getConfiguredApiKey())
+                .header("x-location-token", token)
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new RuntimeException("Location logout returned HTTP " + response.statusCode());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to reach location logout API.", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Location logout request was interrupted.", e);
+        }
+    }
+
     private LocationLoginSession parseSession(String body) {
         Map<String, Object> object = new ApiJsonParser().parseObject(body);
         Object locationValue = object.get("location");

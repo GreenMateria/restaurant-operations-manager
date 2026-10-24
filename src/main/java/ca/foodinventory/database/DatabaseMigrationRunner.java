@@ -6,7 +6,7 @@ import java.util.List;
 
 public class DatabaseMigrationRunner {
 
-    private static final int CURRENT_SCHEMA_VERSION = 23;
+    private static final int CURRENT_SCHEMA_VERSION = 24;
 
     public static void runMigrations(Connection conn) throws SQLException {
         createSchemaVersionTable(conn);
@@ -41,7 +41,8 @@ public class DatabaseMigrationRunner {
                 new Migration20(),
                 new Migration21(),
                 new Migration22(),
-                new Migration23()
+                new Migration23(),
+                new Migration24()
         );
 
         for (Migration migration : migrations) {

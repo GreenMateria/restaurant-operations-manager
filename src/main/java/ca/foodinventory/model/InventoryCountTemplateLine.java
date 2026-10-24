@@ -11,6 +11,7 @@ public class InventoryCountTemplateLine {
     private double conversionFactorToBase;
     private String displayName;
     private boolean active;
+    private boolean pairedPackaging;
 
     // Display-only fields loaded from the products table
     private String sku;
@@ -101,6 +102,14 @@ public class InventoryCountTemplateLine {
 
     public boolean isActive() {
         return active;
+    }
+
+    public boolean isPairedPackaging() {
+        return pairedPackaging;
+    }
+
+    public void setPairedPackaging(boolean pairedPackaging) {
+        this.pairedPackaging = pairedPackaging;
     }
 
     public String getSku() {

@@ -323,6 +323,7 @@ public class DatabaseManager {
                     conversion_factor_to_base REAL DEFAULT 1,
                     display_name TEXT,
                     order_guide_case_size TEXT,
+                    paired_packaging INTEGER NOT NULL DEFAULT 0,
                     active INTEGER DEFAULT 1,
                     FOREIGN KEY(template_id) REFERENCES inventory_count_templates(id),
                     FOREIGN KEY(product_id) REFERENCES products(id)
@@ -380,6 +381,8 @@ public class DatabaseManager {
                     quantity REAL NOT NULL DEFAULT 0,
                     count_unit TEXT,
                     converted_quantity REAL DEFAULT 0,
+                    bottom_sleeves REAL,
+                    lid_sleeves REAL,
                     FOREIGN KEY(count_id) REFERENCES inventory_counts(id),
                     FOREIGN KEY(product_id) REFERENCES products(id)
                 )

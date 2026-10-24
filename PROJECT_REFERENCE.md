@@ -11,14 +11,16 @@ Read this first when starting a new development session, using Codex in IntelliJ
 
 This is the single current technical reference. It combines the former status, schema, coding standards, infrastructure, API, cloud-transition, and roadmap documentation. Update this file when behavior, schema, deployment, or priorities change. Read the implementation before making code changes; archived notes are historical, not current instructions.
 
-- **Desktop source version:** 4.1.6 in `pom.xml` when inspected October 12, 2026; this does not establish publication. The older v4.2.0 references below describe the planned release scope, not proof that v4.2.0 has been published.
+- **Desktop source version:** 4.1.7 in `pom.xml` when inspected October 24, 2026; this does not establish publication. The older v4.2.0 references below describe the planned release scope, not proof that v4.2.0 has been published.
 - **API source version:** use `api/pom.xml`; desktop and API versions may differ.
-- **Schema:** 23. Normal desktop use is Cloud API with store-scoped sessions; SQLite is a snapshot/recovery and development path.
+- **Schema:** 24 on live AWS RDS. Normal desktop use is Cloud API with store-scoped sessions; SQLite is a snapshot/recovery and development path.
 - **Latest accepted change (October 8, 2026):** finalized GFS LineItemList import, manual invoice number/date/shipping/HST/grand-total reconciliation, actual billed weighted costs, and product-based quantity conversion. The manager confirmed correct operation; 27 desktop tests passed. Actual delivered weight is absent from the export, so variable-weight base quantities remain approximate.
 - **Other current work:** zero-sales mapped wine category correction, admin launcher, and adopted AWS infrastructure with Secrets Manager and seven-day RDS backup retention. See the functional sections and release history for details.
-- **Deployment evidence:** infrastructure state was verified October 4, 2026; this documentation consolidation did not query or change live AWS resources.
-- **Pending count synchronization (October 12, 2026):** Synchronize with Template adds missing active template products to in-progress Food, Alcohol, and Supplies counts at zero quantity. Saved values and unsaved entry controls are retained, including weighted alcohol inputs; completed counts are rejected. Native database and authenticated JavaFX checks passed. No migration; desktop and API remain unreleased/undeployed.
-- **Pending Labour conflict protection (October 12, 2026):** hours and amount saves now check loaded values/revisions before writing; conflicts retain entered values. No migration. API deployment must be coordinated with updates on all desktops because older clients cannot save Labour data afterward. This work remains unreleased and undeployed; see Section 17 for behavior and verification limits.
+- **Deployment evidence (October 24, 2026):** the paired-packaging RDS migration was applied and independently verified as schema 24 with all three new columns. `esm-operations-api` reached CloudFormation `UPDATE_COMPLETE`; Lambda was `Active` with update status `Successful`, and `/health` returned `status=ok`. Authenticated business workflows were not exercised against live store data. The desktop app remains unpublished.
+- **Pending desktop count synchronization (October 12, 2026):** Synchronize with Template adds missing active template products to in-progress Food, Alcohol, and Supplies counts at zero quantity. Saved values and unsaved entry controls are retained, including weighted alcohol inputs; completed counts are rejected. Native database and authenticated JavaFX checks passed. Its API is deployed; the desktop remains unpublished.
+- **Pending desktop Labour conflict protection (October 12, 2026):** hours and amount saves now check loaded values/revisions before writing; conflicts retain entered values. No migration. The API is deployed; older desktops cannot save Labour data until updated. The desktop remains unpublished; see Section 17 for behavior and verification limits.
+- **Pending desktop inactivity lock (October 16, 2026):** Cloud API store sessions lock after 30 minutes without keyboard, mouse click, or scroll activity across app windows. A warning appears one minute before lock. The desktop clears its token and calls the deployed `POST /auth/logout` route to revoke it; signing back into the same store restores the main view and open pop-out stages. No schema migration. The desktop remains unpublished.
+- **Pending desktop local drafts and count conflicts (October 16, 2026):** Labour Hours and Food, Alcohol, and Supplies count editors keep unsaved field drafts under the Windows user's FoodInventory app-data directory and offer recovery on reopening the same store/week or count. Count saves compare edited lines with their loaded cloud values, and completion checks all lines in one transaction; stale saves leave entries on screen. The API is deployed; older desktops lack count preconditions and cannot save counts until updated. The desktop remains unpublished.
 - **Latest deployed Labour fix (October 9, 2026):** Save Net Sales and Save Tip Pool now update only their respective amount, preserving other sales fields, finalization, and saved hours. All 28 desktop tests and 11 API tests passed, including a stale-screen regression. The operator deployed through Admin Tools; AWS confirmed `esm-operations-api` at `UPDATE_COMPLETE` (11:30 a.m. Toronto), Lambda `Active` with update status `Successful`, and `/health` returned `status=ok`. The new authenticated save routes were not exercised against live store data. Updated desktop clients are still required; desktop publication/installation has not been verified.
 
 | Information | Location in this reference |
@@ -240,6 +242,8 @@ Administration also includes **POS Catalog / PLUs**, the shared POS item import 
 
 The sidebar includes Home, Back, and Switch Store when Store Login is required. Switch Store confirms the action, clears the saved location session, and returns to Store Login without closing the app.
 
+In Cloud API mode, 30 minutes of inactivity locks the app and clears the local store token. The server logout route revokes the token; the desktop returns to Store Login and requires the same store to resume open work. Closing the app does not leave a direct desktop database connection open. The API session retains its 16-hour absolute expiration as a fallback. Open modal dialogs may close when the lock hides their windows, so the one-minute warning gives operators time to finish or save those dialogs.
+
 The Labour Management module is complete and accepted as working as intended in the current v4.2.0 release target. It includes an administrator-protected Labour Setup screen, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown. Labour Hours uses an inventory-count-style list of saved weeks and opens a separate spreadsheet-style pop-out window for manual Shift 1 / Shift 2 hour entry. Daily Labour Cost uses a weekly start/end date range with Monday-Sunday rows, editable daily net sales, BOH labour dollars, FOH labour dollars, labour percentages, and a total row. Tip Pool uses editable daily tip-out pool amounts, tip-pool eligible employee hours from Labour Hours, calculated employee tip allocation by day, and weekly totals. Tip Pool Breakdown allocates saved tip pool amounts over a selected date range, subtracts configured uniform deductions per worked day for applicable employees only, rounds net payouts to the nearest nickel, and supports compact black-and-white printing.
 
 All module views should remain reachable through the main navigation/back controls. Do not add redundant in-section return buttons where the left navigation already provides the route.
@@ -312,6 +316,8 @@ OTHER
 
 Office supplies are intended to be tracked as an ordering category but are generally not included in physical inventory counts.
 
+Supplies count-template lines can opt into paired bottom/lid sleeve counting for one purchased packaging SKU. New counts record `bottom_sleeves` and `lid_sleeves` separately on the count line; their sum remains `quantity`, and the existing conversion factor produces `converted_quantity` for valuation. The order guide reports the two closing sleeve counts alongside its total closing quantity. Historical totals are never inferred as a component breakdown. SQLite migration 24 adds the nullable count columns and template flag. The additive RDS migration and updated API were deployed and verified on October 24, 2026; the desktop update remains unpublished.
+
 Products can also have supplier SKU aliases so different supplier identifiers can map to one product.
 
 ---
@@ -319,6 +325,8 @@ Products can also have supplier SKU aliases so different supplier identifiers ca
 # 8. Purchasing and Invoice Workflow
 
 Food invoice import now uses the finalized GFS `LineItemList.csv` export, reading received quantities and authoritative line totals by header name. Zero-quantity/zero-value rows are skipped. Weighted rows use the billed amount per received unit for fallback cost. Existing product setup supplies pack sizes and quantity conversions; this export does not supply actual delivered weight. Invoice number/date, shipping, HST, and paper grand total are entered at save, which requires merchandise plus adjustments to balance. Delivery-order H/P exports are rejected to avoid estimated order amounts being treated as billed amounts.
+
+Pending release: the Food invoice preview has **Enter Case Prices** for a selected line with a whole case quantity. The manager enters the separate billed amount for each catch-weight case; the dialog sums them, updates that line's exact extended cost, and shows the average case cost for product fallback pricing. The saved invoice remains one line, so individual case prices are not retained electronically. No schema or API change is needed. Duplicate supplier SKU rows remain separate and can each be corrected in the preview.
 
 The preview shows Imported Merchandise, Current Merchandise, and Edits to Merchandise. The edit comparison is informational; only the save dialog's paper-grand-total reconciliation determines whether the invoice balances. Shipping is saved as the existing Freight adjustment for compatibility. CSV item tax is not automatically applied: the manager enters the paper invoice's exact HST.
 
@@ -441,6 +449,8 @@ Important design rule:
 
 When a count is started, its count lines are created from the template at that time.
 
+Pending release: Cloud API count entry keeps an unsaved local draft per store/count and offers Restore Draft or Discard Draft when reopened. Drafts contain raw quantity, full-unit, and weight fields plus the loaded values used for conflict checks. They are recovery copies, not saved counts. A successful save or completion removes the draft. The API requires loaded `expectedQuantity` and `expectedConvertedQuantity` for each line (HTTP 428 if absent), checks the complete line set under a count lock, and atomically saves edited lines only when their loaded values still match (HTTP 409 otherwise). Unchanged lines can be edited independently by another manager. Completing a count checks every line. Managers retain their entries on screen after a conflict. A newly synchronized line requires reloading before saving if the editor did not see it.
+
 Changing the template afterward does not automatically add new items to the already-started count.
 
 **Pending release: Synchronize with Template (implemented October 12, 2026).** After adding a product to the template, open the existing incomplete count and click **Synchronize with Template**. Review the list of added products, enter their quantities, then use Save Quantities as usual. Deleting/restarting the count is no longer necessary after installing this update.
@@ -451,7 +461,7 @@ Changing the template afterward does not automatically add new items to the alre
 - Existing count products remain visible if their template row is deactivated or removed; unmatched template metadata falls back to product description and the OTHER section. This does not delete or replace saved count lines.
 - Completed counts disable the action. The API checks completion again inside the transaction, so a screen opened before another manager completed the count cannot synchronize it.
 - Cloud API route: authenticated, store-scoped `POST /inventory-counts/{id}/synchronize-template`, with no body. Success returns `addedCount` and `addedProductIds`; completed counts return HTTP 409 and unavailable/other-store counts return HTTP 404. Local SQLite uses the equivalent DAO transaction.
-- No schema migration. The action requires the updated API in Cloud API mode; it is written/tested but not deployed or published. Coordinate this release with the Labour API/desktop rollout described in Section 17.
+- No schema migration. The updated API is deployed in Cloud API mode; the desktop action is not yet published. Coordinate desktop installation with the Labour changes described in Section 17.
 
 Completed counts must remain historical snapshots and should not be modified by later template changes.
 
@@ -838,10 +848,10 @@ Freezer Pull:
 
 - Labour Hours carries a fingerprint of the persisted week entries. A save checks it inside the same transaction as the complete week write; changed hours, snapshots, finalization, or newly created entries block the whole save. Sales and tip-pool changes do not invalidate an hours-only save.
 - Daily Labour Cost and Tip Pool retain the originally loaded amount for each date, skip unchanged amounts, and send `expectedAmount` with changed saves. The API compares only the edited field, preserving independent edits to other fields. Numeric scale differences do not create conflicts.
-- The API serializes operational Labour writes with a store row lock, including previously empty dates/weeks. Loads use a consistent transaction snapshot. SQLite fallback reserves its write transaction before checking. No schema migration is needed; schema remains 23.
+- The API serializes operational Labour writes with a store row lock, including previously empty dates/weeks. Loads use a consistent transaction snapshot. SQLite fallback reserves its write transaction before checking. Labour conflict protection itself requires no schema migration; the current overall schema is 24 for paired packaging.
 - A conflict returns HTTP 409 and retains the manager's entries on screen. The manager can review/copy their entries, then use Load Week (with the existing discard confirmation) and re-enter changes against current data. There is no automatic merge or overwrite action. Amount ranges save changed dates individually: a later conflict can leave earlier dates saved; successful dates retain their new baseline so retrying does not resubmit them. A weekly hours save is atomic.
 - `GET /labour/weekly/{date}` returns `revision`; `PUT /labour/weekly` requires `expectedRevision`. `GET /labour/daily/{date}` returns `revision` and `conflictProtection=true`; full-day `PUT /labour/daily` requires `expectedRevision` covering entries and sales. `PUT /labour/net-sales` and `PUT /labour/tip-pool` require `{ "workDate": "YYYY-MM-DD", "amount": 0, "expectedAmount": 0 }`. Missing preconditions return HTTP 428 before writing.
-- Coordinate the API deployment with installation of the updated desktop on all work PCs. Older desktops cannot save Labour data after this API deployment; the updated desktop also refuses unprotected saves against an older API. This work is written but has not been deployed or published.
+- The API was deployed October 24, 2026. Install the updated desktop on all work PCs promptly: older desktops cannot save Labour data against this API. The updated desktop also refuses unprotected saves against an older API. Desktop update not yet published.
 - Validation: all 38 default desktop regression tests and 22 API tests passed. The six optional authenticated JavaFX scenarios passed separately, bringing desktop coverage executed to 44 scenarios. Native repository verification repeated nine API scenarios on PostgreSQL 18.6.
 - Regression coverage includes stale same-field saves, independent fields/store scopes, empty-week conflicts, whole-week rollback, full-day conflicts, a waiting writer, client preconditions, retained edits, and rejection of older clients. October 12 verification passed nine repository scenarios against native PostgreSQL 18.6 and six actual JavaFX scenarios against an authenticated local API, including two screens editing the same hours/amounts and regular/weighted count synchronization.
 - The runtime checks found and fixed revision tokens being lost when the Labour screens normalize their loaded models. They also found and fixed overlapping API requests sharing a JDBC transaction: repositories now receive independently owned connections. Existing repositories already close their connections after use.
@@ -860,7 +870,7 @@ Implemented Labour Management work includes:
 - Configurable labour employees with position, hourly wage, active status, tip-pool eligibility, and uniform-deduction applicability.
 - Configurable default uniform deduction amount stored in settings.
 - API-backed Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown reads/writes for Cloud API mode.
-- Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes, and the live RDS schema has been advanced through schema version 23 for multi-location operation and effective-dated labour pay rates.
+- Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes. The live RDS schema reached version 23 for multi-location operation and effective-dated labour pay rates, then version 24 for paired packaging.
 - Daily operational sales and employee labour entries stored by actual calendar date.
 - Wage, employee name, position name, and labour group snapshots on saved daily labour entries so historical weeks do not recalculate from later setup changes.
 - Labour Setup stores pay-rate effective dates in `labour_employee_pay_rates`; unsaved Labour Hours and Daily Labour rows use the rate effective on the work date, while saved rows keep their stored wage snapshot.
@@ -881,6 +891,8 @@ Daily Labour Cost UI notes:
 Future Labour Management work should preserve the spreadsheet-like manager workflow: employees grouped by labour position, Monday through Sunday across the screen, separate Shift 1 and Shift 2 entry, daily totals, labour dollars/percentages, FOH/BOH/total variable labour groupings, tip-out allocation by eligible hours, and uniform deductions from configuration.
 
 Labour Hours UI notes:
+
+- Pending release: Unsaved Cloud API Labour Hours fields are kept in a local draft per store/week. Reopening offers Restore Draft or Discard Draft. A restored draft retains its originally loaded revision, so a later cloud change blocks saving rather than being overwritten. A successful save clears the draft. Drafts live under `%LOCALAPPDATA%\FoodInventory\drafts` for the current Windows user.
 
 - The main Labour Hours screen lists saved weeks and opens a separate pop-out editor, following the Inventory Counts workflow pattern.
 - The pop-out editor keeps the spreadsheet mental model while limiting columns to employee name, Monday-Sunday Shift 1 / Shift 2 hour entry, and employee total hours.
@@ -1438,17 +1450,17 @@ Runtime DB path is under:
 
 ### GFS Invoice CSV
 
-Use the finalized GFS `LineItemList.csv`, matched by column headers. Delivery-order H/P exports are rejected with a clear message.
+Use a finalized GFS `InvoicesList.csv` for one invoice, or the older `LineItemList.csv`, matched by column headers. Delivery-order H/P exports are rejected with a clear message. InvoicesList uses `Line Item` as SKU, `Total Amount` as authoritative line total, and pre-fills invoice number/date, summed item tax, and `Original Amount` as the invoice grand total. It rejects exports containing multiple invoices or inconsistent repeated totals. The remaining difference after merchandise and tax is not automatically labelled shipping.
 
 - `Item Code` = SKU (preserve leading zeros).
 - `Item Description` = description.
-- `Current Quantity` = received cases or splits, selected by `Split Item Indicator` (Y/N).
+- `Current Quantity` = received cases or splits, selected by `Split Item Indicator` (Y/N or 1/0).
 - `Line Total` = authoritative merchandise extended cost, excluding item tax.
 - `Unit Price` = purchased unit cost for normal items.
-- `Unit of Measure` Y marks weighted items; derive billed case/each cost from line total / received quantity rather than storing the per-pound price as case cost.
-- Skip zero-quantity, zero-value rows. Reject invalid numbers and unsupported indicators instead of silently importing zero.
-- Pack size and base-unit conversions come from product setup. Actual delivered weight is not supplied in this export.
-- Invoice number/date, shipping, HST, and paper grand total are entered manually at save. Shipping is stored as the existing Freight adjustment for API/database compatibility.
+- `Unit of Measure` Y or 1 marks weighted items; derive billed case/each cost from line total / received quantity rather than storing the per-pound price as case cost.
+- Skip zero-quantity, zero-value rows. A billed row with zero received quantity prompts the desktop user for the paper-invoice received case/split quantity; cancel aborts the import, and the billed line total remains authoritative. Headless callers without a correction callback reject these rows. Reject invalid numbers and unsupported indicators instead of silently importing zero. Import errors offer a copyable stack trace in the desktop UI.
+- Pack size and base-unit conversions come from product setup. InvoicesList supplies a billed `Weight` for weighted items; it is shown in the preview for reference but is not used as base quantity until its unit is confirmed to match inventory setup. LineItemList does not supply weight.
+- InvoicesList pre-fills invoice number/date, item-tax sum as HST, and original grand total; verify these against paper. LineItemList requires manual entry. Shipping and other residual charges always require paper-invoice confirmation. Shipping is stored as the existing Freight adjustment for API/database compatibility.
 - Save requires merchandise plus adjustments to equal the paper grand total. The imported total now means original merchandise subtotal, not supplier grand total.
 - Preview wording is Imported Merchandise, Current Merchandise, and Edits to Merchandise; the edit comparison is informational and must not imply an unbalanced paper invoice.
 - Exact billed cost is preserved for weighted items, while base-unit quantity remains `cases × product conversion factor + splits`. Do not imply that the export provides measured delivered weight.
@@ -2429,7 +2441,7 @@ Notes:
 
 # 29. API Reference
 
-The standalone `api/` Maven project implements the HTTP/Lambda backend without pulling JavaFX into the deployment package. Normal business requests require both `x-api-key` and a valid `x-location-token` when location authentication is enabled. `/health` is public; `/auth/login` exchanges store credentials for a session token. Local examples calling business routes must also supply a valid location token when that enforcement is enabled.
+The standalone `api/` Maven project implements the HTTP/Lambda backend without pulling JavaFX into the deployment package. Normal business requests require both `x-api-key` and a valid `x-location-token` when location authentication is enabled. `/health` is public; `/auth/login` exchanges store credentials for a session token. The pending `POST /auth/logout` route requires both headers and revokes the presented session token. Local examples calling business routes must also supply a valid location token when that enforcement is enabled.
 
 Food/Alcohol/Supplies, Production, Reporting/Sales, Labour, product support, and protected-password workflows use the deployed API. File parsing stays on the desktop. Admin sync download/upload are explicit recovery tools; upload replaces cloud data and is not an ordinary desktop action. No API/schema changes are required for finalized Food invoice parsing.
 
@@ -2439,6 +2451,7 @@ Additional established routes include `POST /products/import`, `GET /products/{i
 ```text
 GET /health
 POST /auth/login
+POST /auth/logout
 GET /protected-passwords/status
 POST /protected-passwords/verify
 PUT /protected-passwords/{scope}

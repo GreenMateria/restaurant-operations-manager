@@ -12,6 +12,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ApiRoutesTest {
 
     @Test
+    void logoutRevokesThePresentedStoreSession() {
+        System.setProperty("foodinventory.api.key", "secret");
+        System.setProperty("foodinventory.api.locationAuthRequired", "true");
+        FakeLocationAuthRepository auth = new FakeLocationAuthRepository(
+                new LocationSession("token", 1, "STORE", "Store", "manager"));
+        ApiRoutes routes = routesWithAuthRepository(auth);
+        Map<String, List<String>> headers = Map.of(
+                "x-api-key", List.of("secret"), "x-location-token", List.of("token"));
+
+        assertEquals(401, routes.handle("POST", "/auth/logout", Map.of(), "").statusCode());
+        assertEquals(200, routes.handle("POST", "/auth/logout", headers, "").statusCode());
+        assertEquals(null, auth.resolveSession("token"));
+    }
+
+    @Test
     void templateSynchronizationRequiresApiKeyAndStoreSession() {
         System.setProperty("foodinventory.api.key", "secret");
         System.setProperty("foodinventory.api.locationAuthRequired", "true");
@@ -195,6 +210,10 @@ class ApiRoutesTest {
     }
 
     private ApiRoutes routesWithAuth(LocationSession session) {
+        return routesWithAuthRepository(new FakeLocationAuthRepository(session));
+    }
+
+    private ApiRoutes routesWithAuthRepository(FakeLocationAuthRepository auth) {
         return new ApiRoutes(
                 new ProductRepository(),
                 new PosMenuItemRepository(),
@@ -206,13 +225,14 @@ class ApiRoutesTest {
                 new ReportingRepository(),
                 new AdminSyncRepository(),
                 new LabourRepository(),
-                new FakeLocationAuthRepository(session),
+                auth,
                 new ProtectedPasswordRepository()
         );
     }
 
     private static class FakeLocationAuthRepository extends LocationAuthRepository {
         private final LocationSession session;
+        private boolean revoked;
 
         FakeLocationAuthRepository(LocationSession session) {
             this.session = session;
@@ -225,7 +245,7 @@ class ApiRoutesTest {
 
         @Override
         LocationContext resolveSession(String token) {
-            if (session == null || !session.token().equals(token)) {
+            if (revoked || session == null || !session.token().equals(token)) {
                 return null;
             }
 
@@ -235,6 +255,13 @@ class ApiRoutesTest {
                     session.locationName(),
                     session.username()
             );
+        }
+
+        @Override
+        void revokeSession(String token) {
+            if (session != null && session.token().equals(token)) {
+                revoked = true;
+            }
         }
     }
 }

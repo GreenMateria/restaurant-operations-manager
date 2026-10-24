@@ -7,9 +7,12 @@ import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.Product;
 import ca.foodinventory.service.GfsCsvImportService;
+import ca.foodinventory.service.CatchWeightCasePricing;
 import ca.foodinventory.service.InvoiceApiClient;
 import ca.foodinventory.service.ProductApiClient;
 import javafx.collections.FXCollections;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -19,6 +22,8 @@ import javafx.util.StringConverter;
 import javafx.util.converter.DoubleStringConverter;
 
 import java.io.File;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -62,6 +67,10 @@ public class ImportInvoiceView {
         editLineButton.getStyleClass().add("primary-button");
         editLineButton.setOnAction(e -> editSelectedLine());
 
+        Button casePricesButton = new Button("Enter Case Prices");
+        casePricesButton.getStyleClass().add("primary-button");
+        casePricesButton.setOnAction(e -> enterCasePrices());
+
         Button removeLineButton = new Button("Remove Selected Line");
         removeLineButton.getStyleClass().add("primary-button");
         removeLineButton.setOnAction(e -> removeSelectedLine());
@@ -75,7 +84,12 @@ public class ImportInvoiceView {
 
         setupTable();
 
-        root.setTop(new VBox(topBar, buildSummaryBar()));
+        Label casePricesHelp = new Label(
+                "Catch-weight totals import automatically. Supplier weight is shown for reference; inventory conversion still uses product setup. Use Enter Case Prices only if the paper total differs.");
+        casePricesHelp.setWrapText(true);
+        HBox casePricesBar = new HBox(10, casePricesButton, casePricesHelp);
+        casePricesBar.setStyle("-fx-padding: 4 10;");
+        root.setTop(new VBox(topBar, casePricesBar, buildSummaryBar()));
         root.setCenter(table);
 
         return root;
@@ -120,6 +134,9 @@ public class ImportInvoiceView {
         TableColumn<InvoiceLine, String> packCol = new TableColumn<>("Pack/Size");
         packCol.setCellValueFactory(new PropertyValueFactory<>("packSize"));
 
+        TableColumn<InvoiceLine, BigDecimal> weightCol = new TableColumn<>("Billed Weight");
+        weightCol.setCellValueFactory(new PropertyValueFactory<>("billedWeight"));
+
         TableColumn<InvoiceLine, BigDecimal> caseCostCol = new TableColumn<>("Case Cost");
         caseCostCol.setCellValueFactory(new PropertyValueFactory<>("caseCost"));
         caseCostCol.setCellFactory(column -> moneyCell());
@@ -137,6 +154,7 @@ public class ImportInvoiceView {
                 descCol,
                 caseQtyCol,
                 splitQtyCol,
+                weightCol,
                 packCol,
                 caseCostCol,
                 eachCostCol,
@@ -191,7 +209,7 @@ public class ImportInvoiceView {
 
     private void chooseCsvFile() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Choose Finalized GFS Invoice — LineItemList CSV");
+        fileChooser.setTitle("Choose Finalized GFS Invoice CSV");
         fileChooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("CSV Files", "*.csv")
         );
@@ -203,15 +221,47 @@ public class ImportInvoiceView {
         }
 
         try {
-            currentInvoice = importService.readInvoice(file);
+            currentInvoice = importService.readInvoice(file, this::correctZeroQuantity);
+        } catch (GfsCsvImportService.ImportCancelledException e) {
+            return;
         } catch (RuntimeException e) {
-            showAlert(Alert.AlertType.ERROR, "Invoice Import Failed", e.getMessage());
+            showImportError(e);
             return;
         }
         currentLines = currentInvoice.getLines();
 
         table.setItems(FXCollections.observableArrayList(currentLines));
         updateSummary();
+    }
+
+    private BigDecimal correctZeroQuantity(int row, String sku, String description,
+                                           BigDecimal lineTotal, boolean split, BigDecimal suggestedQuantity) {
+        String suggestion = suggestedQuantity != null && suggestedQuantity.signum() > 0
+                ? suggestedQuantity.stripTrailingZeros().toPlainString() : "";
+        TextInputDialog dialog = new TextInputDialog(suggestion);
+        dialog.setTitle("Check Invoice Quantity");
+        dialog.setHeaderText("CSV row " + row + ": " + sku + " - " + description);
+        dialog.setContentText("The CSV shows 0 received " + (split ? "splits" : "cases")
+                + " but bills " + formatMoney(lineTotal) + ".\n"
+                + "Enter the received " + (split ? "split" : "case")
+                + " quantity from the paper invoice, or Cancel import:"
+                + (suggestion.isBlank() ? "" : "\nOriginal ordered quantity: " + suggestion + " (verify before accepting)."));
+        while (true) {
+            Optional<String> answer = dialog.showAndWait();
+            if (answer.isEmpty()) {
+                return null;
+            }
+            try {
+                BigDecimal quantity = new BigDecimal(answer.get().trim());
+                if (quantity.signum() > 0 && Double.isFinite(quantity.doubleValue())) {
+                    return quantity;
+                }
+            } catch (NumberFormatException ignored) {
+                // The user can correct the value in the same dialog.
+            }
+            showAlert(Alert.AlertType.WARNING, "Check Invoice Quantity",
+                    "Enter a received quantity greater than zero, or Cancel import.");
+        }
     }
 
     private void addManualLine() {
@@ -252,6 +302,87 @@ public class ImportInvoiceView {
             table.refresh();
             updateSummary();
         });
+    }
+
+    private void enterCasePrices() {
+        InvoiceLine line = table.getSelectionModel().getSelectedItem();
+        int cases;
+        try {
+            cases = CatchWeightCasePricing.caseCount(line);
+        } catch (IllegalArgumentException e) {
+            showAlert(Alert.AlertType.WARNING, "Select a Case Line", e.getMessage());
+            return;
+        }
+
+        Dialog<List<BigDecimal>> dialog = new Dialog<>();
+        dialog.setTitle("Enter Catch-Weight Case Prices");
+        dialog.setHeaderText(line.getSku() + " - " + line.getDescription());
+        ButtonType applyType = new ButtonType("Apply Case Prices", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(applyType, ButtonType.CANCEL);
+
+        VBox fieldsBox = new VBox(8);
+        List<TextField> fields = new ArrayList<>();
+        BigDecimal suggested = line.getExtendedCost().divide(BigDecimal.valueOf(cases), 2, RoundingMode.HALF_UP);
+        for (int i = 0; i < cases; i++) {
+            BigDecimal amount = i == cases - 1
+                    ? line.getExtendedCost().subtract(suggested.multiply(BigDecimal.valueOf(cases - 1)))
+                    : suggested;
+            TextField field = new TextField(amount.toPlainString());
+            field.setPrefWidth(110);
+            fields.add(field);
+            fieldsBox.getChildren().add(new HBox(10, new Label("Case " + (i + 1) + ":"), field));
+        }
+        Label paperTotal = new Label();
+        Runnable refreshTotal = () -> {
+            try {
+                paperTotal.setText("Entered case total: "
+                        + formatMoney(CatchWeightCasePricing.total(readCasePrices(fields)))
+                        + "    Current line: " + formatMoney(line.getExtendedCost()));
+            } catch (IllegalArgumentException e) {
+                paperTotal.setText("Enter a valid dollar amount for every case.");
+            }
+        };
+        fields.forEach(field -> field.textProperty().addListener((obs, oldValue, newValue) -> refreshTotal.run()));
+        refreshTotal.run();
+
+        Label note = new Label("The case amounts will be added to this line. Case Cost will show their average; "
+                + "Extended Cost will use the exact total entered here.");
+        note.setWrapText(true);
+        note.setMaxWidth(520);
+        ScrollPane fieldsScroll = new ScrollPane(fieldsBox);
+        fieldsScroll.setFitToWidth(true);
+        fieldsScroll.setPrefViewportHeight(Math.min(300, cases * 40));
+        VBox content = new VBox(12, note, fieldsScroll, paperTotal);
+        content.setStyle("-fx-padding: 10;");
+        dialog.getDialogPane().setContent(content);
+        Button apply = (Button) dialog.getDialogPane().lookupButton(applyType);
+        apply.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            try {
+                CatchWeightCasePricing.total(readCasePrices(fields));
+            } catch (IllegalArgumentException e) {
+                showAlert(Alert.AlertType.WARNING, "Check Case Prices", e.getMessage());
+                event.consume();
+            }
+        });
+        dialog.setResultConverter(button -> button == applyType ? readCasePrices(fields) : null);
+        dialog.showAndWait().ifPresent(amounts -> {
+            CatchWeightCasePricing.apply(line, amounts);
+            table.refresh();
+            updateSummary();
+        });
+    }
+
+    private List<BigDecimal> readCasePrices(List<TextField> fields) {
+        List<BigDecimal> amounts = new ArrayList<>();
+        for (int i = 0; i < fields.size(); i++) {
+            String raw = fields.get(i).getText().replace("$", "").replace(",", "").trim();
+            try {
+                amounts.add(new BigDecimal(raw));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Case " + (i + 1) + " needs a valid dollar amount.");
+            }
+        }
+        return amounts;
     }
 
     private void removeSelectedLine() {
@@ -604,7 +735,8 @@ public class ImportInvoiceView {
 
         TextField invoiceNumberField = new TextField(currentInvoice.getInvoiceNumber());
         TextField invoiceDateField = new TextField(currentInvoice.getInvoiceDate());
-        TextField paperInvoiceTotalField = new TextField();
+        TextField paperInvoiceTotalField = new TextField(currentInvoice.getSupplierTotal() == null
+                ? "" : currentInvoice.getSupplierTotal().toPlainString());
         paperInvoiceTotalField.setPromptText("0.00");
 
         BigDecimal importedTotal = currentInvoice.getInvoiceTotal()
@@ -656,7 +788,7 @@ public class ImportInvoiceView {
         };
 
         addAdjustmentRow(adjustmentsBox, adjustmentRows, "Shipping", BigDecimal.ZERO, refreshTotals);
-        addAdjustmentRow(adjustmentsBox, adjustmentRows, "HST", BigDecimal.ZERO, refreshTotals);
+        addAdjustmentRow(adjustmentsBox, adjustmentRows, "HST", currentInvoice.getTaxTotal(), refreshTotals);
 
         Button addAdjustmentButton = new Button("Add Adjustment");
         addAdjustmentButton.setOnAction(e ->
@@ -698,7 +830,7 @@ public class ImportInvoiceView {
                 new Separator(),
                 new Label("Merchandise"),
                 new Label("The merchandise subtotal is the only amount used for inventory valuation and cost reporting."),
-                new Label("Enter shipping, HST, and the grand total from the paper invoice. Save is enabled when they balance."),
+                new Label("Verify shipping, HST, and the grand total against the paper invoice. Save is enabled when they balance."),
                 new Separator(),
                 adjustmentsHeading,
                 adjustmentsBox,
@@ -988,6 +1120,39 @@ public class ImportInvoiceView {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private void showImportError(RuntimeException error) {
+        StringWriter writer = new StringWriter();
+        error.printStackTrace(new PrintWriter(writer));
+        String diagnostic = writer.toString();
+
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Invoice Import Failed");
+        alert.setHeaderText("Could not read the finalized invoice CSV");
+        alert.setContentText(error.getMessage());
+
+        TextArea details = new TextArea(diagnostic);
+        details.setEditable(false);
+        details.setWrapText(false);
+        details.setPrefColumnCount(90);
+        details.setPrefRowCount(18);
+        VBox expandableContent = new VBox(8,
+                new Label("Error details (select and copy, or use the button below):"), details);
+        expandableContent.setMaxWidth(Double.MAX_VALUE);
+        alert.getDialogPane().setExpandableContent(expandableContent);
+        alert.getDialogPane().setExpanded(true);
+
+        ButtonType copyButton = new ButtonType("Copy Error Details", ButtonBar.ButtonData.OTHER);
+        alert.getButtonTypes().add(copyButton);
+        Button copy = (Button) alert.getDialogPane().lookupButton(copyButton);
+        copy.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            ClipboardContent content = new ClipboardContent();
+            content.putString(diagnostic);
+            Clipboard.getSystemClipboard().setContent(content);
+            event.consume();
+        });
         alert.showAndWait();
     }
 

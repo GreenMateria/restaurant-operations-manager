@@ -149,6 +149,7 @@ public class LabourHoursView extends BorderPane {
         }
         stage.setScene(scene);
         WindowSizing.fitAndCenter(stage, 1250, 780);
+        stage.setOnHiding(event -> editor.flushDraft());
         stage.setOnHidden(event -> refreshTable());
         stage.show();
     }

@@ -105,6 +105,20 @@ class ApiRoutes {
             }
         }
 
+        if ("POST".equalsIgnoreCase(method) && "/auth/logout".equals(normalizedPath)) {
+            ApiResult unauthorized = requireApiKey(headers);
+            if (unauthorized != null) {
+                return unauthorized;
+            }
+            try {
+                locationAuthRepository.revokeSession(headerValue(headers, "x-location-token"));
+                return ApiResult.json(200, Json.object("status", "ok"));
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return databaseError("Failed to log out.");
+            }
+        }
+
         if (normalizedPath.startsWith("/protected-passwords")) {
             ApiResult unauthorized = requireApiKey(headers);
             if (unauthorized != null) {
@@ -921,7 +935,7 @@ class ApiRoutes {
                 }
 
                 if ("PUT".equalsIgnoreCase(method) && countLinesPath.linesRequest()) {
-                    inventoryRepository.updateCountLines(locationContext.id(), parseBodyArray(body));
+                    inventoryRepository.updateCountLines(locationContext.id(), countLinesPath.countId(), parseBodyArray(body));
                     return ApiResult.json(200, Json.object(
                             "status", "ok",
                             "message", "Inventory count quantities saved."
@@ -951,6 +965,10 @@ class ApiRoutes {
                             "message", "Inventory count not found."
                     ));
                 }
+            } catch (CountPreconditionException e) {
+                return ApiResult.json(428, Json.object("error", "precondition_required", "message", e.getMessage()));
+            } catch (CountConflictException e) {
+                return ApiResult.json(409, Json.object("error", "edit_conflict", "message", e.getMessage()));
             } catch (CountCompletedException e) {
                 return ApiResult.json(409, Json.object("error", "count_completed", "message", e.getMessage()));
             } catch (IllegalArgumentException e) {

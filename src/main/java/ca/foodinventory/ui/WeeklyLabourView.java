@@ -9,6 +9,8 @@ import ca.foodinventory.model.WeeklyLabourRow;
 import ca.foodinventory.model.WeeklyLabourSummary;
 import ca.foodinventory.service.LabourApiClient;
 import ca.foodinventory.service.LabourCalculationService;
+import ca.foodinventory.service.LocalDraftStore;
+import javafx.animation.PauseTransition;
 import javafx.concurrent.Task;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
@@ -29,6 +31,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -40,6 +43,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 public class WeeklyLabourView extends BorderPane {
 
@@ -69,6 +73,11 @@ public class WeeklyLabourView extends BorderPane {
     private final ScrollPane rowHeaderScrollPane = frozenScrollPane(rowHeaderGrid);
     private final ScrollPane bodyScrollPane = new ScrollPane(bodyGrid);
     private final List<TextField> entryFields = new ArrayList<>();
+    private final Map<String, TextField> draftFields = new LinkedHashMap<>();
+    private final LocalDraftStore draftStore = new LocalDraftStore();
+    private final String localDraftStoreCode = DatabaseManager.getConfiguredLocationCode();
+    private final PauseTransition draftDelay = new PauseTransition(Duration.seconds(1));
+    private boolean restoringDraft;
     private final Map<WeeklyLabourRow, Label> rowHoursLabels = new LinkedHashMap<>();
     private final Map<WeeklyLabourRow, Label> rowDollarsLabels = new LinkedHashMap<>();
     private final Map<String, Label> groupHoursLabels = new LinkedHashMap<>();
@@ -91,6 +100,7 @@ public class WeeklyLabourView extends BorderPane {
 
     public WeeklyLabourView(LocalDate initialWeekStart) {
         getStyleClass().add("root-dark");
+        draftDelay.setOnFinished(event -> flushDraft());
 
         Label title = new Label("Labour Hours");
         title.getStyleClass().add("page-title");
@@ -276,6 +286,7 @@ public class WeeklyLabourView extends BorderPane {
             dirty = false;
             buildGrid();
             setReady("Week loaded.");
+            restoreDraft();
         });
         task.setOnFailed(event -> {
             setReady("Load failed.");
@@ -306,6 +317,7 @@ public class WeeklyLabourView extends BorderPane {
         rowHeaderGrid.getRowConstraints().clear();
         bodyGrid.getRowConstraints().clear();
         entryFields.clear();
+        draftFields.clear();
         rowHoursLabels.clear();
         rowDollarsLabels.clear();
         groupHoursLabels.clear();
@@ -383,6 +395,9 @@ public class WeeklyLabourView extends BorderPane {
             rowFields.add(shift2);
             entryFields.add(shift1);
             entryFields.add(shift2);
+            String draftKey = labourRow.getEmployeeId() + "." + date + ".";
+            draftFields.put(draftKey + "s1", shift1);
+            draftFields.put(draftKey + "s2", shift2);
             bodyGrid.add(shift1, day * 2, rowIndex);
             bodyGrid.add(shift2, 1 + day * 2, rowIndex);
 
@@ -425,6 +440,8 @@ public class WeeklyLabourView extends BorderPane {
     }
 
     private void handleHoursEdit(TextField field, LabourDailyEntry entry, boolean shift1) {
+        dirty = true;
+        if (!restoringDraft && draftEnabled()) draftDelay.playFromStart();
         BigDecimal value = parseHours(field.getText());
         field.setStyle(value == null ? "-fx-border-color: #c62828;" : "");
         if (value == null) {
@@ -437,7 +454,6 @@ public class WeeklyLabourView extends BorderPane {
         } else {
             entry.setShift2Hours(value);
         }
-        dirty = true;
         statusLabel.setText("Unsaved changes.");
         updateAllTotals();
     }
@@ -508,6 +524,8 @@ public class WeeklyLabourView extends BorderPane {
             showAlert(Alert.AlertType.WARNING, "Invalid Hours", validation);
             return;
         }
+        draftDelay.stop();
+        flushDraft();
 
         setBusy("Saving week...");
         Task<Void> task = new Task<>() {
@@ -523,6 +541,7 @@ public class WeeklyLabourView extends BorderPane {
         };
         task.setOnSucceeded(event -> {
             dirty = false;
+            deleteDraft();
             setReady("Week saved.");
             showAlert(Alert.AlertType.INFORMATION, "Labour Hours", "Week saved.");
             loadWeek(currentData.weekStartDate());
@@ -575,7 +594,77 @@ public class WeeklyLabourView extends BorderPane {
         alert.setTitle("Unsaved Labour Hours");
         alert.setHeaderText(null);
         alert.setContentText("Discard unsaved labour hours changes?");
-        return alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
+        boolean discard = alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
+        if (discard) deleteDraft();
+        return discard;
+    }
+
+    public void flushDraft() {
+        if (!draftEnabled() || !dirty || currentData == null || restoringDraft) return;
+        Properties values = new Properties();
+        values.setProperty("expectedRevision", currentData.revision() == null ? "" : currentData.revision());
+        draftFields.forEach((key, field) -> values.setProperty("hours." + key, field.getText()));
+        try {
+            draftStore.save(draftStoreCode(), "labour-hours", currentData.weekStartDate().toString(), values);
+            statusLabel.setText("Unsaved draft kept on this PC.");
+        } catch (RuntimeException e) {
+            statusLabel.setText("Local draft could not be saved: " + e.getMessage());
+        }
+    }
+
+    private void restoreDraft() {
+        if (!draftEnabled() || currentData == null) return;
+        Properties values;
+        try {
+            values = draftStore.load(draftStoreCode(), "labour-hours", currentData.weekStartDate().toString());
+        } catch (RuntimeException e) {
+            statusLabel.setText(e.getMessage());
+            return;
+        }
+        if (values == null) return;
+        ButtonType restore = new ButtonType("Restore Draft", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        ButtonType discard = new ButtonType("Discard Draft", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert prompt = new Alert(Alert.AlertType.CONFIRMATION,
+                "Unsaved Labour Hours from this PC were found for this week. Restore them for review?",
+                restore, discard);
+        prompt.setTitle("Unsaved Labour Draft");
+        if (prompt.showAndWait().orElse(discard) != restore) {
+            deleteDraft();
+            return;
+        }
+        restoringDraft = true;
+        try {
+            String revision = values.getProperty("expectedRevision", "");
+            if (!revision.isBlank()) {
+                currentData = new WeeklyLabourData(currentData.weekStartDate(), currentData.rows(), revision);
+            }
+            draftFields.forEach((key, field) -> {
+                String value = values.getProperty("hours." + key);
+                if (value != null) field.setText(value);
+            });
+            dirty = true;
+            statusLabel.setText("Local draft restored. Review before saving; changed cloud data will block the save.");
+        } finally {
+            restoringDraft = false;
+        }
+    }
+
+    private void deleteDraft() {
+        if (!draftEnabled() || currentData == null) return;
+        draftDelay.stop();
+        try {
+            draftStore.delete(draftStoreCode(), "labour-hours", currentData.weekStartDate().toString());
+        } catch (RuntimeException e) {
+            statusLabel.setText(e.getMessage());
+        }
+    }
+
+    private boolean draftEnabled() {
+        return DatabaseManager.isApiDatabase() && !draftStoreCode().isBlank();
+    }
+
+    private String draftStoreCode() {
+        return localDraftStoreCode;
     }
 
     private LocalDate normalizeToMonday(LocalDate date) {

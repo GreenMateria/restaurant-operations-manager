@@ -10,12 +10,19 @@ import ca.foodinventory.ui.MainView;
 import ca.foodinventory.ui.WindowSizing;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.concurrent.Task;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -24,6 +31,8 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.Window;
+import javafx.util.Duration;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,6 +40,12 @@ import java.net.ConnectException;
 import java.net.http.HttpTimeoutException;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,6 +53,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MainApp extends Application {
 
     private static final String APP_NAME = "StoreOps Manager";
+    private static final long IDLE_TIMEOUT_NANOS = TimeUnit.MINUTES.toNanos(30);
+    private static final long IDLE_WARNING_NANOS = TimeUnit.MINUTES.toNanos(29);
 
     private final GitHubUpdateService updateService =
             new GitHubUpdateService();
@@ -45,6 +62,13 @@ public class MainApp extends Application {
             new LocationAuthApiClient();
 
     private Stage primaryStage;
+    private Timeline idleTimer;
+    private Alert idleWarning;
+    private long lastActivityNanos;
+    private final Set<Scene> watchedScenes = Collections.newSetFromMap(new IdentityHashMap<>());
+    private Parent lockedView;
+    private String lockedLocationCode;
+    private final List<Stage> hiddenWindows = new ArrayList<>();
 
     @Override
     public void start(Stage stage) {
@@ -98,6 +122,9 @@ public class MainApp extends Application {
         startupTask.setOnSucceeded(event -> {
             if (DatabaseManager.isApiDatabase()
                     && DatabaseManager.isLocationLoginRequired()) {
+                String previousToken = DatabaseManager.getLocationSessionToken();
+                DatabaseManager.clearLocationSession();
+                revokeInBackground(previousToken);
                 showStoreLoginScreen();
                 return;
             }
@@ -144,7 +171,10 @@ public class MainApp extends Application {
         Label title = new Label("Store Login");
         title.getStyleClass().add("page-title");
 
-        Label subtitle = new Label("Sign in to this location to continue.");
+        Label subtitle = new Label(lockedView == null
+                ? "Sign in to this location to continue."
+                : "Session locked after 30 minutes of inactivity. Sign in to the same store to resume your work.");
+        subtitle.setWrapText(true);
         subtitle.getStyleClass().add("section-title");
 
         TextField usernameField = new TextField();
@@ -243,12 +273,33 @@ public class MainApp extends Application {
 
         loginTask.setOnSucceeded(event -> {
             LocationLoginSession session = loginTask.getValue();
+            if (lockedView != null && !session.locationCode().equals(lockedLocationCode)) {
+                revokeInBackground(session.token());
+                statusLabel.setText("Sign in to " + lockedLocationCode + " to resume the open work.");
+                usernameField.setDisable(false);
+                passwordField.setDisable(false);
+                loginButton.setDisable(false);
+                closeButton.setDisable(false);
+                passwordField.clear();
+                return;
+            }
             DatabaseManager.saveLocationSession(
                     session.token(),
                     session.locationCode(),
                     session.locationName()
             );
-            showMainApplication();
+            if (lockedView != null) {
+                primaryStage.getScene().setRoot(lockedView);
+                lockedView = null;
+                lockedLocationCode = null;
+                for (Stage window : hiddenWindows) {
+                    window.show();
+                }
+                hiddenWindows.clear();
+                lastActivityNanos = System.nanoTime();
+            } else {
+                showMainApplication();
+            }
         });
 
         loginTask.setOnFailed(event -> {
@@ -270,11 +321,111 @@ public class MainApp extends Application {
         MainView mainView = new MainView(this::switchStore);
         primaryStage.getScene().setRoot(mainView.getView());
         checkForUpdates();
+        startIdleMonitor();
     }
 
     private void switchStore() {
+        if (idleTimer != null) {
+            idleTimer.stop();
+        }
+        if (idleWarning != null) {
+            idleWarning.hide();
+        }
+        for (Window window : new ArrayList<>(Window.getWindows())) {
+            if (window != primaryStage) {
+                window.hide();
+            }
+        }
+        String token = DatabaseManager.getLocationSessionToken();
         DatabaseManager.clearLocationSession();
+        revokeInBackground(token);
         showStoreLoginScreen();
+    }
+
+    private void startIdleMonitor() {
+        lastActivityNanos = System.nanoTime();
+        idleTimer = new Timeline(new KeyFrame(Duration.seconds(5), event -> checkIdle()));
+        idleTimer.setCycleCount(Timeline.INDEFINITE);
+        idleTimer.play();
+    }
+
+    private void checkIdle() {
+        if (lockedView != null) {
+            return;
+        }
+        EventHandler<KeyEvent> keyActivity = event -> recordActivity();
+        EventHandler<MouseEvent> mouseActivity = event -> recordActivity();
+        EventHandler<ScrollEvent> scrollActivity = event -> recordActivity();
+        for (Window window : Window.getWindows()) {
+            Scene scene = window.getScene();
+            if (scene != null && watchedScenes.add(scene)) {
+                scene.addEventFilter(KeyEvent.KEY_PRESSED, keyActivity);
+                scene.addEventFilter(MouseEvent.MOUSE_PRESSED, mouseActivity);
+                scene.addEventFilter(ScrollEvent.SCROLL, scrollActivity);
+            }
+        }
+        long idleNanos = System.nanoTime() - lastActivityNanos;
+        if (idleNanos >= IDLE_TIMEOUT_NANOS) {
+            lockForInactivity();
+        } else if (idleNanos >= IDLE_WARNING_NANOS && idleWarning == null) {
+            idleWarning = new Alert(Alert.AlertType.WARNING,
+                    "Your store session will lock in one minute. Select Stay Signed In to keep working.",
+                    new ButtonType("Stay Signed In", ButtonBar.ButtonData.OK_DONE));
+            idleWarning.initOwner(primaryStage);
+            idleWarning.setTitle("Session Expiring");
+            idleWarning.setOnHidden(event -> idleWarning = null);
+            idleWarning.show();
+        }
+    }
+
+    private void recordActivity() {
+        lastActivityNanos = System.nanoTime();
+        if (idleWarning != null) {
+            idleWarning.hide();
+        }
+    }
+
+    private void lockForInactivity() {
+        if (idleWarning != null) {
+            idleWarning.hide();
+        }
+        String token = DatabaseManager.getLocationSessionToken();
+        lockedLocationCode = DatabaseManager.getConfiguredLocationCode();
+        lockedView = primaryStage.getScene().getRoot();
+        hiddenWindows.clear();
+        List<Window> windowsToHide = new ArrayList<>();
+        for (Window window : Window.getWindows()) {
+            if (window != primaryStage && window.isShowing()) {
+                windowsToHide.add(window);
+            }
+            if (window instanceof Stage stage && stage != primaryStage && stage.isShowing()) {
+                if (stage.getScene() != null
+                        && !(stage.getScene().getRoot() instanceof DialogPane)) {
+                    hiddenWindows.add(stage);
+                }
+            }
+        }
+        for (Window window : windowsToHide) {
+            window.hide();
+        }
+        DatabaseManager.clearLocationSession();
+        revokeInBackground(token);
+        showStoreLoginScreen();
+    }
+
+    private void revokeInBackground(String token) {
+        if (token == null || token.isBlank()) {
+            return;
+        }
+        Thread thread = new Thread(() -> {
+            try {
+                locationAuthClient.logout(token);
+            } catch (RuntimeException e) {
+                System.err.println("Could not revoke store session: " + e.getMessage());
+            }
+        }, "store-logout");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void showStartupFailure(Throwable exception) {

@@ -95,6 +95,18 @@ class LocationAuthRepository {
         }
     }
 
+    void revokeSession(String token) throws SQLException {
+        if (token == null || token.isBlank()) {
+            return;
+        }
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "UPDATE location_sessions SET revoked = 1 WHERE token_hash = ?")) {
+            statement.setString(1, tokenHash(token));
+            statement.executeUpdate();
+        }
+    }
+
     private void saveSession(Connection connection, int locationId, String token) throws SQLException {
         String sql = """
                 INSERT INTO location_sessions (location_id, token_hash, expires_at, revoked)

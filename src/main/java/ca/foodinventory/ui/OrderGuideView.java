@@ -148,6 +148,10 @@ public class OrderGuideView {
         closingCol.setCellValueFactory(new PropertyValueFactory<>("closingQuantity"));
         closingCol.setPrefWidth(90);
 
+        TableColumn<OrderGuideRow, String> packagingCol = new TableColumn<>("Bottom / Lid sleeves");
+        packagingCol.setCellValueFactory(new PropertyValueFactory<>("packagingBreakdown"));
+        packagingCol.setPrefWidth(115);
+
         TableColumn<OrderGuideRow, Double> usageCol = new TableColumn<>("Usage");
         usageCol.setCellValueFactory(new PropertyValueFactory<>("usageQuantity"));
         usageCol.setPrefWidth(90);
@@ -171,6 +175,7 @@ public class OrderGuideView {
                 unitCol,
                 caseSizeCol,
                 closingCol,
+                packagingCol,
                 usageCol,
                 order1Col,
                 order2Col
@@ -391,9 +396,10 @@ public class OrderGuideView {
         addHeaderCell(grid, "Unit", 2);
         addHeaderCell(grid, "Case", 3);
         addHeaderCell(grid, "Close", 4);
-        addHeaderCell(grid, "Usage", 5);
-        addHeaderCell(grid, "Order 1", 6);
-        addHeaderCell(grid, "Order 2", 7);
+        addHeaderCell(grid, "Bottom/Lid", 5);
+        addHeaderCell(grid, "Usage", 6);
+        addHeaderCell(grid, "Order 1", 7);
+        addHeaderCell(grid, "Order 2", 8);
 
         return grid;
     }
@@ -408,9 +414,10 @@ public class OrderGuideView {
         addDataCell(grid, row.getUnit(), 2);
         addDataCell(grid, row.getCaseSize(), 3);
         addDataCell(grid, formatNumber(row.getClosingQuantity()), 4);
-        addDataCell(grid, formatNumber(row.getUsageQuantity()), 5);
-        addDataCell(grid, formatNumber(row.getOrderQuantity()), 6);
-        addDataCell(grid, "", 7);
+        addDataCell(grid, row.getPackagingBreakdown(), 5);
+        addDataCell(grid, formatNumber(row.getUsageQuantity()), 6);
+        addDataCell(grid, formatNumber(row.getOrderQuantity()), 7);
+        addDataCell(grid, "", 8);
 
         return grid;
     }
@@ -428,6 +435,7 @@ public class OrderGuideView {
                 new ColumnConstraints(45),  // Unit
                 new ColumnConstraints(65),  // Case
                 new ColumnConstraints(55),  // Close
+                new ColumnConstraints(75),  // Bottom/Lid
                 new ColumnConstraints(55),  // Usage
                 new ColumnConstraints(60),  // Order 1
                 new ColumnConstraints(60)   // Order 2

@@ -224,25 +224,37 @@ public class InventoryApiClient {
         return new InventoryCountSynchronizationResult(added);
     }
 
-    public void updateCountLines(int countId, List<InventoryCountLine> lines) {
+    public void updateCountLines(int countId, List<InventoryCountLine> lines,
+                                 Map<Integer, double[]> loadedValues) {
         HttpResponse<String> response = send(
                 requestBuilder("/inventory-counts/" + countId + "/lines")
                         .header("Content-Type", "application/json")
-                        .PUT(HttpRequest.BodyPublishers.ofString(countLinesJson(lines)))
+                        .PUT(HttpRequest.BodyPublishers.ofString(countLinesJson(lines, loadedValues)))
                         .build(),
                 "save inventory count quantities"
         );
-        requireStatus(response, 200, "Inventory API");
+        requireCountSaveStatus(response);
     }
 
-    public void completeCount(int countId, List<InventoryCountLine> lines) {
+    public void completeCount(int countId, List<InventoryCountLine> lines,
+                              Map<Integer, double[]> loadedValues) {
         HttpResponse<String> response = send(
                 requestBuilder("/inventory-counts/" + countId + "/complete")
                         .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(countLinesJson(lines)))
+                        .POST(HttpRequest.BodyPublishers.ofString(countLinesJson(lines, loadedValues)))
                         .build(),
                 "complete inventory count"
         );
+        requireCountSaveStatus(response);
+    }
+
+    private void requireCountSaveStatus(HttpResponse<String> response) {
+        if (response.statusCode() == 428) {
+            throw new IllegalStateException("Update the desktop application and reload this count before saving.");
+        }
+        if (response.statusCode() == 409) {
+            throw new InventoryCountConflictException();
+        }
         requireStatus(response, 200, "Inventory API");
     }
 
@@ -346,6 +358,7 @@ public class InventoryApiClient {
             line.setCountUnit(stringValue(object.get("countUnit")));
             line.setConversionFactorToBase(doubleValue(object.get("conversionFactorToBase")));
             line.setDisplayName(stringValue(object.get("displayName")));
+            line.setPairedPackaging(booleanValue(object.get("pairedPackaging")));
             line.setActive(booleanValue(object.get("active")));
             line.setSku(stringValue(object.get("sku")));
             line.setProductDescription(stringValue(object.get("productDescription")));
@@ -385,6 +398,9 @@ public class InventoryApiClient {
             line.setQuantity(doubleValue(object.get("quantity")));
             line.setCountUnit(stringValue(object.get("countUnit")));
             line.setConvertedQuantity(doubleValue(object.get("convertedQuantity")));
+            line.setBottomSleeves(nullableDouble(object.get("bottomSleeves")));
+            line.setLidSleeves(nullableDouble(object.get("lidSleeves")));
+            line.setPairedPackaging(booleanValue(object.get("pairedPackaging")));
             line.setConversionFactor(doubleValue(object.get("conversionFactor")));
             line.setSku(stringValue(object.get("sku")));
             line.setProductDescription(stringValue(object.get("productDescription")));
@@ -411,6 +427,8 @@ public class InventoryApiClient {
             row.setCaseSize(stringValue(object.get("caseSize")));
             row.setSectionName(stringValue(object.get("sectionName")));
             row.setClosingQuantity(doubleValue(object.get("closingQuantity")));
+            row.setClosingBottomSleeves(nullableDouble(object.get("closingBottomSleeves")));
+            row.setClosingLidSleeves(nullableDouble(object.get("closingLidSleeves")));
             row.setUsageQuantity(doubleValue(object.get("usageQuantity")));
             Object orderQuantity = object.get("orderQuantity");
             row.setOrderQuantity(orderQuantity instanceof Number number
@@ -422,7 +440,7 @@ public class InventoryApiClient {
         return rows;
     }
 
-    private String countLinesJson(List<InventoryCountLine> lines) {
+    private String countLinesJson(List<InventoryCountLine> lines, Map<Integer, double[]> loadedValues) {
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < lines.size(); i++) {
             if (i > 0) {
@@ -430,10 +448,20 @@ public class InventoryApiClient {
             }
 
             InventoryCountLine line = lines.get(i);
+            double[] loaded = loadedValues.get(line.getId());
+            if (loaded == null) {
+                throw new IllegalStateException("Reload the count before saving new lines.");
+            }
             json.append('{')
                     .append("\"id\":").append(line.getId()).append(',')
                     .append("\"quantity\":").append(line.getQuantity()).append(',')
-                    .append("\"convertedQuantity\":").append(line.getConvertedQuantity())
+                    .append("\"convertedQuantity\":").append(line.getConvertedQuantity()).append(',')
+                    .append("\"expectedQuantity\":").append(loaded[0]).append(',')
+                    .append("\"expectedConvertedQuantity\":").append(loaded[1]).append(',')
+                    .append("\"bottomSleeves\":").append(jsonNumber(line.getBottomSleeves())).append(',')
+                    .append("\"lidSleeves\":").append(jsonNumber(line.getLidSleeves())).append(',')
+                    .append("\"expectedBottomSleeves\":").append(loaded.length > 2 && Double.isFinite(loaded[2]) ? loaded[2] : "null").append(',')
+                    .append("\"expectedLidSleeves\":").append(loaded.length > 3 && Double.isFinite(loaded[3]) ? loaded[3] : "null")
                     .append('}');
         }
         return json.append(']').toString();
@@ -446,7 +474,8 @@ public class InventoryApiClient {
                 .append("\"sortOrder\":").append(line.getSortOrder()).append(',')
                 .append("\"countUnit\":").append(jsonString(line.getCountUnit())).append(',')
                 .append("\"conversionFactorToBase\":").append(line.getConversionFactorToBase()).append(',')
-                .append("\"displayName\":").append(jsonString(line.getDisplayName()))
+                .append("\"displayName\":").append(jsonString(line.getDisplayName())).append(',')
+                .append("\"pairedPackaging\":").append(line.isPairedPackaging())
                 .append('}')
                 .toString();
     }
@@ -501,6 +530,14 @@ public class InventoryApiClient {
 
     private double doubleValue(Object value) {
         return value instanceof Number number ? number.doubleValue() : 0;
+    }
+
+    private Double nullableDouble(Object value) {
+        return value instanceof Number number ? number.doubleValue() : null;
+    }
+
+    private String jsonNumber(Double value) {
+        return value == null ? "null" : value.toString();
     }
 
     private boolean booleanValue(Object value) {
