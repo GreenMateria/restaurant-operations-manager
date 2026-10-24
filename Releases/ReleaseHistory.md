@@ -299,3 +299,8 @@ Date: 2026-10-09 11:38
 Date: 2026-10-12 12:42
 
 - Fixed multiple users save issue. Added a syncronize ability for inventory counts.
+
+## v4.1.8
+Date: 2026-10-24 12:29
+
+- Updated invoicing, added split take out packaging. Fixed catch weight calculation. Added user confirmation for split qtys and catch weights
