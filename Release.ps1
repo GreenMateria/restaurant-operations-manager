@@ -106,6 +106,11 @@ function Get-ReleaseApiKey {
         return $envKey.Trim()
     }
 
+    $userKey = [Environment]::GetEnvironmentVariable("FOOD_INVENTORY_RELEASE_API_KEY", "User")
+    if (![string]::IsNullOrWhiteSpace($userKey)) {
+        return $userKey.Trim()
+    }
+
     $tempKeyPath = Join-Path $env:TEMP "esm-api-key.txt"
     if (Test-Path $tempKeyPath) {
         $fileKey = Get-Content $tempKeyPath -Raw
@@ -194,6 +199,12 @@ try {
 
     Assert-GitHubCli
     Assert-WindowsUpgradeUuid
+
+    $ReleaseApiUrl = Get-ReleaseApiUrl
+    $ReleaseApiKey = Get-ReleaseApiKey
+    if ([string]::IsNullOrWhiteSpace($ReleaseApiKey)) {
+        throw "Release API configuration is missing. Set FOOD_INVENTORY_RELEASE_API_KEY before publishing."
+    }
 
     $CurrentVersion = Get-PomVersion
 
@@ -286,9 +297,6 @@ try {
     Invoke-Step "Maven clean" {
         mvn clean
     }
-
-    $ReleaseApiUrl = Get-ReleaseApiUrl
-    $ReleaseApiKey = Get-ReleaseApiKey
 
     Write-Host ""
     Write-Host "Generating release API configuration..." -ForegroundColor Yellow
