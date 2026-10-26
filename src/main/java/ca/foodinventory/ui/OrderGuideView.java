@@ -274,6 +274,7 @@ public class OrderGuideView {
             return;
         }
 
+        pageLayout = job.getJobSettings().getPageLayout();
         List<Node> pages = buildPrintablePages(new ArrayList<>(table.getItems()));
 
         boolean success = true;
@@ -381,7 +382,7 @@ public class OrderGuideView {
         label.setStyle("-fx-text-fill: white;");
         label.setPadding(new Insets(1, 2, 1, 2));
 
-        grid.add(label, 0, 0, 8, 1);
+        grid.add(label, 0, 0, 9, 1);
 
         return grid;
     }
