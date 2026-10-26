@@ -2,6 +2,7 @@ package ca.foodinventory.service;
 
 import ca.foodinventory.model.InvoiceAdjustment;
 import ca.foodinventory.model.InvoiceLine;
+import ca.foodinventory.model.PurchasePriceBaseline;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -10,7 +11,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class InvoiceApiClient {
 
@@ -26,30 +29,107 @@ public class InvoiceApiClient {
         this.httpClient = httpClient;
     }
 
-    public boolean invoiceExists(String invoiceNumber) {
+    public List<String> findSupplierNames() {
         HttpResponse<String> response = send(
-                requestBuilder("/invoices/exists")
+                requestBuilder("/invoices/suppliers").GET().build(),
+                "load suppliers"
+        );
+        if (response.statusCode() == 404) {
+            return new ReportingApiClient().findInvoices().stream()
+                    .map(ca.foodinventory.model.Invoice::getSupplier)
+                    .filter(name -> name != null && !name.isBlank())
+                    .toList();
+        }
+        requireStatus(response, 200, "Invoice API");
+        List<String> suppliers = new ArrayList<>();
+        for (Map<String, Object> row : new JsonObjectArrayParser().parse(response.body())) {
+            Object name = row.get("name");
+            if (name != null && !name.toString().isBlank()) {
+                suppliers.add(name.toString());
+            }
+        }
+        return suppliers;
+    }
+
+    public List<PurchasePriceBaseline> findPriceBaselines(List<String> skus, String invoiceDate,
+                                                          String supplier, String invoiceNumber) {
+        StringBuilder payload = new StringBuilder("{\"skus\":[");
+        for (String sku : new java.util.LinkedHashSet<>(skus)) {
+            if (payload.charAt(payload.length() - 1) != '[') payload.append(',');
+            payload.append(jsonString(sku));
+        }
+        payload.append("],\"invoiceDate\":").append(jsonString(invoiceDate))
+                .append(",\"supplier\":").append(jsonString(supplier))
+                .append(",\"invoiceNumber\":").append(jsonString(invoiceNumber)).append('}');
+        HttpResponse<String> response = send(requestBuilder("/invoices/price-baselines")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload.toString())).build(),
+                "load purchase price history");
+        if (response.statusCode() == 404) {
+            throw new IllegalStateException("The Cloud API must be updated to review invoice price changes.");
+        }
+        requireStatus(response, 200, "Invoice API");
+        List<PurchasePriceBaseline> baselines = new ArrayList<>();
+        for (Map<String, Object> row : new JsonObjectArrayParser().parse(response.body())) {
+            baselines.add(new PurchasePriceBaseline(
+                    row.get("sku").toString(), new BigDecimal(row.get("totalCost").toString()),
+                    new BigDecimal(row.get("baseQuantity").toString()),
+                    new BigDecimal(row.get("purchaseCount").toString()).intValueExact(),
+                    new BigDecimal(row.get("conversionFactor").toString()),
+                    Boolean.parseBoolean(row.get("recent").toString())
+            ));
+        }
+        return baselines;
+    }
+
+    public boolean invoiceExists(String invoiceNumber) {
+        return invoiceExistsAt("/invoices/exists", null, invoiceNumber);
+    }
+
+    public boolean invoiceExists(String supplier, String invoiceNumber) {
+        return invoiceExistsAt("/invoices/exists-by-supplier", supplier, invoiceNumber);
+    }
+
+    private boolean invoiceExistsAt(String path, String supplier, String invoiceNumber) {
+        HttpResponse<String> response = send(
+                requestBuilder(path)
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(
-                                "{\"invoiceNumber\":" + jsonString(invoiceNumber) + "}"
+                                "{\"invoiceNumber\":" + jsonString(invoiceNumber)
+                                        + ",\"supplier\":" + jsonString(supplier) + "}"
                         ))
                         .build(),
                 "check invoice number"
         );
+        if (response.statusCode() == 404 && supplier != null) {
+            throw new IllegalStateException("The Cloud API must be updated before supplier-scoped invoices can be saved.");
+        }
         requireStatus(response, 200, "Invoice API");
         return response.body() != null && response.body().contains("\"exists\":\"true\"");
     }
 
     public void deleteInvoice(String invoiceNumber) {
+        deleteInvoiceAt("/invoices/delete", null, invoiceNumber);
+    }
+
+    public void deleteInvoice(String supplier, String invoiceNumber) {
+        deleteInvoiceAt("/invoices/delete-by-supplier", supplier, invoiceNumber);
+    }
+
+    private void deleteInvoiceAt(String path, String supplier, String invoiceNumber) {
         HttpResponse<String> response = send(
-                requestBuilder("/invoices/delete")
+                requestBuilder(path)
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(
-                                "{\"invoiceNumber\":" + jsonString(invoiceNumber) + "}"
+                                "{\"invoiceNumber\":" + jsonString(invoiceNumber)
+                                        + ",\"supplier\":" + jsonString(supplier) + "}"
                         ))
                         .build(),
                 "delete invoice"
         );
+        if (response.statusCode() == 404 && supplier != null) {
+            throw new IllegalStateException("The Cloud API must be updated before supplier-scoped invoices can be overwritten.");
+        }
         requireStatus(response, 200, "Invoice API");
     }
 

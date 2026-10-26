@@ -11,10 +11,11 @@ Read this first when starting a new development session, using Codex in IntelliJ
 
 This is the single current technical reference. It combines the former status, schema, coding standards, infrastructure, API, cloud-transition, and roadmap documentation. Update this file when behavior, schema, deployment, or priorities change. Read the implementation before making code changes; archived notes are historical, not current instructions.
 
-- **Desktop source version:** 4.1.7 in `pom.xml` when inspected October 24, 2026; this does not establish publication. The older v4.2.0 references below describe the planned release scope, not proof that v4.2.0 has been published.
+- **Desktop source version:** 4.1.9 in `pom.xml` as inspected October 26, 2026. The manager plans to call the next release 5.0.0 and will update `pom.xml` when pushing; source version does not establish publication. Older v4.2.0 references below describe earlier planned scope, not proof of publication.
 - **API source version:** use `api/pom.xml`; desktop and API versions may differ.
 - **Schema:** 24 on live AWS RDS. Normal desktop use is Cloud API with store-scoped sessions; SQLite is a snapshot/recovery and development path.
-- **Latest accepted change (October 8, 2026):** finalized GFS LineItemList import, manual invoice number/date/shipping/HST/grand-total reconciliation, actual billed weighted costs, and product-based quantity conversion. The manager confirmed correct operation; 27 desktop tests passed. Actual delivered weight is absent from the export, so variable-weight base quantities remain approximate.
+- **Manager-accepted invoice work (October 8, 2026):** finalized GFS LineItemList import, manual invoice number/date/shipping/HST/grand-total reconciliation, actual billed weighted costs, and product-based quantity conversion. The manager confirmed correct operation; 27 desktop tests passed. Actual delivered weight is absent from the export, so variable-weight base quantities remain approximate.
+- **Recent manager validation (October 26, 2026):** the manager tested the recent invoice supplier, invoice-history filter, and Weekly Cost chart changes in the dev app and reported them working. The new invoice price review has only automated coverage so far and requires its new API route before dev-app testing.
 - **Other current work:** zero-sales mapped wine category correction, admin launcher, and adopted AWS infrastructure with Secrets Manager and seven-day RDS backup retention. See the functional sections and release history for details.
 - **Deployment evidence (October 24, 2026):** the paired-packaging RDS migration was applied and independently verified as schema 24 with all three new columns. `esm-operations-api` reached CloudFormation `UPDATE_COMPLETE`; Lambda was `Active` with update status `Successful`, and `/health` returned `status=ok`. Authenticated business workflows were not exercised against live store data. The desktop app remains unpublished.
 - **Pending desktop count synchronization (October 12, 2026):** Synchronize with Template adds missing active template products to in-progress Food, Alcohol, and Supplies counts at zero quantity. Saved values and unsaved entry controls are retained, including weighted alcohol inputs; completed counts are rejected. Native database and authenticated JavaFX checks passed. Its API is deployed; the desktop remains unpublished.
@@ -122,8 +123,8 @@ Important:
 - Cloud snapshot download is an administrator backup/recovery tool, not routine daily sync.
 - Never delete, replace, or reset the runtime database unless explicitly requested.
 - Database schema changes must be made through migrations.
-- Current release target is v4.2.0. `pom.xml` may remain at the prior version until `Release.ps1` performs the release-version update during packaging.
-- Current database schema version in code is 23.
+- Current planned desktop release target is v5.0.0. The manager will update `pom.xml` when pushing; do not change it as part of this documentation update.
+- Current database schema version in code is 24.
 - API layer stack `esm-operations-api` is deployed in AWS and the desktop app uses API mode for normal workflows.
 - On October 4, 2026, existing RDS, networking, subnet/monitoring resources were adopted in place into CloudFormation; API credentials moved to a retained Secrets Manager secret. RDS now has seven-day backup retention and deletion protection. Infrastructure Plan/Apply and status are available in Admin Tools; see the Infrastructure and Recovery section below. Store data and desktop release behavior were preserved.
 - The deployed API stack was updated on Friday, October 2, 2026 after confirming AWS RDS schema version 23 and `labour_employee_pay_rates` were already present.
@@ -244,7 +245,7 @@ The sidebar includes Home, Back, and Switch Store when Store Login is required. 
 
 In Cloud API mode, 30 minutes of inactivity locks the app and clears the local store token. The server logout route revokes the token; the desktop returns to Store Login and requires the same store to resume open work. Closing the app does not leave a direct desktop database connection open. The API session retains its 16-hour absolute expiration as a fallback. Open modal dialogs may close when the lock hides their windows, so the one-minute warning gives operators time to finish or save those dialogs.
 
-The Labour Management module is complete and accepted as working as intended in the current v4.2.0 release target. It includes an administrator-protected Labour Setup screen, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown. Labour Hours uses an inventory-count-style list of saved weeks and opens a separate spreadsheet-style pop-out window for manual Shift 1 / Shift 2 hour entry. Daily Labour Cost uses a weekly start/end date range with Monday-Sunday rows, editable daily net sales, BOH labour dollars, FOH labour dollars, labour percentages, and a total row. Tip Pool uses editable daily tip-out pool amounts, tip-pool eligible employee hours from Labour Hours, calculated employee tip allocation by day, and weekly totals. Tip Pool Breakdown allocates saved tip pool amounts over a selected date range, subtracts configured uniform deductions per worked day for applicable employees only, rounds net payouts to the nearest nickel, and supports compact black-and-white printing.
+The Labour Management module is complete and accepted as working as intended in the earlier v4.2.0 scope. It includes an administrator-protected Labour Setup screen, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown. Labour Hours uses an inventory-count-style list of saved weeks and opens a separate spreadsheet-style pop-out window for manual Shift 1 / Shift 2 hour entry. Daily Labour Cost uses a weekly start/end date range with Monday-Sunday rows, editable daily net sales, BOH labour dollars, FOH labour dollars, labour percentages, and a total row. Tip Pool uses editable daily tip-out pool amounts, tip-pool eligible employee hours from Labour Hours, calculated employee tip allocation by day, and weekly totals. Tip Pool Breakdown allocates saved tip pool amounts over a selected date range, subtracts configured uniform deductions per worked day for applicable employees only, rounds net payouts to the nearest nickel, and supports compact black-and-white printing.
 
 All module views should remain reachable through the main navigation/back controls. Do not add redundant in-section return buttons where the left navigation already provides the route.
 
@@ -326,6 +327,12 @@ Products can also have supplier SKU aliases so different supplier identifiers ca
 
 Food invoice import now uses the finalized GFS `LineItemList.csv` export, reading received quantities and authoritative line totals by header name. Zero-quantity/zero-value rows are skipped. Weighted rows use the billed amount per received unit for fallback cost. Existing product setup supplies pack sizes and quantity conversions; this export does not supply actual delivered weight. Invoice number/date, shipping, HST, and paper grand total are entered at save, which requires merchandise plus adjustments to balance. Delivery-order H/P exports are rejected to avoid estimated order amounts being treated as billed amounts.
 
+Pending desktop release: the import reconciliation dialog requires the manager to enter the supplier name. That name is saved on the invoice and on any newly mapped supplier SKU aliases. Reconciliation now precedes unknown-SKU mapping so one supplier name is used throughout the save. The screen uses generic invoice wording; the parser still accepts only the documented `InvoicesList.csv` and `LineItemList.csv` layouts.
+
+Pending desktop release (manager reports API deployed October 26, 2026): imported and manual invoice supplier fields offer existing names from the signed-in store's invoice history while allowing a new name. Whitespace and case-only variants of an existing name resolve to its displayed spelling. Duplicate invoice checks and overwrite deletion use supplier plus invoice number (case-insensitive supplier comparison), preserving another supplier's invoice with the same number. The new authenticated `GET /invoices/suppliers` route lists existing names; older APIs fall back to the existing invoice-history route for the desktop picker. The updated desktop uses new `POST /invoices/exists-by-supplier` and `POST /invoices/delete-by-supplier` routes, so an older API cannot silently perform a number-only overwrite. The existing number-only routes remain supported for older clients. No schema migration. Additional supplier CSV layouts require representative exports before parser changes.
+
+Pending desktop/API release: invoice save review checks each positive merchandise line against the quantity-weighted price per inventory base unit from purchases in the prior 28 days. If none exist, it uses the latest positive purchase in the prior 180 days; older history and credits are ignored. The current supplier/invoice number is excluded so an overwrite does not compare against itself. A line is flagged when its price rose at least 15% and the estimated extra cost on that line is at least $2. Food CSV, food/supplies manual, and alcohol manual invoice entry display a small price marker and Review button only when items are flagged. Review shows current/equivalent case or each price, baseline, percent increase, invoice count, and estimated line impact. Saving remains optional after the warning; a failed price-history lookup asks whether to save without review. History is scoped to the signed-in location. `POST /invoices/price-baselines` supplies the API history; update the API before expecting cloud price warnings. No schema change and no Invoice History report changes.
+
 Pending release: the Food invoice preview has **Enter Case Prices** for a selected line with a whole case quantity. The manager enters the separate billed amount for each catch-weight case; the dialog sums them, updates that line's exact extended cost, and shows the average case cost for product fallback pricing. The saved invoice remains one line, so individual case prices are not retained electronically. No schema or API change is needed. Duplicate supplier SKU rows remain separate and can each be corrected in the preview.
 
 The preview shows Imported Merchandise, Current Merchandise, and Edits to Merchandise. The edit comparison is informational; only the save dialog's paper-grand-total reconciliation determines whether the invoice balances. Shipping is saved as the existing Freight adjustment for compatibility. CSV item tax is not automatically applied: the manager enters the paper invoice's exact HST.
@@ -335,6 +342,7 @@ Manager testing on October 8, 2026 confirmed the finalized import works better a
 The purchasing module supports:
 
 - GFS invoice import
+- Searchable existing-product selection by description, category, or SKU when mapping an unknown supplier SKU; mapping requires an explicit product selection
 - Manual invoice entry
 - Invoice preview and editing
 - Add manual line
@@ -347,6 +355,8 @@ The purchasing module supports:
 - Invoice history
 - Invoice deletion
 - Category breakdown
+
+Pending desktop release: Reporting → Invoice History has an All Suppliers dropdown populated from the loaded invoices. Selecting a supplier filters the invoice list without changing stored records; switching the filter clears any selected invoice and its detail panels. The filter remains selected after a deletion while that supplier still has invoices.
 
 Operational workflow:
 
@@ -362,7 +372,7 @@ Import Invoice
 Important behavior:
 
 - Duplicate SKU lines on one invoice must be supported.
-- Duplicate invoices are detected by invoice number.
+- Updated desktops detect duplicate invoices by supplier and invoice number; older desktop clients retain number-only checks until replaced.
 - Imported totals should reconcile to the supplier invoice.
 - Food and supplies use the generic manual invoice workflow.
 - Alcohol uses a dedicated manual invoice workflow.
@@ -521,6 +531,8 @@ Reporting behavior:
 - Supplies categories are generally compared to total revenue.
 - Multi-week periods are supported.
 - Opening and closing dates are flexible.
+
+Pending desktop release (manager reports API deployed October 26, 2026): the Weekly Cost Report tab shows a horizontal bar chart for each food or alcohol cost-of-goods category, using `usage / matching net sales × 100`. Each category has a consistent colour, while the category labels and exact gross/net sales and usage figures remain available without colour in the text report below. Categories with zero or negative net sales are omitted from the chart with a visible note, because a sales percentage would be undefined or misleading. The Cloud API response now includes structured `cogsRows` alongside the existing `reportText`; older API responses still display the text report but have no chart rows. Confirm the deployed API includes `cogsRows` when testing the desktop chart.
 
 ---
 
@@ -1149,7 +1161,7 @@ The application currently has a stable foundation for:
 - Complete Labour Management module: top-level navigation, administrator-protected Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, Tip Pool Breakdown, schema/API/model foundation, and shared labour daily records
 - Multi-location rollout implementation includes location credentials, `locations`, `location_sessions`, API `POST /auth/login`, development-machine credential scripts, release-enabled desktop Store Login, desktop store-session request headers, Labour `location_id` scoping, store-owned operational `location_id` columns, location-scoped API reads/writes for the main business workflows, PostgreSQL location-aware uniqueness for duplicate-sensitive store data, and admin setup-copy tooling for products/templates/production setup between stores
 - Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
-- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history are confirmed working for the v4.2.0 release target
+- Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history were confirmed working for the earlier v4.2.0 scope
 
 Labour Management, multi-location Store Login/location scoping, the StoreOps Manager navigation shell, and manager-tested invoice/variance workflows are accepted as working as intended. The v4.2.0 wording elsewhere describes planned release scope; the source POM and release history establish built versions. Remaining work focuses on publishing validated desktop changes and future enhancements.
 
@@ -2446,6 +2458,8 @@ The standalone `api/` Maven project implements the HTTP/Lambda backend without p
 Food/Alcohol/Supplies, Production, Reporting/Sales, Labour, product support, and protected-password workflows use the deployed API. File parsing stays on the desktop. Admin sync download/upload are explicit recovery tools; upload replaces cloud data and is not an ordinary desktop action. No API/schema changes are required for finalized Food invoice parsing.
 
 Additional established routes include `POST /products/import`, `GET /products/{id}/purchase-history`, Reporting/Sales endpoints, and `GET /admin/sync/download` / `POST /admin/sync/upload`. The inventory below reflects the former API guide; consult `ApiRoutes` for the complete executable route set.
+
+The weekly-cost GET route retains `reportText` and adds `cogsRows` with category, gross sales, net sales, and usage for desktop charting. The desktop calculates the plotted net percentage using the same `CategoryCostReportRow` calculation as local mode.
 ## Route inventory
 
 ```text
@@ -2465,6 +2479,10 @@ GET /pos-menu-items
 POST /pos-menu-items
 POST /invoices/exists
 POST /invoices/delete
+GET /invoices/suppliers
+POST /invoices/exists-by-supplier
+POST /invoices/delete-by-supplier
+POST /invoices/price-baselines
 POST /food-invoices
 POST /alcohol-invoices
 POST /supplies-invoices
@@ -2924,7 +2942,7 @@ VPC security group: sg-056216eb5a750ccfa
 
 This existing RDS instance was imported into `esm-operations-infrastructure` on October 4, 2026. The import did not recreate it. Current backup retention is seven days and deletion protection is enabled.
 
-The live RDS application schema is currently at version 23. Labour Management, multi-location, location-aware uniqueness, protected-password, and labour pay-rate schema setup paths remain controlled database migrations, separate from infrastructure deployment. The restricted `operations_app` runtime user cannot create or alter schema-owned structures in the `public` schema. Use the secure prompt-based migration helpers with the schema-capable RDS admin user; do not store the admin password in repo files or Lambda environment variables.
+The live RDS application schema reached version 24 for paired packaging on October 24, 2026. Labour Management, multi-location, location-aware uniqueness, protected-password, and labour pay-rate schema setup paths remain controlled database migrations, separate from infrastructure deployment. The restricted `operations_app` runtime user cannot create or alter schema-owned structures in the `public` schema. Use the secure prompt-based migration helpers with the schema-capable RDS admin user; do not store the admin password in repo files or Lambda environment variables.
 
 For the current budget, keep the database small and Single-AZ unless the budget is intentionally changed.
 

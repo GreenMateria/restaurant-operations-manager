@@ -138,7 +138,7 @@ public class GfsCsvImportService {
         } catch (ImportCancelledException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to import finalized GFS invoice CSV: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to import finalized invoice CSV: " + e.getMessage(), e);
         }
 
         return new InvoiceImportResult(invoiceNumber, invoiceDate, invoiceTotal,

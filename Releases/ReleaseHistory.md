@@ -319,3 +319,8 @@ Date: 2026-10-24 12:44
 Date: 2026-10-26 11:41
 
 - Fixed order guide layout
+
+## v5.0.0
+Date: 2026-10-26 14:28
+
+- Updated Suppliers, Updated Price alerts. Fixed order guide padding

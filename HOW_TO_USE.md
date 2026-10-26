@@ -530,15 +530,15 @@ Supplies are usually compared against total revenue in reporting.
 
 Use the department menus for food, alcohol, and supplies invoices. Invoices keep product costs current.
 
-## PURCHASING 1 - Import A GFS Invoice
+## PURCHASING 1 - Import An Invoice CSV
 
 1. From the dashboard, click **Food Department**.
 2. Click **Import Invoice**.
-3. Select a finalized GFS **InvoicesList.csv** export for one invoice. The older **LineItemList.csv** export also remains supported. Delivery-order CSV files are not supported.
+3. Select a finalized **InvoicesList.csv** export for one invoice. The older **LineItemList.csv** layout also remains supported. Other supplier CSV layouts and delivery-order CSV files are not supported by this parser.
 4. Wait for the invoice preview to load.
 5. Review the imported merchandise subtotal.
 6. Confirm delivered quantities and line totals; zero-quantity, zero-value items are skipped, and weighted item costs use the supplier's billed line total.
-7. Review the supplier.
+7. Check the supplier name on the paper invoice; you will enter it when saving.
 8. Scroll through the invoice lines.
 
 If a billed CSV row shows **0** received cases or splits, the app pauses and shows the item, CSV row, and billed amount. Check the paper invoice, enter the actual received quantity, and continue. InvoicesList may suggest its original ordered quantity, but you must verify it before accepting. The billed line total stays unchanged. Cancel stops the import without saving any of its lines. For other import errors, click **Copy Error Details** and share the copied text for diagnosis.
@@ -555,7 +555,9 @@ If every line is matched:
 2. Review the category breakdown.
 3. Click **Save Invoice**.
 
-In the save dialog, verify the invoice number, invoice date, HST, and **Paper Invoice Grand Total** against the paper copy. InvoicesList pre-fills these fields; LineItemList requires manual entry. Enter shipping and any other charges from the paper invoice. The calculated grand total is merchandise plus those adjustments. Save is enabled only when the difference is zero. The InvoicesList billed weight is shown for reference and does not yet replace product-based inventory quantity conversion.
+In the save dialog, select an existing supplier name or type a new one, then verify the invoice number, invoice date, HST, and **Paper Invoice Grand Total** against the paper copy. InvoicesList pre-fills the invoice details; LineItemList requires manual entry. Enter shipping and any other charges from the paper invoice. The calculated grand total is merchandise plus those adjustments. Save is enabled only when the supplier is entered and the difference is zero. The InvoicesList billed weight is shown for reference and does not yet replace product-based inventory quantity conversion.
+
+When saving an invoice, the app checks for notable item price increases against purchases in the previous four weeks. If it flags an item, choose **Review Items** to see the old and new prices and the percentage increase, or **Save Anyway** if the billed price is correct. A small **▲ Increase** marker and Review button remain on the entry screen so you can inspect the flagged items. For products without a purchase in the last four weeks, the latest purchase within 180 days is used and labelled as such. Credits are ignored. The Invoice History report is unchanged.
 
 The preview labels mean:
 
@@ -571,19 +573,16 @@ Unit costing uses the product's saved conversion factor. For example, one case c
 
 If there are unknown SKUs:
 
-1. Click the unknown line.
-2. Search for the matching product.
-3. Link the supplier SKU to the product.
-4. Save the alias or mapping.
-5. Confirm the line now shows the correct product.
-6. Continue until no required unknown SKUs remain.
-7. Save the invoice.
+1. Click **Save Invoice** and enter the supplier and paper-invoice details in the reconciliation dialog.
+2. Search for the matching product in each unknown-SKU mapping dialog, or create a new product when needed.
+3. Click **Map SKU** to link the supplier SKU to the selected product. The new alias records the supplier name entered during reconciliation.
+4. Continue until all unknown SKUs are mapped, then save the invoice.
 
 ## PURCHASING 2 - Enter A Manual Invoice
 
 1. From the dashboard, click the matching department: **Food Department**, **Alcohol Department**, or **Supplies Department**.
 2. Choose **Manual Invoice**.
-3. Enter the supplier.
+3. Select an existing supplier or type a new supplier name.
 4. Enter the invoice number.
 5. Enter the invoice date.
 6. Click **Add Line**.
@@ -597,16 +596,17 @@ If there are unknown SKUs:
 14. Compare totals to the paper invoice.
 15. Click **Save Invoice**.
 
+The manual invoice screens use the same price increase review described above. If a price is flagged, review the comparison or choose **Save Anyway** when the paper invoice is correct.
+
 ![Manual invoice](docs/images/manual-invoice.png)
 
 ## PURCHASING 3 - Check Invoice History
 
 1. From the dashboard, open **Reporting**.
 2. Click **Invoice History**.
-3. Search by invoice number, supplier, or date.
-4. Select the invoice.
-5. Review line items.
-6. Review adjustments.
+3. Use the **Supplier** dropdown to choose a supplier, or leave **All Suppliers** selected to see every invoice.
+4. Select an invoice from the filtered list.
+5. Review its line items and category breakdown or adjustments.
 
 ![Invoice history](docs/images/invoice-history.png)
 
@@ -621,26 +621,17 @@ Use this after counts, invoices, and sales are entered.
 ## REPORT 1 - Generate A Weekly Cost Report
 
 1. From the dashboard, open **Reporting**.
-2. Choose **Weekly Cost Report**.
-3. Select the department:
-   - Food
-   - Alcohol
-   - Supplies
-4. Select the opening count.
-5. Select the closing count.
-6. Confirm the sales period.
-7. Click **Generate**.
+2. Choose **Inventory Valuation**, then open the **Weekly Cost Report** tab.
+3. Select opening and closing counts from the same department.
+4. Click **Generate Cost Report**.
 
 ![Weekly cost report](docs/images/weekly-cost-report.png)
 
 Review:
 
-1. Opening inventory.
-2. Purchases.
-3. Closing inventory.
-4. Usage.
-5. Sales.
-6. Cost percentage.
+1. Compare the chart bars for food or alcohol categories. Each bar is inventory usage as a percentage of that category's net sales.
+2. Read the report below the chart for exact gross sales, net sales, usage, and cost percentages. Supplies remain in the text report.
+3. If a category has no positive net sales, the chart omits its bar and shows a note; check the text report for its figures.
 
 If the report looks wrong, check the counts, dates, sales, invoices, duplicate invoices, and product categories.
 

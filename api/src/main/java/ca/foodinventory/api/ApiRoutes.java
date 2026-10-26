@@ -425,7 +425,50 @@ class ApiRoutes {
             }
         }
 
-        if ("POST".equalsIgnoreCase(method) && "/invoices/exists".equals(normalizedPath)) {
+        if ("GET".equalsIgnoreCase(method) && "/invoices/suppliers".equals(normalizedPath)) {
+            ApiResult unauthorized = requireApiKey(headers);
+            if (unauthorized != null) return unauthorized;
+            try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) return locationUnauthorized();
+                return ApiResult.json(200, invoiceRepository.supplierNamesJson(locationContext.id()));
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return databaseError("Failed to load supplier names.");
+            }
+        }
+
+        if ("POST".equalsIgnoreCase(method) && "/invoices/price-baselines".equals(normalizedPath)) {
+            ApiResult unauthorized = requireApiKey(headers);
+            if (unauthorized != null) return unauthorized;
+            try {
+                LocationContext locationContext = requireLocationContext(headers);
+                if (locationContext == null) return locationUnauthorized();
+                Map<String, Object> request = parseBody(body);
+                Object rawSkus = request.get("skus");
+                if (!(rawSkus instanceof List<?> values) || values.size() > 500) {
+                    throw new IllegalArgumentException("A list of up to 500 SKUs is required.");
+                }
+                List<String> skus = new java.util.ArrayList<>();
+                for (Object value : values) {
+                    if (!(value instanceof String sku) || sku.isBlank()) {
+                        throw new IllegalArgumentException("Every SKU must be a nonempty string.");
+                    }
+                    skus.add(sku);
+                }
+                return ApiResult.json(200, invoiceRepository.priceBaselinesJson(locationContext.id(), skus,
+                        stringBodyField(body, "invoiceDate"), stringBodyField(body, "supplier"),
+                        stringBodyField(body, "invoiceNumber")));
+            } catch (IllegalArgumentException e) {
+                return badRequest(e);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return databaseError("Failed to load purchase price history.");
+            }
+        }
+
+        if ("POST".equalsIgnoreCase(method) && ("/invoices/exists".equals(normalizedPath)
+                || "/invoices/exists-by-supplier".equals(normalizedPath))) {
             ApiResult unauthorized = requireApiKey(headers);
             if (unauthorized != null) {
                 return unauthorized;
@@ -436,10 +479,15 @@ class ApiRoutes {
                 if (locationContext == null) {
                     return locationUnauthorized();
                 }
-                boolean exists = invoiceRepository.invoiceExists(
-                        locationContext.id(),
-                        stringBodyField(body, "invoiceNumber")
-                );
+                Map<String, Object> invoiceRequest = parseBody(body);
+                Object requestedSupplier = invoiceRequest.get("supplier");
+                if ("/invoices/exists-by-supplier".equals(normalizedPath)
+                        && (requestedSupplier == null || requestedSupplier.toString().isBlank())) {
+                    throw new IllegalArgumentException("supplier is required.");
+                }
+                boolean exists = invoiceRepository.invoiceExists(locationContext.id(),
+                        requestedSupplier == null ? null : requestedSupplier.toString(),
+                        stringBodyField(body, "invoiceNumber"));
                 return ApiResult.json(200, Json.object("exists", String.valueOf(exists)));
             } catch (IllegalArgumentException e) {
                 return ApiResult.json(400, Json.object(
@@ -455,7 +503,8 @@ class ApiRoutes {
             }
         }
 
-        if ("POST".equalsIgnoreCase(method) && "/invoices/delete".equals(normalizedPath)) {
+        if ("POST".equalsIgnoreCase(method) && ("/invoices/delete".equals(normalizedPath)
+                || "/invoices/delete-by-supplier".equals(normalizedPath))) {
             ApiResult unauthorized = requireApiKey(headers);
             if (unauthorized != null) {
                 return unauthorized;
@@ -466,10 +515,15 @@ class ApiRoutes {
                 if (locationContext == null) {
                     return locationUnauthorized();
                 }
-                invoiceRepository.deleteInvoice(
-                        locationContext.id(),
-                        stringBodyField(body, "invoiceNumber")
-                );
+                Map<String, Object> invoiceRequest = parseBody(body);
+                Object requestedSupplier = invoiceRequest.get("supplier");
+                if ("/invoices/delete-by-supplier".equals(normalizedPath)
+                        && (requestedSupplier == null || requestedSupplier.toString().isBlank())) {
+                    throw new IllegalArgumentException("supplier is required.");
+                }
+                invoiceRepository.deleteInvoice(locationContext.id(),
+                        requestedSupplier == null ? null : requestedSupplier.toString(),
+                        stringBodyField(body, "invoiceNumber"));
                 return ApiResult.json(200, Json.object(
                         "status", "ok",
                         "message", "Invoice deleted."

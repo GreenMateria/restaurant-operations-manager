@@ -14,18 +14,126 @@ import java.util.Map;
 
 class InvoiceRepository {
 
+    String priceBaselinesJson(int locationId, List<String> skus, String invoiceDate,
+                              String supplier, String invoiceNumber) throws SQLException {
+        java.time.LocalDate date = java.time.LocalDate.parse(normalizeInvoiceDate(invoiceDate));
+        String recentSql = """
+                SELECT SUM(il.extended_cost) AS total_cost, SUM(il.base_quantity) AS base_quantity,
+                       COUNT(DISTINCT i.id) AS purchase_count
+                FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id
+                WHERE il.product_id = ? AND i.location_id = ? AND il.location_id = ?
+                  AND i.invoice_date >= ? AND i.invoice_date < ?
+                  AND il.base_quantity > 0 AND il.extended_cost > 0
+                  AND NOT (LOWER(TRIM(i.supplier)) = LOWER(TRIM(?)) AND i.invoice_number = ?)
+                """;
+        String lastSql = """
+                SELECT il.extended_cost AS total_cost, il.base_quantity AS base_quantity
+                FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id
+                WHERE il.product_id = ? AND i.location_id = ? AND il.location_id = ?
+                  AND i.invoice_date >= ? AND i.invoice_date < ?
+                  AND il.base_quantity > 0 AND il.extended_cost > 0
+                  AND NOT (LOWER(TRIM(i.supplier)) = LOWER(TRIM(?)) AND i.invoice_number = ?)
+                ORDER BY i.invoice_date DESC, i.id DESC, il.id DESC LIMIT 1
+                """;
+        StringBuilder json = new StringBuilder("[");
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement recent = connection.prepareStatement(recentSql);
+             PreparedStatement last = connection.prepareStatement(lastSql)) {
+            for (String sku : new java.util.LinkedHashSet<>(skus)) {
+                Integer productId = findIdBySkuOrAlias(connection, locationId, sku);
+                if (productId == null) continue;
+                double conversionFactor = getConversionFactor(connection, productId);
+                recent.setInt(1, productId);
+                recent.setInt(2, locationId);
+                recent.setInt(3, locationId);
+                recent.setString(4, date.minusDays(28).toString());
+                recent.setString(5, date.toString());
+                recent.setString(6, supplier);
+                recent.setString(7, invoiceNumber);
+                boolean found = false;
+                try (ResultSet rows = recent.executeQuery()) {
+                    if (rows.next() && rows.getInt("purchase_count") > 0) {
+                        appendPriceBaseline(json, sku, rows.getBigDecimal("total_cost"),
+                                rows.getBigDecimal("base_quantity"), rows.getInt("purchase_count"),
+                                conversionFactor, true);
+                        found = true;
+                    }
+                }
+                if (found) continue;
+                last.setInt(1, productId);
+                last.setInt(2, locationId);
+                last.setInt(3, locationId);
+                last.setString(4, date.minusDays(180).toString());
+                last.setString(5, date.toString());
+                last.setString(6, supplier);
+                last.setString(7, invoiceNumber);
+                try (ResultSet rows = last.executeQuery()) {
+                    if (rows.next()) {
+                        appendPriceBaseline(json, sku, rows.getBigDecimal("total_cost"),
+                                rows.getBigDecimal("base_quantity"), 1, conversionFactor, false);
+                    }
+                }
+            }
+        }
+        return json.append(']').toString();
+    }
+
+    private void appendPriceBaseline(StringBuilder json, String sku, BigDecimal totalCost,
+                                     BigDecimal baseQuantity, int purchaseCount,
+                                     double conversionFactor, boolean recent) {
+        if (json.length() > 1) json.append(',');
+        json.append("{\"sku\":").append(Json.nullableString(sku))
+                .append(",\"totalCost\":").append(totalCost)
+                .append(",\"baseQuantity\":").append(baseQuantity)
+                .append(",\"purchaseCount\":").append(purchaseCount)
+                .append(",\"conversionFactor\":").append(conversionFactor)
+                .append(",\"recent\":").append(recent).append('}');
+    }
+
+    String supplierNamesJson(int locationId) throws SQLException {
+        String sql = """
+                SELECT DISTINCT supplier
+                FROM invoices
+                WHERE location_id = ? AND TRIM(supplier) <> ''
+                ORDER BY supplier
+                """;
+        StringBuilder json = new StringBuilder("[");
+        try (Connection connection = PostgresConnectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, locationId);
+            try (ResultSet results = statement.executeQuery()) {
+                boolean first = true;
+                while (results.next()) {
+                    if (!first) json.append(',');
+                    json.append("{\"name\":")
+                            .append(Json.nullableString(results.getString("supplier").trim()))
+                            .append('}');
+                    first = false;
+                }
+            }
+        }
+        return json.append(']').toString();
+    }
+
     boolean invoiceExists(int locationId, String invoiceNumber) throws SQLException {
+        return invoiceExists(locationId, null, invoiceNumber);
+    }
+
+    boolean invoiceExists(int locationId, String supplier, String invoiceNumber) throws SQLException {
         String sql = """
                 SELECT COUNT(*)
                 FROM invoices
                 WHERE invoice_number = ?
                   AND location_id = ?
-                """;
+                """ + (supplier == null ? "" : " AND LOWER(TRIM(supplier)) = LOWER(TRIM(?))");
 
         try (Connection connection = PostgresConnectionProvider.getConnection();
             PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, invoiceNumber);
             statement.setInt(2, locationId);
+            if (supplier != null) {
+                statement.setString(3, supplier);
+            }
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() && resultSet.getInt(1) > 0;
@@ -34,6 +142,11 @@ class InvoiceRepository {
     }
 
     void deleteInvoice(int locationId, String invoiceNumber) throws SQLException {
+        deleteInvoice(locationId, null, invoiceNumber);
+    }
+
+    void deleteInvoice(int locationId, String supplier, String invoiceNumber) throws SQLException {
+        String supplierClause = supplier == null ? "" : " AND LOWER(TRIM(supplier)) = LOWER(TRIM(?))";
         String deleteLinesSql = """
                 DELETE FROM invoice_lines
                 WHERE invoice_id IN (
@@ -41,8 +154,9 @@ class InvoiceRepository {
                     FROM invoices
                     WHERE invoice_number = ?
                       AND location_id = ?
+                      %s
                 )
-                """;
+                """.formatted(supplierClause);
         String deleteAdjustmentsSql = """
                 DELETE FROM invoice_adjustments
                 WHERE invoice_id IN (
@@ -50,13 +164,14 @@ class InvoiceRepository {
                     FROM invoices
                     WHERE invoice_number = ?
                       AND location_id = ?
+                      %s
                 )
-                """;
+                """.formatted(supplierClause);
         String deleteInvoiceSql = """
                 DELETE FROM invoices
                 WHERE invoice_number = ?
                   AND location_id = ?
-                """;
+                """ + supplierClause;
 
         try (Connection connection = PostgresConnectionProvider.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -67,14 +182,17 @@ class InvoiceRepository {
                  PreparedStatement deleteInvoice = connection.prepareStatement(deleteInvoiceSql)) {
                 deleteLines.setString(1, invoiceNumber);
                 deleteLines.setInt(2, locationId);
+                if (supplier != null) deleteLines.setString(3, supplier);
                 deleteLines.executeUpdate();
 
                 deleteAdjustments.setString(1, invoiceNumber);
                 deleteAdjustments.setInt(2, locationId);
+                if (supplier != null) deleteAdjustments.setString(3, supplier);
                 deleteAdjustments.executeUpdate();
 
                 deleteInvoice.setString(1, invoiceNumber);
                 deleteInvoice.setInt(2, locationId);
+                if (supplier != null) deleteInvoice.setString(3, supplier);
                 deleteInvoice.executeUpdate();
                 connection.commit();
             } catch (SQLException e) {

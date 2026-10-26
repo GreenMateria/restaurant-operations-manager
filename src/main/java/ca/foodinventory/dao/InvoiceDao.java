@@ -272,6 +272,66 @@ public class InvoiceDao {
         return history;
     }
 
+    public List<ca.foodinventory.model.PurchasePriceBaseline> findPriceBaselines(
+            List<String> skus, String invoiceDate, String supplier, String invoiceNumber
+    ) {
+        java.time.LocalDate date = java.time.LocalDate.parse(normalizeInvoiceDate(invoiceDate));
+        String recentSql = """
+                SELECT SUM(il.extended_cost) AS total_cost, SUM(il.base_quantity) AS base_quantity,
+                       COUNT(DISTINCT i.id) AS purchase_count
+                FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id
+                WHERE il.product_id = ? AND i.invoice_date >= ? AND i.invoice_date < ?
+                  AND il.base_quantity > 0 AND il.extended_cost > 0
+                  AND NOT (LOWER(TRIM(i.supplier)) = LOWER(TRIM(?)) AND i.invoice_number = ?)
+                """;
+        String lastSql = """
+                SELECT il.extended_cost AS total_cost, il.base_quantity AS base_quantity
+                FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id
+                WHERE il.product_id = ? AND i.invoice_date >= ? AND i.invoice_date < ?
+                  AND il.base_quantity > 0 AND il.extended_cost > 0
+                  AND NOT (LOWER(TRIM(i.supplier)) = LOWER(TRIM(?)) AND i.invoice_number = ?)
+                ORDER BY i.invoice_date DESC, i.id DESC, il.id DESC LIMIT 1
+                """;
+        List<ca.foodinventory.model.PurchasePriceBaseline> baselines = new ArrayList<>();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement recent = connection.prepareStatement(recentSql);
+             PreparedStatement last = connection.prepareStatement(lastSql)) {
+            for (String sku : new java.util.LinkedHashSet<>(skus)) {
+                Integer productId = findIdBySkuOrAlias(connection, sku);
+                if (productId == null) continue;
+                BigDecimal conversion = BigDecimal.valueOf(getConversionFactor(connection, productId));
+                recent.setInt(1, productId);
+                recent.setString(2, date.minusDays(28).toString());
+                recent.setString(3, date.toString());
+                recent.setString(4, supplier);
+                recent.setString(5, invoiceNumber);
+                try (ResultSet rows = recent.executeQuery()) {
+                    if (rows.next() && rows.getInt("purchase_count") > 0) {
+                        baselines.add(new ca.foodinventory.model.PurchasePriceBaseline(sku,
+                                rows.getBigDecimal("total_cost"), rows.getBigDecimal("base_quantity"),
+                                rows.getInt("purchase_count"), conversion, true));
+                        continue;
+                    }
+                }
+                last.setInt(1, productId);
+                last.setString(2, date.minusDays(180).toString());
+                last.setString(3, date.toString());
+                last.setString(4, supplier);
+                last.setString(5, invoiceNumber);
+                try (ResultSet rows = last.executeQuery()) {
+                    if (rows.next()) {
+                        baselines.add(new ca.foodinventory.model.PurchasePriceBaseline(sku,
+                                rows.getBigDecimal("total_cost"), rows.getBigDecimal("base_quantity"),
+                                1, conversion, false));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load purchase price history", e);
+        }
+        return baselines;
+    }
+
     public void saveInvoice(List<InvoiceLine> lines) {
         saveInvoice(
                 "GFS",
@@ -324,12 +384,36 @@ public class InvoiceDao {
         return invoices;
     }
     public boolean invoiceExists(String invoiceNumber) {
+        return invoiceExists(null, invoiceNumber);
+    }
+
+    public List<String> findSupplierNames() {
+        String sql = """
+                SELECT DISTINCT TRIM(supplier) AS supplier
+                FROM invoices
+                WHERE TRIM(supplier) <> ''
+                ORDER BY supplier COLLATE NOCASE
+                """;
+        List<String> suppliers = new ArrayList<>();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet results = statement.executeQuery()) {
+            while (results.next()) {
+                suppliers.add(results.getString("supplier"));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to load supplier names", e);
+        }
+        return suppliers;
+    }
+
+    public boolean invoiceExists(String supplier, String invoiceNumber) {
 
         String sql = """
         SELECT COUNT(*)
         FROM invoices
         WHERE invoice_number = ?
-    """;
+    """ + (supplier == null ? "" : " AND LOWER(TRIM(supplier)) = LOWER(TRIM(?))");
 
         try (
                 Connection conn = DatabaseManager.getConnection();
@@ -337,6 +421,9 @@ public class InvoiceDao {
         ) {
 
             ps.setString(1, invoiceNumber);
+            if (supplier != null) {
+                ps.setString(2, supplier);
+            }
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -493,6 +580,11 @@ public class InvoiceDao {
         return total;
     }
     public void deleteInvoice(String invoiceNumber) {
+        deleteInvoice(null, invoiceNumber);
+    }
+
+    public void deleteInvoice(String supplier, String invoiceNumber) {
+        String supplierClause = supplier == null ? "" : " AND LOWER(TRIM(supplier)) = LOWER(TRIM(?))";
 
         String deleteLinesSql = """
         DELETE FROM invoice_lines
@@ -500,18 +592,19 @@ public class InvoiceDao {
             SELECT id
             FROM invoices
             WHERE invoice_number = ?
+              %s
         )
-    """;
+    """.formatted(supplierClause);
 
         String deleteAdjustmentsSql = """
         DELETE FROM invoice_adjustments
-        WHERE invoice_id IN (SELECT id FROM invoices WHERE invoice_number = ?)
-    """;
+        WHERE invoice_id IN (SELECT id FROM invoices WHERE invoice_number = ? %s)
+    """.formatted(supplierClause);
 
         String deleteInvoiceSql = """
         DELETE FROM invoices
         WHERE invoice_number = ?
-    """;
+    """ + supplierClause;
 
         try (Connection conn = DatabaseManager.getConnection()) {
 
@@ -521,16 +614,19 @@ public class InvoiceDao {
 
                 try (PreparedStatement ps = conn.prepareStatement(deleteLinesSql)) {
                     ps.setString(1, invoiceNumber);
+                    if (supplier != null) ps.setString(2, supplier);
                     ps.executeUpdate();
                 }
 
                 try (PreparedStatement ps = conn.prepareStatement(deleteAdjustmentsSql)) {
                     ps.setString(1, invoiceNumber);
+                    if (supplier != null) ps.setString(2, supplier);
                     ps.executeUpdate();
                 }
 
                 try (PreparedStatement ps = conn.prepareStatement(deleteInvoiceSql)) {
                     ps.setString(1, invoiceNumber);
+                    if (supplier != null) ps.setString(2, supplier);
                     ps.executeUpdate();
                 }
 

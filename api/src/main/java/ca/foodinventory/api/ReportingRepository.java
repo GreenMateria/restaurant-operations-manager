@@ -283,7 +283,22 @@ class ReportingRepository {
 
     String weeklyCostReportTextJson(int locationId, int openingCountId, int closingCountId) throws SQLException {
         WeeklyCostData report = generateWeeklyCostReport(locationId, openingCountId, closingCountId);
-        return Json.object("reportText", buildWeeklyCostReportText(report));
+        StringBuilder json = new StringBuilder("{\"reportText\":")
+                .append(Json.nullableString(buildWeeklyCostReportText(report)))
+                .append(",\"cogsRows\":[");
+        boolean first = true;
+        for (CostRow row : report.cogsRows()) {
+            if (!first) {
+                json.append(',');
+            }
+            json.append("{\"category\":").append(Json.nullableString(row.category()))
+                    .append(",\"sales\":").append(Json.nullableString(row.sales().toPlainString()))
+                    .append(",\"netSales\":").append(Json.nullableString(row.netSales().toPlainString()))
+                    .append(",\"usage\":").append(Json.nullableString(row.usage().toPlainString()))
+                    .append('}');
+            first = false;
+        }
+        return json.append("]}").toString();
     }
 
     private List<ValuationLine> calculateValuation(int locationId, int countId) throws SQLException {

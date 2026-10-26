@@ -7,6 +7,7 @@ import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
 import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.service.ReportingApiClient;
 import javafx.collections.FXCollections;
+import javafx.collections.transformation.FilteredList;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
@@ -19,15 +20,20 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.TreeSet;
 
 public class InvoiceHistoryView {
+
+    private static final String ALL_SUPPLIERS = "All Suppliers";
 
     private final InvoiceDao invoiceDao = new InvoiceDao();
     private final ReportingApiClient reportingApiClient = new ReportingApiClient();
 
+    private final ComboBox<String> supplierFilter = new ComboBox<>();
     private final TableView<Invoice> invoiceTable = new TableView<>();
     private final TableView<InvoiceLine> lineTable = new TableView<>();
     private final TableView<InvoiceCategoryBreakdownLine> breakdownTable = new TableView<>();
+    private FilteredList<Invoice> filteredInvoices;
 
     public BorderPane getView() {
         BorderPane root = new BorderPane();
@@ -46,6 +52,10 @@ public class InvoiceHistoryView {
         setupInvoiceTable();
         setupLineTable();
         setupBreakdownTable();
+
+        supplierFilter.setPrefWidth(260);
+        supplierFilter.setOnAction(e -> applySupplierFilter());
+        HBox filterBar = new HBox(10, new Label("Supplier:"), supplierFilter);
 
         loadInvoices();
 
@@ -84,7 +94,7 @@ public class InvoiceHistoryView {
         VBox.setVgrow(lineTable, Priority.ALWAYS);
         VBox.setVgrow(breakdownTable, Priority.ALWAYS);
 
-        VBox content = new VBox(10, topBar, invoiceTable, detailArea);
+        VBox content = new VBox(10, topBar, filterBar, invoiceTable, detailArea);
         content.getStyleClass().add("content-area");
 
         VBox.setVgrow(invoiceTable, Priority.ALWAYS);
@@ -96,9 +106,36 @@ public class InvoiceHistoryView {
     }
 
     private void loadInvoices() {
-        invoiceTable.setItems(FXCollections.observableArrayList(findInvoices()));
+        String selectedSupplier = supplierFilter.getValue();
+        List<Invoice> invoices = findInvoices();
+        filteredInvoices = new FilteredList<>(FXCollections.observableArrayList(invoices));
+        invoiceTable.setItems(filteredInvoices);
+
+        TreeSet<String> suppliers = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (Invoice invoice : invoices) {
+            if (invoice.getSupplier() != null && !invoice.getSupplier().isBlank()) {
+                suppliers.add(invoice.getSupplier().trim());
+            }
+        }
+        supplierFilter.getItems().setAll(ALL_SUPPLIERS);
+        supplierFilter.getItems().addAll(suppliers);
+        supplierFilter.setValue(selectedSupplier != null && suppliers.contains(selectedSupplier)
+                ? selectedSupplier : ALL_SUPPLIERS);
+        applySupplierFilter();
+    }
+
+    private void applySupplierFilter() {
+        if (filteredInvoices == null) {
+            return;
+        }
+
+        invoiceTable.getSelectionModel().clearSelection();
         lineTable.setItems(FXCollections.observableArrayList());
         breakdownTable.setItems(FXCollections.observableArrayList());
+
+        String supplier = supplierFilter.getValue();
+        filteredInvoices.setPredicate(invoice -> supplier == null || ALL_SUPPLIERS.equals(supplier)
+                || invoice.getSupplier() != null && invoice.getSupplier().trim().equalsIgnoreCase(supplier));
     }
 
     private List<Invoice> findInvoices() {

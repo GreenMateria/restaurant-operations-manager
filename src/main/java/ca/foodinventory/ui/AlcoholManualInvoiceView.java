@@ -36,8 +36,12 @@ public class AlcoholManualInvoiceView {
 
     private final List<AlcoholInvoiceEntryLine> lines = new ArrayList<>();
     private final TableView<AlcoholInvoiceEntryLine> table = new TableView<>();
+    private List<InvoicePriceReview.Flag> priceFlags = List.of();
+    private final Button priceReviewButton = new Button();
+    private final TableColumn<AlcoholInvoiceEntryLine, String> priceColumn =
+            InvoicePriceReview.markerColumn(AlcoholInvoiceEntryLine::getSku, () -> priceFlags);
 
-    private final TextField supplierField = new TextField();
+    private final ComboBox<String> supplierField = new ComboBox<>();
     private final TextField invoiceNumberField = new TextField();
     private final DatePicker invoiceDatePicker = new DatePicker(LocalDate.now());
 
@@ -78,7 +82,10 @@ public class AlcoholManualInvoiceView {
         );
 
         setupProductComboBox();
+        setupSupplierField();
         setupTable();
+        supplierField.getEditor().textProperty().addListener((obs, oldValue, newValue) -> setPriceFlags(List.of()));
+        invoiceDatePicker.valueProperty().addListener((obs, oldValue, newValue) -> setPriceFlags(List.of()));
 
         Button addLineButton = new Button("Add Line");
         addLineButton.getStyleClass().add("primary-button");
@@ -91,12 +98,15 @@ public class AlcoholManualInvoiceView {
         Button saveButton = new Button("Save Invoice");
         saveButton.getStyleClass().add("primary-button");
         saveButton.setOnAction(e -> saveInvoice());
+        priceReviewButton.setVisible(false);
+        priceReviewButton.setManaged(false);
+        priceReviewButton.getStyleClass().add("price-review-button");
+        priceReviewButton.setOnAction(e -> InvoicePriceReview.show(priceFlags));
 
         GridPane invoiceGrid = new GridPane();
         invoiceGrid.setHgap(8);
         invoiceGrid.setVgap(6);
 
-        supplierField.setPromptText("LCBO / Beer Store / Supplier");
         invoiceNumberField.setPromptText("Invoice Number");
 
         invoiceGrid.add(new Label("Supplier:"), 0, 0);
@@ -159,6 +169,7 @@ public class AlcoholManualInvoiceView {
                 adjustmentTotalLabel,
                 new Label("Calculated Total:"),
                 totalLabel,
+                priceReviewButton,
                 removeLineButton,
                 saveButton
         );
@@ -299,8 +310,10 @@ public class AlcoholManualInvoiceView {
                 hstIncludedCol,
                 depositIncludedCol,
                 merchCol,
-                unitCostCol
+                unitCostCol,
+                priceColumn
         );
+        priceColumn.setVisible(false);
 
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
     }
@@ -353,6 +366,7 @@ public class AlcoholManualInvoiceView {
             }
 
             lines.add(line);
+            setPriceFlags(List.of());
             table.setItems(FXCollections.observableArrayList(lines));
             updateTotal();
             clearLineEntryFields();
@@ -363,7 +377,7 @@ public class AlcoholManualInvoiceView {
     }
 
     private void saveInvoice() {
-        if (supplierField.getText().isBlank()) {
+        if (SupplierFieldSupport.name(supplierField).isBlank()) {
             showAlert(Alert.AlertType.WARNING, "Missing Supplier", "Please enter a supplier.");
             return;
         }
@@ -378,7 +392,7 @@ public class AlcoholManualInvoiceView {
             return;
         }
 
-        String supplier = supplierField.getText().trim();
+        String supplier = SupplierFieldSupport.name(supplierField);
         String invoiceNumber = invoiceNumberField.getText().trim();
         String invoiceDate = invoiceDatePicker.getValue().toString();
         BigDecimal paperInvoiceTotal = parseMoney(paperInvoiceTotalField.getText());
@@ -411,6 +425,12 @@ public class AlcoholManualInvoiceView {
                 .add(adjustmentTotal)
                 .setScale(2, RoundingMode.HALF_UP);
 
+        List<InvoiceLine> invoiceLines = buildInvoiceLines(discrepancy);
+        InvoicePriceReview.ReviewResult priceReview = InvoicePriceReview.reviewBeforeSave(
+                invoiceLines, invoiceDate, supplier, invoiceNumber);
+        setPriceFlags(priceReview.flags());
+        if (!priceReview.proceed()) return;
+
         boolean confirmed = showConfirmSaveDialog(
                 supplier,
                 invoiceNumber,
@@ -426,14 +446,16 @@ public class AlcoholManualInvoiceView {
             return;
         }
 
-        if (invoiceExists(invoiceNumber)) {
-            boolean overwrite = showDuplicateInvoiceDialog(invoiceNumber);
-
-            if (!overwrite) {
-                return;
+        try {
+            if (invoiceExists(supplier, invoiceNumber)) {
+                if (!showDuplicateInvoiceDialog(supplier, invoiceNumber)) {
+                    return;
+                }
+                deleteInvoice(supplier, invoiceNumber);
             }
-
-            deleteInvoice(invoiceNumber);
+        } catch (RuntimeException ex) {
+            showAlert(Alert.AlertType.ERROR, "Invoice Check Failed", ex.getMessage());
+            return;
         }
 
         saveInvoice(
@@ -444,33 +466,51 @@ public class AlcoholManualInvoiceView {
                 reconciledMerchandiseSubtotal,
                 paperInvoiceTotal,
                 buildAdjustments(),
-                buildInvoiceLines(discrepancy)
+                invoiceLines
         );
 
         showAlert(Alert.AlertType.INFORMATION, "Invoice Saved", "Alcohol manual invoice saved successfully.");
 
         lines.clear();
+        setPriceFlags(List.of());
         table.setItems(FXCollections.observableArrayList(lines));
         updateTotal();
 
         invoiceNumberField.clear();
-        supplierField.clear();
+        if (!supplierField.getItems().contains(supplier)) supplierField.getItems().add(supplier);
+        supplierField.setValue(null);
+        supplierField.getEditor().clear();
         invoiceDatePicker.setValue(LocalDate.now());
         clearLineEntryFields();
         clearAdjustmentFields();
     }
 
-    private boolean invoiceExists(String invoiceNumber) {
-        return DatabaseManager.isApiDatabase()
-                ? invoiceApiClient.invoiceExists(invoiceNumber)
-                : invoiceDao.invoiceExists(invoiceNumber);
+    private void setPriceFlags(List<InvoicePriceReview.Flag> flags) {
+        priceFlags = flags;
+        priceReviewButton.setText(flags.size() + " price increase" + (flags.size() == 1 ? "" : "s") + " · Review");
+        priceReviewButton.setVisible(!flags.isEmpty());
+        priceReviewButton.setManaged(!flags.isEmpty());
+        priceColumn.setVisible(!flags.isEmpty());
+        table.refresh();
     }
 
-    private void deleteInvoice(String invoiceNumber) {
+    private boolean invoiceExists(String supplier, String invoiceNumber) {
+        return DatabaseManager.isApiDatabase()
+                ? invoiceApiClient.invoiceExists(supplier, invoiceNumber)
+                : invoiceDao.invoiceExists(supplier, invoiceNumber);
+    }
+
+    private void setupSupplierField() {
+        SupplierFieldSupport.configure(supplierField, DatabaseManager.isApiDatabase()
+                ? invoiceApiClient.findSupplierNames() : invoiceDao.findSupplierNames());
+        supplierField.setPrefWidth(260);
+    }
+
+    private void deleteInvoice(String supplier, String invoiceNumber) {
         if (DatabaseManager.isApiDatabase()) {
-            invoiceApiClient.deleteInvoice(invoiceNumber);
+            invoiceApiClient.deleteInvoice(supplier, invoiceNumber);
         } else {
-            invoiceDao.deleteInvoice(invoiceNumber);
+            invoiceDao.deleteInvoice(supplier, invoiceNumber);
         }
     }
 
@@ -732,13 +772,13 @@ public class AlcoholManualInvoiceView {
                 .isPresent();
     }
 
-    private boolean showDuplicateInvoiceDialog(String invoiceNumber) {
+    private boolean showDuplicateInvoiceDialog(String supplier, String invoiceNumber) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Duplicate Invoice");
-        alert.setHeaderText("This invoice number already exists.");
+        alert.setHeaderText("This supplier already has this invoice number.");
 
         alert.setContentText(
-                "Invoice #: " + invoiceNumber + "\n\n" +
+                "Supplier: " + supplier + "\nInvoice #: " + invoiceNumber + "\n\n" +
                         "Do you want to overwrite the existing invoice?"
         );
 
@@ -773,6 +813,7 @@ public class AlcoholManualInvoiceView {
         }
 
         lines.remove(selectedLine);
+        setPriceFlags(List.of());
         table.setItems(FXCollections.observableArrayList(lines));
         updateTotal();
     }

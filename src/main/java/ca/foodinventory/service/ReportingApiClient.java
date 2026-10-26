@@ -5,6 +5,7 @@ import ca.foodinventory.model.Invoice;
 import ca.foodinventory.model.InvoiceCategoryBreakdownLine;
 import ca.foodinventory.model.InvoiceLine;
 import ca.foodinventory.model.SalesPeriod;
+import ca.foodinventory.model.CategoryCostReportRow;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -76,12 +77,32 @@ public class ReportingApiClient {
     }
 
     public String generateWeeklyCostReportText(int openingCountId, int closingCountId) {
+        return generateWeeklyCostReport(openingCountId, closingCountId).reportText();
+    }
+
+    public WeeklyCostReportResult generateWeeklyCostReport(int openingCountId, int closingCountId) {
         Map<String, Object> object = parseObject(get(
                 "/reporting/weekly-cost/" + openingCountId + "/" + closingCountId,
                 "load weekly cost report"
         ));
         Object reportText = object.get("reportText");
-        return reportText == null ? "" : reportText.toString();
+        List<CategoryCostReportRow> rows = new ArrayList<>();
+        if (object.get("cogsRows") instanceof List<?> cogsRows) {
+            for (Object item : cogsRows) {
+                if (item instanceof Map<?, ?> row) {
+                    rows.add(new CategoryCostReportRow(
+                            stringValue(row.get("category")),
+                            moneyValue(row.get("sales")),
+                            moneyValue(row.get("netSales")),
+                            moneyValue(row.get("usage"))
+                    ));
+                }
+            }
+        }
+        return new WeeklyCostReportResult(reportText == null ? "" : reportText.toString(), rows);
+    }
+
+    public record WeeklyCostReportResult(String reportText, List<CategoryCostReportRow> cogsRows) {
     }
 
     private String get(String path, String action) {

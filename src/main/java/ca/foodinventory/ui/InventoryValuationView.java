@@ -8,6 +8,10 @@ import ca.foodinventory.service.InventoryApiClient;
 import ca.foodinventory.service.InventoryValuationService;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
+import javafx.scene.chart.BarChart;
+import javafx.scene.chart.CategoryAxis;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
@@ -16,6 +20,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import ca.foodinventory.model.CategoryCostReportRow;
 import ca.foodinventory.model.WeeklyCostReport;
@@ -41,6 +46,10 @@ public class InventoryValuationView {
     private final ComboBox<InventoryCount> closingCountComboBox = new ComboBox<>();
 
     private final TextArea weeklyCostReportArea = new TextArea();
+    private final NumberAxis costPercentAxis = new NumberAxis();
+    private final BarChart<Number, String> costPercentChart =
+            new BarChart<>(costPercentAxis, new CategoryAxis());
+    private final Label costChartNote = new Label();
     private final Label totalValueLabel = new Label("Total Inventory Value: $0.00");
     private final Label summaryTotalLabel = new Label("Total Inventory Value: $0.00");
 
@@ -90,10 +99,22 @@ public class InventoryValuationView {
         Button generateCostReportButton = new Button("Generate Cost Report");
         generateCostReportButton.getStyleClass().add("primary-button");
         generateCostReportButton.setOnAction(e -> generateWeeklyCostReport());
+        openingCountComboBox.valueProperty().addListener((obs, oldCount, newCount) -> clearWeeklyCostReport());
+        closingCountComboBox.valueProperty().addListener((obs, oldCount, newCount) -> clearWeeklyCostReport());
 
         weeklyCostReportArea.setEditable(false);
         weeklyCostReportArea.setWrapText(false);
         weeklyCostReportArea.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 13px;");
+
+        costPercentAxis.setLabel("Usage as % of net sales");
+        costPercentChart.setLegendVisible(false);
+        costPercentChart.setAnimated(false);
+        costPercentChart.setPrefHeight(260);
+        costPercentChart.getStyleClass().add("cost-percent-chart");
+        costPercentChart.setVisible(false);
+        costPercentChart.setManaged(false);
+        costChartNote.setVisible(false);
+        costChartNote.setManaged(false);
 
         HBox costReportControls = new HBox(
                 10,
@@ -104,8 +125,10 @@ public class InventoryValuationView {
                 generateCostReportButton
         );
 
-        VBox costReportContent = new VBox(10, costReportControls, weeklyCostReportArea);
+        VBox costReportContent = new VBox(10, costReportControls, costPercentChart,
+                costChartNote, weeklyCostReportArea);
         costReportContent.getStyleClass().add("content-area");
+        VBox.setVgrow(weeklyCostReportArea, Priority.ALWAYS);
 
         TabPane tabPane = new TabPane();
 
@@ -565,20 +588,24 @@ public class InventoryValuationView {
 
         try {
             if (DatabaseManager.isApiDatabase()) {
-                weeklyCostReportArea.setText(reportingApiClient.generateWeeklyCostReportText(
+                ReportingApiClient.WeeklyCostReportResult result = reportingApiClient.generateWeeklyCostReport(
                         openingCount.getId(),
                         closingCount.getId()
-                ));
+                );
+                weeklyCostReportArea.setText(result.reportText());
+                updateCostPercentChart(result.cogsRows());
             } else {
                 WeeklyCostReport report = costService.generateReport(
                         openingCount.getId(),
                         closingCount.getId()
                 );
                 weeklyCostReportArea.setText(buildWeeklyCostReportText(report));
+                updateCostPercentChart(report.getCogsRows());
             }
 
         } catch (Exception ex) {
             ex.printStackTrace();
+            clearWeeklyCostReport();
 
             showAlert(
                     Alert.AlertType.ERROR,
@@ -586,6 +613,67 @@ public class InventoryValuationView {
                     ex.getMessage()
             );
         }
+    }
+
+    private void clearWeeklyCostReport() {
+        weeklyCostReportArea.clear();
+        costPercentChart.getData().clear();
+        costPercentChart.setVisible(false);
+        costPercentChart.setManaged(false);
+        costChartNote.setVisible(false);
+        costChartNote.setManaged(false);
+    }
+
+    private void updateCostPercentChart(List<CategoryCostReportRow> rows) {
+        XYChart.Series<Number, String> series = new XYChart.Series<>();
+        int missingNetSales = 0;
+        for (CategoryCostReportRow row : rows) {
+            if (row.getNetSales().signum() <= 0) {
+                missingNetSales++;
+                continue;
+            }
+
+            XYChart.Data<Number, String> data = new XYChart.Data<>(
+                    row.getNetCostPercent().doubleValue(), row.getCategory());
+            data.nodeProperty().addListener((obs, oldNode, newNode) -> {
+                if (newNode != null) {
+                    newNode.getStyleClass().add(costCategoryStyle(row.getCategory()));
+                    Tooltip.install(newNode, new Tooltip(
+                            row.getCategory() + ": " + row.getNetCostPercent() + "%\n"
+                                    + "Usage: " + formatMoney(row.getUsage()) + "\n"
+                                    + "Net sales: " + formatMoney(row.getNetSales())));
+                }
+            });
+            series.getData().add(data);
+        }
+
+        costPercentChart.setData(FXCollections.observableArrayList(series));
+        boolean hasBars = !series.getData().isEmpty();
+        costPercentChart.setVisible(hasBars);
+        costPercentChart.setManaged(hasBars);
+
+        if (missingNetSales > 0) {
+            costChartNote.setText(missingNetSales == rows.size()
+                    ? "No category has positive net sales for this period, so no percentage chart is available."
+                    : "Categories without positive net sales are omitted from the chart.");
+        }
+        costChartNote.setVisible(missingNetSales > 0);
+        costChartNote.setManaged(missingNetSales > 0);
+    }
+
+    private String costCategoryStyle(String category) {
+        if (category == null) {
+            return "cost-category-other";
+        }
+        return switch (category.trim().toUpperCase(Locale.ROOT)) {
+            case "FOOD" -> "cost-category-food";
+            case "BEER" -> "cost-category-beer";
+            case "WINE" -> "cost-category-wine";
+            case "DRAUGHT" -> "cost-category-draught";
+            case "IMPORT DRAUGHT" -> "cost-category-import-draught";
+            case "LIQUOR" -> "cost-category-liquor";
+            default -> "cost-category-other";
+        };
     }
 
     private String buildWeeklyCostReportText(WeeklyCostReport report) {

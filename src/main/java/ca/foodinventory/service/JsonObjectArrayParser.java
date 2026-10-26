@@ -80,6 +80,10 @@ class JsonObjectArrayParser {
         private Object readValue() {
             skipWhitespace();
 
+            if (peek('[')) {
+                return readObjectArray();
+            }
+
             if (peek('"')) {
                 return readString();
             }

@@ -15,6 +15,54 @@
     -fx-font-weight: bold;
 }
 
+.cost-percent-chart {
+    -fx-background-color: #272727;
+}
+
+.cost-percent-chart .chart-plot-background {
+    -fx-background-color: #272727;
+}
+
+.cost-percent-chart .axis {
+    -fx-tick-label-fill: #e0e0e0;
+}
+
+.cost-percent-chart .axis-label {
+    -fx-text-fill: #e0e0e0;
+}
+
+.cost-percent-chart .chart-vertical-grid-lines {
+    -fx-stroke: #484848;
+}
+
+.cost-percent-chart .chart-bar.cost-category-food {
+    -fx-bar-fill: #65c18c;
+}
+
+.cost-percent-chart .chart-bar.cost-category-beer {
+    -fx-bar-fill: #e5b34f;
+}
+
+.cost-percent-chart .chart-bar.cost-category-wine {
+    -fx-bar-fill: #b56aa3;
+}
+
+.cost-percent-chart .chart-bar.cost-category-draught {
+    -fx-bar-fill: #61a5e8;
+}
+
+.cost-percent-chart .chart-bar.cost-category-import-draught {
+    -fx-bar-fill: #53c5c0;
+}
+
+.cost-percent-chart .chart-bar.cost-category-liquor {
+    -fx-bar-fill: #e28565;
+}
+
+.cost-percent-chart .chart-bar.cost-category-other {
+    -fx-bar-fill: #8a9cb2;
+}
+
 .top-bar {
     -fx-padding: 0 0 20 0;
     -fx-alignment: center-left;
@@ -74,6 +122,19 @@
 
 .primary-button:hover {
     -fx-background-color: #3a98ff;
+}
+
+.price-review-button {
+    -fx-background-color: #5b410f;
+    -fx-text-fill: #ffdc91;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 5 10;
+    -fx-background-radius: 6;
+}
+
+.price-review-button:hover {
+    -fx-background-color: #76551a;
 }
 
 .danger-button {

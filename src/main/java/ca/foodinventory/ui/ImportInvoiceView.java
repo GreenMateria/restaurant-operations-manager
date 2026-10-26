@@ -10,6 +10,7 @@ import ca.foodinventory.service.GfsCsvImportService;
 import ca.foodinventory.service.CatchWeightCasePricing;
 import ca.foodinventory.service.InvoiceApiClient;
 import ca.foodinventory.service.ProductApiClient;
+import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -40,6 +41,10 @@ public class ImportInvoiceView {
     private final ProductApiClient productApiClient = new ProductApiClient();
 
     private final TableView<InvoiceLine> table = new TableView<>();
+    private List<InvoicePriceReview.Flag> priceFlags = List.of();
+    private final Button priceReviewButton = new Button();
+    private final TableColumn<InvoiceLine, String> priceColumn =
+            InvoicePriceReview.markerColumn(InvoiceLine::getSku, () -> priceFlags);
 
     private final Label importedTotalValue = new Label("$0.00");
     private final Label calculatedTotalValue = new Label("$0.00");
@@ -78,6 +83,10 @@ public class ImportInvoiceView {
         Button saveButton = new Button("Save Invoice");
         saveButton.getStyleClass().add("primary-button");
         saveButton.setOnAction(e -> saveInvoice());
+        priceReviewButton.setVisible(false);
+        priceReviewButton.setManaged(false);
+        priceReviewButton.getStyleClass().add("price-review-button");
+        priceReviewButton.setOnAction(e -> InvoicePriceReview.show(priceFlags));
 
         HBox topBar = new HBox(15, title, chooseFileButton, addLineButton, editLineButton, removeLineButton, saveButton);
         topBar.getStyleClass().add("top-bar");
@@ -104,7 +113,8 @@ public class ImportInvoiceView {
                 new Label("Current Merchandise:"),
                 calculatedTotalValue,
                 new Label("Edits to Merchandise:"),
-                differenceValue
+                differenceValue,
+                priceReviewButton
         );
 
         summaryBar.setStyle("-fx-padding: 10;");
@@ -158,8 +168,10 @@ public class ImportInvoiceView {
                 packCol,
                 caseCostCol,
                 eachCostCol,
-                extCostCol
+                extCostCol,
+                priceColumn
         );
+        priceColumn.setVisible(false);
 
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         table.setEditable(true);
@@ -209,7 +221,7 @@ public class ImportInvoiceView {
 
     private void chooseCsvFile() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Choose Finalized GFS Invoice CSV");
+        fileChooser.setTitle("Choose Finalized Invoice CSV");
         fileChooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("CSV Files", "*.csv")
         );
@@ -539,15 +551,30 @@ public class ImportInvoiceView {
             showAlert(
                     Alert.AlertType.WARNING,
                     "No Invoice Loaded",
-                    "Please choose a GFS CSV file before saving."
+                    "Please choose a finalized invoice CSV before saving."
             );
             return;
+        }
+
+        Optional<ConfirmedInvoiceDetails> confirmedDetails = showConfirmInvoiceDialog();
+        if (confirmedDetails.isEmpty()) {
+            return;
+        }
+        ConfirmedInvoiceDetails details = confirmedDetails.get();
+
+        if (isFoodApiMode()) {
+            try {
+                invoiceExists(details.supplier(), details.invoiceNumber());
+            } catch (RuntimeException ex) {
+                showAlert(Alert.AlertType.ERROR, "Invoice Check Failed", ex.getMessage());
+                return;
+            }
         }
 
         List<InvoiceLine> unknownLines = findUnknownSkus();
 
         if (!unknownLines.isEmpty()) {
-            boolean mappedAll = showUnknownSkuMappingDialog(unknownLines);
+            boolean mappedAll = showUnknownSkuMappingDialog(unknownLines, details.supplier());
 
             if (!mappedAll) {
                 return;
@@ -565,52 +592,52 @@ public class ImportInvoiceView {
             }
         }
 
-        Optional<ConfirmedInvoiceDetails> confirmedDetails = showConfirmInvoiceDialog();
+        try {
+            InvoicePriceReview.ReviewResult priceReview = InvoicePriceReview.reviewBeforeSave(
+                    currentLines, details.invoiceDate(), details.supplier(), details.invoiceNumber());
+            setPriceFlags(priceReview.flags());
+            if (!priceReview.proceed()) return;
+            if (invoiceExists(details.supplier(), details.invoiceNumber())) {
 
-        confirmedDetails.ifPresent(details -> {
-            try {
-                if (invoiceExists(details.invoiceNumber())) {
+                boolean overwrite =
+                        showDuplicateInvoiceWarning(details.supplier(), details.invoiceNumber());
 
-                    boolean overwrite =
-                            showDuplicateInvoiceWarning(details.invoiceNumber());
-
-                    if (!overwrite) {
-                        return;
-                    }
-
-                    deleteInvoice(details.invoiceNumber());
+                if (!overwrite) {
+                    return;
                 }
 
-                saveInvoice(
-                        "GFS",
-                        details.invoiceNumber(),
-                        details.invoiceDate(),
-                        details.importedTotal(),
-                        details.merchandiseSubtotal(),
-                        details.invoiceTotal(),
-                        details.adjustments(),
-                        currentLines
-                );
-
-                showAlert(
-                        Alert.AlertType.INFORMATION,
-                        "Invoice Saved",
-                        "Invoice saved successfully."
-                );
-
-            } catch (Exception ex) {
-                ex.printStackTrace();
-
-                showAlert(
-                        Alert.AlertType.ERROR,
-                        "Invoice Save Failed",
-                        ex.getMessage()
-                );
+                deleteInvoice(details.supplier(), details.invoiceNumber());
             }
-        });
+
+            saveInvoice(
+                    details.supplier(),
+                    details.invoiceNumber(),
+                    details.invoiceDate(),
+                    details.importedTotal(),
+                    details.merchandiseSubtotal(),
+                    details.invoiceTotal(),
+                    details.adjustments(),
+                    currentLines
+            );
+
+            showAlert(
+                    Alert.AlertType.INFORMATION,
+                    "Invoice Saved",
+                    "Invoice saved successfully."
+            );
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+
+            showAlert(
+                    Alert.AlertType.ERROR,
+                    "Invoice Save Failed",
+                    ex.getMessage()
+            );
+        }
     }
 
-    private boolean showUnknownSkuMappingDialog(List<InvoiceLine> unknownLines) {
+    private boolean showUnknownSkuMappingDialog(List<InvoiceLine> unknownLines, String supplier) {
         List<Product> products = loadSortedProducts();
 
         for (InvoiceLine line : unknownLines) {
@@ -622,7 +649,7 @@ public class ImportInvoiceView {
 
             Product product = selectedProduct.get();
 
-            addSkuAliasIfNeeded(product, line);
+            addSkuAliasIfNeeded(product, line, supplier);
 
             products = loadSortedProducts();
         }
@@ -663,10 +690,9 @@ public class ImportInvoiceView {
         Label packSizeLabel = new Label(line.getPackSize());
 
         ComboBox<Product> productComboBox = new ComboBox<>();
-        productComboBox.setItems(FXCollections.observableArrayList(products));
         productComboBox.setPrefWidth(500);
 
-        productComboBox.setConverter(new StringConverter<>() {
+        StringConverter<Product> productDisplayConverter = new StringConverter<>() {
             @Override
             public String toString(Product product) {
                 if (product == null) {
@@ -682,7 +708,9 @@ public class ImportInvoiceView {
             public Product fromString(String string) {
                 return null;
             }
-        });
+        };
+        SearchableComboBoxSupport.makeSearchable(productComboBox, products, productDisplayConverter);
+        productComboBox.getEditor().setPromptText("Search by product name or SKU");
 
         GridPane grid = new GridPane();
         grid.setHgap(12);
@@ -707,7 +735,11 @@ public class ImportInvoiceView {
         dialog.getDialogPane().setContent(grid);
 
         Button mapButton = (Button) dialog.getDialogPane().lookupButton(mapButtonType);
-        mapButton.disableProperty().bind(productComboBox.valueProperty().isNull());
+        mapButton.disableProperty().bind(Bindings.createBooleanBinding(() -> {
+            Product selectedProduct = productComboBox.getValue();
+            return selectedProduct == null || !productDisplayConverter.toString(selectedProduct)
+                    .equals(productComboBox.getEditor().getText());
+        }, productComboBox.valueProperty(), productComboBox.getEditor().textProperty()));
 
         dialog.setResultConverter(button -> {
             if (button == mapButtonType) {
@@ -733,6 +765,10 @@ public class ImportInvoiceView {
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
         dialog.getDialogPane().setPrefWidth(650);
 
+        ComboBox<String> supplierField = new ComboBox<>();
+        SupplierFieldSupport.configure(supplierField, isFoodApiMode()
+                ? invoiceApiClient.findSupplierNames() : invoiceDao.findSupplierNames());
+        supplierField.setPrefWidth(260);
         TextField invoiceNumberField = new TextField(currentInvoice.getInvoiceNumber());
         TextField invoiceDateField = new TextField(currentInvoice.getInvoiceDate());
         TextField paperInvoiceTotalField = new TextField(currentInvoice.getSupplierTotal() == null
@@ -776,7 +812,8 @@ public class ImportInvoiceView {
             boolean balanced = validAmounts
                     && difference.compareTo(BigDecimal.ZERO) == 0;
             boolean requiredFieldsPresent = !invoiceNumberField.getText().isBlank()
-                    && !invoiceDateField.getText().isBlank();
+                    && !invoiceDateField.getText().isBlank()
+                    && !SupplierFieldSupport.name(supplierField).isBlank();
 
             if (balanced) {
                 differenceLabel.setStyle("-fx-text-fill: lightgreen; -fx-font-weight: bold;");
@@ -795,18 +832,19 @@ public class ImportInvoiceView {
                 addAdjustmentRow(adjustmentsBox, adjustmentRows, "", BigDecimal.ZERO, refreshTotals));
 
         paperInvoiceTotalField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
+        supplierField.getEditor().textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
         invoiceNumberField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
         invoiceDateField.textProperty().addListener((obs, oldValue, newValue) -> refreshTotals.run());
 
         GridPane invoiceGrid = new GridPane();
         invoiceGrid.setHgap(12);
         invoiceGrid.setVgap(10);
-        invoiceGrid.add(new Label("Invoice Number:"), 0, 0);
-        invoiceGrid.add(invoiceNumberField, 1, 0);
-        invoiceGrid.add(new Label("Invoice Date:"), 0, 1);
-        invoiceGrid.add(invoiceDateField, 1, 1);
-        invoiceGrid.add(new Label("Supplier:"), 0, 2);
-        invoiceGrid.add(new Label("GFS"), 1, 2);
+        invoiceGrid.add(new Label("Supplier:"), 0, 0);
+        invoiceGrid.add(supplierField, 1, 0);
+        invoiceGrid.add(new Label("Invoice Number:"), 0, 1);
+        invoiceGrid.add(invoiceNumberField, 1, 1);
+        invoiceGrid.add(new Label("Invoice Date:"), 0, 2);
+        invoiceGrid.add(invoiceDateField, 1, 2);
 
         GridPane totalsGrid = new GridPane();
         totalsGrid.setHgap(12);
@@ -869,6 +907,7 @@ public class ImportInvoiceView {
                     .setScale(2, RoundingMode.HALF_UP);
 
             return new ConfirmedInvoiceDetails(
+                    SupplierFieldSupport.name(supplierField),
                     invoiceNumberField.getText().trim(),
                     invoiceDateField.getText().trim(),
                     importedTotal,
@@ -913,12 +952,12 @@ public class ImportInvoiceView {
         refreshTotals.run();
     }
 
-    private boolean showDuplicateInvoiceWarning(String invoiceNumber) {
+    private boolean showDuplicateInvoiceWarning(String supplier, String invoiceNumber) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Duplicate Invoice");
-        alert.setHeaderText("This invoice number already exists.");
+        alert.setHeaderText("This supplier already has this invoice number.");
         alert.setContentText(
-                "Invoice Number: " + invoiceNumber + "\n\n" +
+                "Supplier: " + supplier + "\nInvoice Number: " + invoiceNumber + "\n\n" +
                         "Do you want to overwrite the existing invoice?"
         );
 
@@ -933,6 +972,7 @@ public class ImportInvoiceView {
     }
 
     private void updateSummary() {
+        setPriceFlags(List.of());
         BigDecimal importedTotal = currentInvoice == null
                 ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
                 : currentInvoice.getInvoiceTotal();
@@ -945,6 +985,15 @@ public class ImportInvoiceView {
         differenceValue.setText(formatMoney(difference));
 
         differenceValue.setStyle("-fx-font-weight: bold;");
+    }
+
+    private void setPriceFlags(List<InvoicePriceReview.Flag> flags) {
+        priceFlags = flags;
+        priceReviewButton.setText(flags.size() + " price increase" + (flags.size() == 1 ? "" : "s") + " · Review");
+        priceReviewButton.setVisible(!flags.isEmpty());
+        priceReviewButton.setManaged(!flags.isEmpty());
+        priceColumn.setVisible(!flags.isEmpty());
+        table.refresh();
     }
 
     private boolean isValidMoney(String value) {
@@ -986,7 +1035,7 @@ public class ImportInvoiceView {
                 .toList();
     }
 
-    private void addSkuAliasIfNeeded(Product product, InvoiceLine line) {
+    private void addSkuAliasIfNeeded(Product product, InvoiceLine line, String supplier) {
         if (product.getSku().equals(line.getSku())) {
             return;
         }
@@ -994,7 +1043,7 @@ public class ImportInvoiceView {
         if (isFoodApiMode()) {
             productApiClient.addSkuAlias(
                     product.getId(),
-                    "GFS",
+                    supplier,
                     line.getSku(),
                     line.getDescription(),
                     line.getPackSize()
@@ -1004,7 +1053,7 @@ public class ImportInvoiceView {
 
         productDao.addSkuAlias(
                 product.getId(),
-                "GFS",
+                supplier,
                 line.getSku(),
                 line.getDescription(),
                 line.getPackSize()
@@ -1017,17 +1066,17 @@ public class ImportInvoiceView {
                 : productDao.createProductFromInvoiceLine(line);
     }
 
-    private boolean invoiceExists(String invoiceNumber) {
+    private boolean invoiceExists(String supplier, String invoiceNumber) {
         return isFoodApiMode()
-                ? invoiceApiClient.invoiceExists(invoiceNumber)
-                : invoiceDao.invoiceExists(invoiceNumber);
+                ? invoiceApiClient.invoiceExists(supplier, invoiceNumber)
+                : invoiceDao.invoiceExists(supplier, invoiceNumber);
     }
 
-    private void deleteInvoice(String invoiceNumber) {
+    private void deleteInvoice(String supplier, String invoiceNumber) {
         if (isFoodApiMode()) {
-            invoiceApiClient.deleteInvoice(invoiceNumber);
+            invoiceApiClient.deleteInvoice(supplier, invoiceNumber);
         } else {
-            invoiceDao.deleteInvoice(invoiceNumber);
+            invoiceDao.deleteInvoice(supplier, invoiceNumber);
         }
     }
 
@@ -1172,6 +1221,7 @@ public class ImportInvoiceView {
     }
 
     private record ConfirmedInvoiceDetails(
+            String supplier,
             String invoiceNumber,
             String invoiceDate,
             BigDecimal importedTotal,
