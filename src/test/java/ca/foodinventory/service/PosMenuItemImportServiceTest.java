@@ -60,6 +60,42 @@ class PosMenuItemImportServiceTest {
     }
 
     @Test
+    void rejectsNewPosWeekdayReportBeforeLegacyImport() throws Exception {
+        Path report = tempDir.resolve("new-pos-usage.xlsx");
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Usage");
+            var header = sheet.createRow(33);
+            String[] headings = {"Name", "Wednesday", "Thursday", "Friday", "Saturday",
+                    "Sunday", "Monday", "Tuesday", "Week to Date"};
+            for (int index = 0; index < headings.length; index++) {
+                header.createCell(index).setCellValue(headings[index]);
+            }
+            sheet.createRow(34).createCell(0).setCellValue("AYCE Bcn Caesar");
+            try (OutputStream output = Files.newOutputStream(report)) {
+                workbook.write(output);
+            }
+        }
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new ProductionUsageReportImportService().importUsageReport(report.toFile()));
+        assertTrue(error.getMessage().contains("new POS weekday report"));
+
+        IllegalArgumentException catalogError = assertThrows(IllegalArgumentException.class,
+                () -> new PosMenuItemImportService().importMenuItems(report.toFile()));
+        assertTrue(catalogError.getMessage().contains("not a legacy POS catalog"));
+    }
+
+    @Test
+    void rejectsProductionImportWithNoActiveLegacyPlu() throws Exception {
+        TestDatabaseSupport.useTempSqliteDatabase(tempDir.resolve("empty-usage.db"));
+        Path report = writeReport(true);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> new ProductionUsageReportImportService().importUsageReport(report.toFile()));
+        assertTrue(error.getMessage().contains("No active legacy POS PLUs"));
+    }
+
+    @Test
     void refusesCleanupWhenKdsEndHeadingIsMissing() throws Exception {
         RuntimeException error = assertThrows(RuntimeException.class,
                 () -> new PosMenuItemImportService().findKdsSectionPosSkus(writeReport(false).toFile()));

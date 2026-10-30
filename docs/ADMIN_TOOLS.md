@@ -37,6 +37,10 @@ Normal API updates still use **Deploy API (usual update)**. Their saved SAM conf
 
 The named maintenance picker exposes the existing schema migrations, RDS application-user maintenance, and legacy local password tools. These tasks do not run automatically during deployment. The store login schema foundation action can reset the selected store's login credentials; use it only for deliberate initial setup/repair. Legacy local password tools do not reset cloud store protected passwords.
 
+For the new POS catalog, **New POS catalog schema (all stores)** under advanced maintenance applies schema 25 to the shared RDS database and prompts for the schema-capable RDS administrator password. The catalog remains store-scoped. The manager confirmed the catalog works from the dev desktop after the October 29 API deployment. This migration is a one-time action; do not run it for routine desktop builds.
+
+The October 29 migration initially timed out because the workstation public IP had changed. The managed network template was updated to the current single-address ingress rule and an infrastructure plan was applied. If a future direct RDS maintenance task times out, compare the workstation public IP with the RDS security group rule, then use the managed infrastructure Plan/Apply path to change the rule. Do not open PostgreSQL to all public IPs.
+
 The original scripts remain available. Direct `Copy-LocationSetup.ps1` use retains its previous replacement behavior unless `-RequireEmptyTarget` is supplied. Direct `Set-LocationCredentials.ps1` retains its create-or-reset behavior unless `-CreateOnly` is supplied.
 
 ## Offline verification

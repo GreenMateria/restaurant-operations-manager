@@ -41,6 +41,9 @@ public class ProductionUsageReportImportService {
                 Workbook workbook = new XSSFWorkbook(fileInputStream)
         ) {
             Sheet sheet = workbook.getSheetAt(0);
+            if (NewPosWeekdayReportDetector.matches(sheet)) {
+                throw new IllegalArgumentException("This is a new POS weekday report. New POS import is not available yet; the existing production week was not changed.");
+            }
             boolean productionImport = mappedPosSkus == null;
             Set<String> activePosSkus = productionImport ? loadActivePosSkus() : new HashSet<>();
             if (!productionImport) {
@@ -111,8 +114,14 @@ public class ProductionUsageReportImportService {
                 ));
             }
 
+            if (productionImport && lines.isEmpty()) {
+                throw new IllegalArgumentException("No active legacy POS PLUs were found in this report. Check the report format and POS catalog; the existing production week was not changed.");
+            }
+
             return new ImportedUsageReportSummary(sheet.getSheetName(), lines);
 
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to import usage report", e);
         }

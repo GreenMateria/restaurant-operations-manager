@@ -278,6 +278,7 @@ $maintenance = [ordered]@{
     'Store uniqueness constraints'='Apply-LocationUniqueConstraintsMigration.ps1'
     'Store protected passwords'='Apply-LocationProtectedPasswordsMigration.ps1'
     'Labour pay rate history'='Apply-LabourPayRateSchemaMigration.ps1'
+    'New POS catalog schema (all stores)'='Apply-NewPosCatalogSchemaMigration.ps1'
     'Create or repair RDS application user'='Create-AwsRdsAppUser.ps1'
     'Local SQLite admin password (legacy)'='Reset-AdminPassword.ps1'
     'Local SQLite labour password (legacy)'='Reset-LabourSetupPassword.ps1'

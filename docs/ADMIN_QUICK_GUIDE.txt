@@ -22,6 +22,7 @@ New tables, columns, or constraints:
   - Use the relevant advanced maintenance action when instructed.
   - Deploy the matching API update in the order specified for the change.
   - Routine releases do not require schema maintenance.
+  - New POS catalog schema (all stores) is a one-time schema 25 action.
 
 AWS INFRASTRUCTURE CHANGE
 Database settings, network rules, monitoring, or other AWS resource configuration:

@@ -2,6 +2,7 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.ProductionWeekDao;
 import ca.foodinventory.dao.ProductionItemDao;
+import ca.foodinventory.dao.NewPosMenuItemDao;
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.ProductionReportSummary;
@@ -11,6 +12,7 @@ import ca.foodinventory.model.ProductionWeekLine;
 import ca.foodinventory.service.ProductionReportService;
 import ca.foodinventory.service.ProductionUsageReportImportService;
 import ca.foodinventory.service.ProductionApiClient;
+import ca.foodinventory.service.NewPosUsagePreviewService;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -113,6 +115,10 @@ public class WeeklyProductionView extends BorderPane {
         configureToolbarButton(importButton);
         importButton.setOnAction(e -> importUsageReport());
 
+        Button previewNewPosButton = new Button("Preview New POS Report");
+        configureToolbarButton(previewNewPosButton);
+        previewNewPosButton.setOnAction(e -> previewNewPosReport());
+
         Button refreshButton = new Button("Refresh Week");
         configureToolbarButton(refreshButton);
         refreshButton.setOnAction(e -> refreshSelectedWeek());
@@ -148,6 +154,7 @@ public class WeeklyProductionView extends BorderPane {
                 parMultiplierSpinner,
                 includeAllProductionItemsCheckBox,
                 importButton,
+                previewNewPosButton,
                 refreshButton,
                 saveButton,
                 savePermanentOverrideButton,
@@ -354,6 +361,31 @@ public class WeeklyProductionView extends BorderPane {
                 setText(empty || value == null ? null : formatNumber(value));
             }
         };
+    }
+
+    private void previewNewPosReport() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select New POS Weekday Usage Report");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"));
+        File file = chooser.showOpenDialog(getScene() == null ? null : getScene().getWindow());
+        if (file == null) return;
+
+        Task<NewPosPreviewResult> task = new Task<>() {
+            @Override
+            protected NewPosPreviewResult call() {
+                var catalog = DatabaseManager.isApiDatabase()
+                        ? productionApiClient.findNewPosMenuItems() : new NewPosMenuItemDao().findAll();
+                var preview = new NewPosUsagePreviewService().preview(file, catalog);
+                return new NewPosPreviewResult(preview, catalog);
+            }
+        };
+        task.setOnSucceeded(event -> new NewPosUsagePreviewDialog(
+                task.getValue().preview(), task.getValue().catalog()).showAndWait());
+        task.setOnFailed(event -> showAlert(Alert.AlertType.ERROR, "Preview Failed",
+                task.getException() == null ? "Could not read report." : task.getException().getMessage()));
+        Thread thread = new Thread(task, "new-pos-preview");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void importUsageReport() {
@@ -1094,6 +1126,12 @@ public class WeeklyProductionView extends BorderPane {
     private record ProductionImportResult(
             int productionWeekId,
             List<ProductionWeek> weeks
+    ) {
+    }
+
+    private record NewPosPreviewResult(
+            ca.foodinventory.model.NewPosUsagePreview preview,
+            List<ca.foodinventory.model.NewPosMenuItem> catalog
     ) {
     }
 

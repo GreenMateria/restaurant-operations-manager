@@ -31,6 +31,9 @@ public class PosMenuItemImportService {
                 Workbook workbook = new XSSFWorkbook(fileInputStream)
         ) {
             Sheet sheet = workbook.getSheetAt(0);
+            if (NewPosWeekdayReportDetector.matches(sheet)) {
+                throw new IllegalArgumentException("This is a new POS weekday usage report, not a legacy POS catalog. No catalog items were changed.");
+            }
             int rowsRead = 0;
             int insertedCount = 0;
             int updatedCount = 0;
@@ -106,6 +109,8 @@ public class PosMenuItemImportService {
                     skippedCount
             );
 
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to import POS menu items", e);
         }

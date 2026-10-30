@@ -8,7 +8,7 @@ import java.sql.Statement;
 
 public class PostgresSchemaInitializer {
 
-    public static final int CURRENT_SCHEMA_VERSION = 24;
+    public static final int CURRENT_SCHEMA_VERSION = 25;
 
     private static final String[] STORE_OWNED_TABLES = {
             "products",
@@ -461,6 +461,21 @@ public class PostgresSchemaInitializer {
                     production_profile_id INTEGER REFERENCES production_profiles(id),
                     active INTEGER NOT NULL DEFAULT 1,
                     CONSTRAINT pos_menu_items_location_pos_sku_key UNIQUE(location_id, pos_sku)
+                )
+                """);
+
+        statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_production_profiles_id_location ON production_profiles(id, location_id)");
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS new_pos_menu_items (
+                    id SERIAL PRIMARY KEY,
+                    location_id INTEGER NOT NULL REFERENCES locations(id),
+                    name TEXT NOT NULL,
+                    name_key TEXT NOT NULL,
+                    production_profile_id INTEGER,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    UNIQUE(location_id, name_key),
+                    FOREIGN KEY (production_profile_id, location_id)
+                        REFERENCES production_profiles(id, location_id)
                 )
                 """);
 

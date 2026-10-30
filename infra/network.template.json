@@ -76,7 +76,7 @@
                                                                                                       "IpProtocol":  "tcp",
                                                                                                       "ToPort":  5432,
                                                                                                       "FromPort":  5432,
-                                                                                                      "CidrIp":  "24.141.234.197/32"
+                                                                                                      "CidrIp":  "24.141.234.253/32"
                                                                                                   },
                                                                                                   {
                                                                                                       "IpProtocol":  "-1",

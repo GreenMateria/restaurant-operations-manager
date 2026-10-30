@@ -33,7 +33,12 @@ The most common manager workflows are:
 - **Production** - weekly production and prep sheets.
 - **System** - backup, restore, API connection checks, and administrator tools.
 - **POS Catalog / PLUs** - shared POS item import and maintenance under Administration, used by Alcohol Sales Mappings and Production.
+- **New POS Catalog** - available from Administration -> POS Catalog / PLUs in the next desktop update. It stores new POS item names separately from legacy PLUs. Use **Discover from Usage Report** to review candidate names, select the ones to add, then select an item and **Assign Profile** to reuse an existing production profile. Type part of a profile name in the picker to search. Use **Add Name** for items the report does not discover. This catalog does not yet import new POS quantities into Weekly Production.
+- **Preview New POS Report** - in Weekly Production, choose a new POS weekday workbook to inspect its selected dates, candidate item quantities, repeated rows, and profile matches. Use **Preview Production Impact** to calculate mapped production items by weekday without saving. Both previews are read-only; they do not create or replace a production week. Their totals are provisional while report grouping is being validated.
+
 - **About** - version, database mode, signed-in store, and application scope.
+
+The manager has checked the new POS catalog, usage preview, and production dry run in the dev app. Keep using the legacy POS import for saved production until a completed new POS week has been reconciled and generated prep sheets have been tested in the TEST store. The planned release will keep one Weekly Production workflow, with clear report-source selection and separate legacy PLU/new-POS name catalog views.
 
 ## Important Safety Rules
 

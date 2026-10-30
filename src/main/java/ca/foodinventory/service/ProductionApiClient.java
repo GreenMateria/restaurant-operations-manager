@@ -1,6 +1,7 @@
 package ca.foodinventory.service;
 
 import ca.foodinventory.model.PosMenuItem;
+import ca.foodinventory.model.NewPosMenuItem;
 import ca.foodinventory.model.ProductionItem;
 import ca.foodinventory.model.ProductionItemProductMapping;
 import ca.foodinventory.model.ProductionProfile;
@@ -115,6 +116,31 @@ public class ProductionApiClient {
 
     public List<PosMenuItem> findPosMenuItems() {
         return parsePosMenuItems(get("/production/pos-menu-items", "load POS menu items"));
+    }
+
+    public List<NewPosMenuItem> findNewPosMenuItems() {
+        List<NewPosMenuItem> items = new ArrayList<>();
+        for (Map<String, Object> object : parseArray(get("/production/new-pos-items", "load new POS catalog"))) {
+            items.add(new NewPosMenuItem(intValue(object.get("id")), stringValue(object.get("name")),
+                    intValue(object.get("productionProfileId")), stringValue(object.get("productionProfileName")),
+                    booleanValue(object.get("active"))));
+        }
+        return items;
+    }
+
+    public int addNewPosNames(List<String> names) {
+        StringBuilder body = new StringBuilder("[");
+        for (String name : names) {
+            if (body.length() > 1) body.append(',');
+            body.append("{\"name\":").append(jsonString(name)).append('}');
+        }
+        return intValue(parseObject(post("/production/new-pos-items/import", body.append(']').toString(),
+                "add new POS names")).get("inserted"));
+    }
+
+    public void assignNewPosProfile(int itemId, int profileId) {
+        put("/production/new-pos-items/" + itemId,
+                "{\"productionProfileId\":" + profileId + "}", "assign new POS profile");
     }
 
     public List<PosMenuItem> findActivePosMenuItems() {

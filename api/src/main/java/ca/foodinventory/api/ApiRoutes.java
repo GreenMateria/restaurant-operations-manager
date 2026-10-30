@@ -1555,6 +1555,19 @@ class ApiRoutes {
                 }
             }
 
+            if ("GET".equalsIgnoreCase(method) && "/production/new-pos-items".equals(path)) {
+                return ApiResult.json(200, new NewPosCatalogRepository().findAllJson(locationId));
+            }
+            if ("POST".equalsIgnoreCase(method) && "/production/new-pos-items/import".equals(path)) {
+                return ApiResult.json(200, new NewPosCatalogRepository().addNamesJson(locationId, parseBodyArray(body)));
+            }
+            Integer newPosItemId = pathId(path, "/production/new-pos-items/");
+            if (newPosItemId != null && "PUT".equalsIgnoreCase(method)) {
+                Object value = parseBody(body).get("productionProfileId");
+                int selectedNewPosProfileId = value instanceof Number number ? number.intValue() : 0;
+                return okOrNotFound(new NewPosCatalogRepository().assignProfile(locationId, newPosItemId, selectedNewPosProfileId),
+                        "New POS profile assigned.", "New POS item not found.");
+            }
             if ("GET".equalsIgnoreCase(method) && "/production/pos-menu-items".equals(path)) {
                 return ApiResult.json(200, productionRepository.findPosMenuItemsJson(locationId, false));
             }

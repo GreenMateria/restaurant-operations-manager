@@ -41,6 +41,7 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
     private Button setupImportButton;
     private Button deleteKdsButton;
     private Button importButton;
+    private Button newPosCatalogButton;
 
     public PosMenuItemsView() {
         this(false);
@@ -70,10 +71,11 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         setupImportButton = createPrimaryButton("Import POS Catalog", this::importMenuItems);
         deleteKdsButton = createPrimaryButton("Delete KDS Items", this::deleteKdsItems);
         importButton = createPrimaryButton("Import Usage Report", this::importUsageReport);
+        newPosCatalogButton = createPrimaryButton("New POS Catalog", () -> new NewPosCatalogDialog().showAndWait());
 
         return productionMode
                 ? new HBox(10, editButton, importButton)
-                : new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton);
+                : new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton, newPosCatalogButton);
     }
 
     private void setupTable() {

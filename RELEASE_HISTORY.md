@@ -1,6 +1,19 @@
 # Release History
 
-## Unreleased (planned v5.0.0)
+## Unreleased after v5.0.0
+
+- Manager tested the new POS catalog import and searchable profile picker, then confirmed the usage preview's names, dates, quantities, and mapping status looked accurate. The manager also reviewed the production-impact dry run and reported that it looked good. Saved new-POS production, prep sheets, a full-week report, and mixed-source periods remain untested and unreleased.
+- Planned completion: one uncluttered Weekly Production workflow with report-format detection and review, store preference, source-aware catalog maintenance, date-based legacy/new-POS combination without overlap, TEST-store save/prep-sheet checks, and separate new-POS sales and alcohol import work after representative reports arrive. See `POS_TRANSITION.md` for details.
+- Added a separate read-only Production Impact dry run to the New POS usage preview. It calculates production quantities by actual weekday for mapped names using existing profile lines and yield factors. It never saves a production week. A focused database test verifies weekday mapping and absence of saved weeks. Desktop-only.
+- Added a read-only New POS usage preview under Weekly Production. It maps weekday columns to the report footer dates, displays candidate item quantities and catalog/profile status, deduplicates identical repeats, and flags conflicting repeated rows. It does not generate or save production. Both supplied partial reports parsed; focused preview test passed. Desktop-only.
+- The New POS Catalog production-profile picker now filters profiles as the manager types, matching the existing legacy POS profile picker. Desktop-only; no API or schema change.
+- Added a separate new-POS catalog with manager-reviewed discovery of item names from weekday usage reports, manual name entry, and assignment to existing production profiles. Legacy PLUs remain separate. Added SQLite migration 25, a store-scoped RDS migration/API route, and a named Admin Tools schema action. The API was deployed October 29, 2026; the manager confirmed the catalog works against it, although the live schema-version value has not been independently queried. Saved new-POS usage and weekly production generation are not supported yet.
+- Re-ran the API deployment after finding the prior SAM change set had stopped at its confirmation prompt. CloudFormation reached UPDATE_COMPLETE, Lambda was Active with a Successful update, and `/health` returned `ok` at 5:50 p.m. Toronto time. The manager subsequently confirmed the authenticated new POS catalog works in the dev app.
+- Began POS transition safety work. Weekly Production and the legacy POS Catalog importer now reject the observed new-POS weekday report before saving. Weekly Production also rejects imports with no active legacy PLU matches before saving a generated week. Saved new-POS production import still needs a completed-week report and further validation. Focused POS import tests passed.
+
+## Earlier v5.0.0 planning notes
+
+The manager confirmed 5.0.0 was published October 26, 2026. Publication statements within the entries below were recorded before that confirmation and have not been reconciled item by item with the release artifact.
 
 - Added a non-blocking invoice price increase review to Food CSV import and manual Food, Alcohol, and Supplies invoices. Each positive line is compared with the quantity-weighted unit cost over the previous 28 days, or the latest purchase within 180 days. Increases of at least 15% and $2 estimated impact are marked on the entry screen, with a single Review action showing details. Credits, absent history, and the current invoice on overwrite are excluded. Added a store-scoped API history route; this API change and the desktop update are not yet deployed or published. No schema or Invoice History report change.
 - Validation for the price review and supplier work: 58 desktop tests passed, six optional UI tests were skipped, and 33 API tests passed. The new price review still needs a workstation check after the updated API and desktop are installed.
