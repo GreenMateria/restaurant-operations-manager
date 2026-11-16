@@ -275,6 +275,9 @@ public class InventoryCountTemplateEditorView {
 
         dialog.getDialogPane().setContent(grid);
 
+        Node addButton = dialog.getDialogPane().lookupButton(addButtonType);
+        addButton.disableProperty().bind(productBox.valueProperty().isNull());
+
         dialog.setResultConverter(button -> {
             if (button == addButtonType) {
                 Product selectedProduct = productBox.getSelectionModel().getSelectedItem();
@@ -311,12 +314,29 @@ public class InventoryCountTemplateEditorView {
                 return;
             }
 
-            if (isMigratedDepartmentApiMode()) {
-                apiClient.addTemplateLine(line);
-            } else {
-                lineDao.add(line);
+            try {
+                if (isMigratedDepartmentApiMode()) {
+                    apiClient.addTemplateLine(line);
+                } else {
+                    lineDao.add(line);
+                }
+                refreshTable();
+            } catch (RuntimeException error) {
+                showSimpleAlert(Alert.AlertType.ERROR, "Product Not Added",
+                        "The product could not be saved to the count template: " + error.getMessage());
+                return;
             }
-            refreshTable();
+            InventoryCountTemplateLine savedLine = table.getItems().stream()
+                    .filter(saved -> saved.getProductId() == line.getProductId())
+                    .findFirst()
+                    .orElse(null);
+            if (savedLine == null) {
+                showSimpleAlert(Alert.AlertType.ERROR, "Product Not Added",
+                        "The product was not found in the template after saving. Please try again or report this error.");
+                return;
+            }
+            table.getSelectionModel().select(savedLine);
+            table.scrollTo(savedLine);
         });
     }
 

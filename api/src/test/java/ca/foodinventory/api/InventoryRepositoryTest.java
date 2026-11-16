@@ -76,6 +76,34 @@ class InventoryRepositoryTest {
     }
 
     @Test
+    void templateLineAddAndEditPersistIntegerPairedPackaging() throws Exception {
+        Map<String, Object> line = Map.of(
+                "productId", 3, "sectionName", "Freezer", "sortOrder", 6,
+                "countUnit", "EA", "conversionFactorToBase", 1.0,
+                "displayName", "Test Product", "pairedPackaging", false);
+        repository.addTemplateLine(1, 1, line);
+        int addedId;
+        try (Connection connection = connection(); Statement statement = connection.createStatement();
+             ResultSet row = statement.executeQuery(
+                     "SELECT id, paired_packaging FROM inventory_count_template_lines WHERE product_id = 3 AND active = 1")) {
+            assertTrue(row.next());
+            addedId = row.getInt(1);
+            assertEquals(0, row.getInt(2));
+        }
+        assertTrue(repository.findTemplateLinesJson(1, 1).contains("Test Product"));
+
+        Map<String, Object> edited = new java.util.HashMap<>(line);
+        edited.put("pairedPackaging", true);
+        assertTrue(repository.updateTemplateLine(1, addedId, edited));
+        try (Connection connection = connection(); Statement statement = connection.createStatement();
+             ResultSet row = statement.executeQuery(
+                     "SELECT paired_packaging FROM inventory_count_template_lines WHERE id = " + addedId)) {
+            assertTrue(row.next());
+            assertEquals(1, row.getInt(1));
+        }
+    }
+
+    @Test
     void staleCountSaveCannotOverwriteNewerQuantitiesOrCompleteCount() throws Exception {
         Map<String, Object> first = withComponents(Map.of("id", 1, "quantity", 5.0, "convertedQuantity", 10.0,
                 "expectedQuantity", 4.5, "expectedConvertedQuantity", 9.0));

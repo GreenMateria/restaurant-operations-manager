@@ -4,16 +4,28 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.File;
+import java.io.FileInputStream;
 
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-final class NewPosWeekdayReportDetector {
+public final class NewPosWeekdayReportDetector {
     private static final Set<String> HEADINGS = Set.of("name", "monday", "tuesday", "wednesday",
             "thursday", "friday", "saturday", "sunday", "week to date");
 
     private NewPosWeekdayReportDetector() {
+    }
+
+    public static boolean matches(File file) {
+        try (FileInputStream input = new FileInputStream(file); XSSFWorkbook workbook = new XSSFWorkbook(input)) {
+            return matches(workbook.getSheetAt(0));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Could not read the usage report: " + e.getMessage(), e);
+        }
     }
 
     static boolean matches(Sheet sheet) {

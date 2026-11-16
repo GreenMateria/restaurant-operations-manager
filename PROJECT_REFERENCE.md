@@ -1,6 +1,6 @@
 # StoreOps Manager — Project Reference
 
-_Last Updated: Thursday, October 29, 2026_
+_Last Updated: Sunday, November 15, 2026_
 
 This document is the primary reference for the **StoreOps Manager** project.
 
@@ -12,13 +12,14 @@ Read this first when starting a new development session, using Codex in IntelliJ
 This is the single current technical reference. It combines the former status, schema, coding standards, infrastructure, API, cloud-transition, and roadmap documentation. Update this file when behavior, schema, deployment, or priorities change. Read the implementation before making code changes; archived notes are historical, not current instructions.
 
 - **Latest stable desktop release:** 5.0.0, confirmed published by the manager on October 26, 2026 and reconfirmed October 29, 2026. `pom.xml` declares 5.0.0. Older v4.2.0 references below describe earlier planned scope.
-- **New POS catalog (desktop dev-only):** Administration > POS Catalog / PLUs opens a separate New POS Catalog for reviewed text names and searchable production-profile assignments. The catalog API was deployed October 29, 2026. The manager confirmed that name import and profile assignment work through the dev app. This establishes that the new table is operational, though the live `schema_version` value has not been independently queried. It does not import usage quantities or generate production.
-- **New POS usage preview (desktop dev-only):** Weekly Production previews weekday quantities, actual report dates, repeated rows, and mapping status without saving. A separate Production Impact dry run applies mapped names to existing profiles and yield factors without writing a production week. The manager confirmed the preview values looked accurate and the production dry run looked good. Candidate selection remains based on a following day-part row; category and grouping rules still need completed-week validation before saving production.
-- **POS transition safeguards (desktop dev-only, October 29, 2026):** Weekly Production and the legacy POS Catalog importer reject the observed new-POS weekday layout before saving. Weekly Production also rejects imports with no active legacy PLU matches before replacing generated data. Saved new-POS generation, mixed-system weeks, sales parsing, and alcohol mappings remain future work; see `POS_TRANSITION.md`.
+- **POS catalogs (desktop dev-only):** Administration > POS Catalog / PLUs opens a MICROS or SYMPHONY choice. MICROS maintains legacy PLUs; SYMPHONY maintains reviewed text names with production-profile and alcohol-product assignments. The new catalog API was deployed October 29, 2026. The manager confirmed that name import and profile assignment work through the dev app. The live `schema_version` value has not been independently queried.
+- **Unified Weekly Production import (dev source, November 12, 2026):** **Import Usage Report** detects legacy PLU versus new POS weekday workbooks from headers. The separate preview button is removed. New POS rows use the validated preview parser and mapped production-profile calculation, then the existing generated-week save path. The report's actual seven-day range becomes the production period, including non-Monday starts. The desktop SQLite and API source now label days and select quantities by actual weekday. Identical repeats are counted once; conflicting repeats and daily/Week to Date mismatches on mapped active items block save with item names, while unmapped items are excluded. On November 15 the manager reported that the implemented workflow had been tested and was working properly. The desktop update is being held for a larger release; the deployment status of the latest API source was not specified.
+- **Remaining POS transition work:** Mixed-system weeks and overlap handling and new POS sales-category parsing remain future work; see `POS_TRANSITION.md`. The dev build now supports new POS name-based alcohol mappings and Alcohol Variance from the weekday workbook, pending manager validation with a completed week. The legacy POS Catalog importer still rejects new POS weekday workbooks, and the legacy Weekly Production parser still requires active PLU matches.
 - **API source version:** use `api/pom.xml`; desktop and API versions may differ.
 - **Schema:** source schema 25 adds the new-POS catalog. The manager confirmed the catalog works against the live Cloud API after the schema action and October 29 API deployment; the live `schema_version` value has not been independently queried. Normal desktop use is Cloud API with store-scoped sessions; SQLite is a snapshot/recovery and development path.
 - **Manager-accepted invoice work (October 8, 2026):** finalized GFS LineItemList import, manual invoice number/date/shipping/HST/grand-total reconciliation, actual billed weighted costs, and product-based quantity conversion. The manager confirmed correct operation; 27 desktop tests passed. Actual delivered weight is absent from the export, so variable-weight base quantities remain approximate.
 - **Recent manager validation (October 26, 2026):** the manager tested the recent invoice supplier, invoice-history filter, and Weekly Cost chart changes in the dev app and reported them working. The new invoice price review has only automated coverage so far and requires its new API route before dev-app testing.
+- **Food invoice price review (dev source, November 15, 2026):** finalized CSV import checks price increases as soon as lines load and shows flagged items before reconciliation. LineItemList files prompt once for their missing invoice date and number; those values carry into reconciliation. Save repeats the data check but skips the review prompt when flags are unchanged; edits or changed invoice details can trigger a new review. If import-time checking is unavailable, save-time review remains the fallback. The manager tested the corrected dev-app import and reported it working perfectly. This desktop change has not been published.
 - **Other current work:** zero-sales mapped wine category correction, admin launcher, and adopted AWS infrastructure with Secrets Manager and seven-day RDS backup retention. See the functional sections and release history for details.
 
 The October 9–24 publication-status notes below are historical snapshots recorded before the confirmed October 26 v5.0.0 release. They do not describe the current publication status of the whole desktop app. The new POS transition changes described above remain dev-only.
@@ -244,7 +245,7 @@ Main cards include:
 - System
 - About
 
-Administration also includes **POS Catalog / PLUs**, the shared POS item import and maintenance screen for Alcohol Sales Mappings and Production. Catalog XLSX imports read item names from column A and PLUs from column B. Production retains **POS Production Mappings** for profile assignments and usage-report import.
+Administration includes **POS Catalog / PLUs**, which opens MICROS and SYMPHONY catalog choices. MICROS catalog XLSX imports read item names from column A and PLUs from column B. Each catalog maintains its own POS identities and production-profile assignments; SYMPHONY also supports alcohol-product mappings. Weekly Production handles usage-report import.
 
 The sidebar includes Home, Back, and Switch Store when Store Login is required. Switch Store confirms the action, clears the saved location session, and returns to Store Login without closing the app.
 
@@ -782,9 +783,9 @@ POS menu items map POS SKUs or PLUs to production profiles.
 
 Multiple POS SKUs may map into the same production requirement.
 
-Alcohol Sales Mappings also reuse this shared catalog as the selectable POS item source. Import and maintain it through Administration → POS Catalog / PLUs; assign production profiles through Production → POS Production Mappings. This avoids maintaining a second POS item list while keeping alcohol inventory variance mappings separate from production profiles.
+Alcohol Sales Mappings also reuse this shared catalog as the selectable POS item source. Import and maintain legacy items and their production profile assignments through Administration → POS Catalog / PLUs. This keeps alcohol inventory variance mappings separate from production profiles.
 
-For the new POS transition, Administration → POS Catalog / PLUs also opens a separate New POS Catalog. It stores normalized text-name identities per store, preserves display names, and allows those names to reference the same production profiles as legacy PLUs. Candidate names from the weekday report require manager review; manual entry covers names without a recognizable day-part breakdown. The new catalog does not alter legacy PLU mappings. The planned final interface will keep both sources under one concise catalog/workflow with a source switch or filter; see `POS_TRANSITION.md`.
+For the new POS transition, Administration → POS Catalog / PLUs opens a two-choice landing screen. SYMPHONY stores normalized text-name identities per store, preserves display names, and allows those names to reference the same production profiles as MICROS PLUs. Candidate names from the weekday report require manager review; manual entry covers names without a recognizable day-part breakdown. The SYMPHONY catalog does not alter MICROS PLU mappings; see `POS_TRANSITION.md`.
 
 ## Product Mappings
 
@@ -814,7 +815,7 @@ Weekly Production currently supports:
 
 Cloud-mode usage report import/generation runs in a background task and production profile lines are batch-loaded to avoid repeated cloud round trips during report generation.
 
-The dev build adds **Preview New POS Report** and **Preview Production Impact**. They parse actual report dates, collapse identical repeated rows, flag conflicts, show mapping status, and calculate mapped production quantities in memory. They do not call the generated-week save path, change overrides, or produce final prep sheets. A completed new-POS week and mixed-source date/overlap rules remain prerequisites for saved Weekly Production support.
+The dev build uses one **Import Usage Report** action for legacy and new POS workbooks. For new POS, the parser reads actual report dates, collapses identical repeated item rows, validates mapped items, calculates production quantities from their profiles, and saves the generated seven-day period. The separate preview action is removed. The manager reports that the implemented workflow has been tested and works properly. Mixed-source date/overlap rules remain future work.
 
 In API mode, Production setup, POS Menu Items, Weekly Production, product mappings, production report import/generation, and Freezer Pull are backed by the deployed API stack.
 
@@ -889,6 +890,7 @@ Implemented Labour Management work includes:
 - Labour Hours department headers are styled as distinct bands in the pop-out entry window.
 - Configurable labour positions grouped as `FOH` or `BOH`.
 - Configurable labour employees with position, hourly wage, active status, tip-pool eligibility, and uniform-deduction applicability.
+- The dev Labour Setup employee list has separate Active and Inactive tabs; Active opens by default, and inactive employees remain searchable and editable for reactivation. This is a desktop-only change awaiting the next release.
 - Configurable default uniform deduction amount stored in settings.
 - API-backed Labour Setup, Labour Hours, Daily Labour Cost, Tip Pool, and Tip Pool Breakdown reads/writes for Cloud API mode.
 - Live AWS API deployment includes `/labour/weeks`, `/labour/weekly`, and `/labour/daily` routes. The live RDS schema reached version 23 for multi-location operation and effective-dated labour pay rates, then version 24 for paired packaging.
@@ -1172,7 +1174,7 @@ The application currently has a stable foundation for:
 - Background cloud-mode save/import handling for inventory count saves/completions, sales report imports/saves, and Weekly Production usage imports
 - Normal API workflows for Food, Alcohol, Supplies, Production, Reporting/Sales, product import, and product purchase history were confirmed working for the earlier v4.2.0 scope
 
-Labour Management, multi-location Store Login/location scoping, the StoreOps Manager navigation shell, and manager-tested invoice/variance workflows are accepted as working as intended. The v4.2.0 wording elsewhere describes planned release scope; the source POM and release history establish built versions. Current POS transition work remains in the dev desktop build until completed-week, saved-production, and prep-sheet checks pass.
+Labour Management, multi-location Store Login/location scoping, the StoreOps Manager navigation shell, and manager-tested invoice/variance workflows are accepted as working as intended. The v4.2.0 wording elsewhere describes planned release scope; the source POM and release history establish built versions. The manager reports that the implemented POS transition workflow works properly; its desktop update is being held for a larger release.
 
 Primary unfinished areas:
 
@@ -1188,7 +1190,7 @@ Primary unfinished areas:
 ## Immediate
 
 1. Continue monitoring daily Cloud API use on the configured work PCs.
-2. Complete the new POS transition validation in the TEST store before publishing a desktop update: full-week usage, production save, printed prep sheets, legacy regression, and a mixed-source transition period.
+2. Finish remaining POS transition features as needed, including mixed-source date/overlap handling and new POS sales parsing; validate new POS alcohol variance with a completed week before publishing the planned larger update.
 3. Continue advanced reporting and workflow polish.
 
 ## Medium Term
@@ -2377,7 +2379,7 @@ Notes:
 
 ### new_pos_menu_items (schema 25)
 
-Stores new-POS text-name identities separately from legacy `pos_menu_items`. Important fields are `id`, `location_id` in RDS, display `name`, normalized `name_key`, nullable `production_profile_id`, and `active`. `name_key` is unique within a store after trimming, collapsing whitespace, and lowercasing. The RDS foreign key keeps profile assignments in the same store. These names can share existing production profiles with legacy PLUs. The current desktop uses this table for catalog maintenance and read-only previews, not saved production generation.
+Stores new-POS text-name identities separately from legacy `pos_menu_items`. Important fields are `id`, `location_id` in RDS, display `name`, normalized `name_key`, nullable `production_profile_id`, and `active`. `name_key` is unique within a store after trimming, collapsing whitespace, and lowercasing. The RDS foreign key keeps profile assignments in the same store. These names can share existing production profiles with legacy PLUs. The desktop uses this table for catalog maintenance and saved new POS production generation.
 
 ### production_item_product_mappings
 

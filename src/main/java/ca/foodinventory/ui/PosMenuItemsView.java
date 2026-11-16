@@ -2,14 +2,10 @@ package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.PosMenuItemDao;
 import ca.foodinventory.database.DatabaseManager;
-import ca.foodinventory.model.ImportedUsageReportSummary;
 import ca.foodinventory.model.PosMenuItem;
 import ca.foodinventory.model.PosMenuItemImportSummary;
-import ca.foodinventory.model.ProductionReportSummary;
 import ca.foodinventory.service.PosMenuItemImportService;
 import ca.foodinventory.service.ProductionApiClient;
-import ca.foodinventory.service.ProductionReportService;
-import ca.foodinventory.service.ProductionUsageReportImportService;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
@@ -26,35 +22,19 @@ import java.util.Set;
 
 public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
 
-    private final boolean productionMode;
     private final PosMenuItemDao dao = new PosMenuItemDao();
     private final ProductionApiClient apiClient = new ProductionApiClient();
-    private final ProductionUsageReportImportService usageReportImportService =
-            new ProductionUsageReportImportService();
     private final PosMenuItemImportService posMenuItemImportService =
             new PosMenuItemImportService();
-    private final ProductionReportService productionReportService = new ProductionReportService();
     private FilteredList<PosMenuItem> filteredItems;
     private Button addButton;
     private Button editButton;
     private Button deactivateButton;
     private Button setupImportButton;
     private Button deleteKdsButton;
-    private Button importButton;
-    private Button newPosCatalogButton;
 
     public PosMenuItemsView() {
-        this(false);
-    }
-
-    public PosMenuItemsView(boolean productionMode) {
-        super(
-                productionMode ? "POS Production Mappings" : "POS Catalog / PLUs",
-                productionMode
-                        ? "Assign POS items to production profiles. Import shared items from Administration > POS Catalog / PLUs."
-                        : "Shared POS items for Alcohol Sales Mappings and Production."
-        );
-        this.productionMode = productionMode;
+        super("MICROS POS Catalog / PLUs", "Legacy PLUs for Alcohol Sales Mappings and Production.");
 
         setupTable();
         installToolbar();
@@ -70,12 +50,7 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         deactivateButton = createPrimaryButton("Deactivate", this::deactivateSelectedItem);
         setupImportButton = createPrimaryButton("Import POS Catalog", this::importMenuItems);
         deleteKdsButton = createPrimaryButton("Delete KDS Items", this::deleteKdsItems);
-        importButton = createPrimaryButton("Import Usage Report", this::importUsageReport);
-        newPosCatalogButton = createPrimaryButton("New POS Catalog", () -> new NewPosCatalogDialog().showAndWait());
-
-        return productionMode
-                ? new HBox(10, editButton, importButton)
-                : new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton, newPosCatalogButton);
+        return new HBox(10, addButton, editButton, deactivateButton, setupImportButton, deleteKdsButton);
     }
 
     private void setupTable() {
@@ -259,45 +234,6 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
         });
     }
 
-    private void importUsageReport() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Select Usage Report");
-
-        chooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx")
-        );
-
-        File file = chooser.showOpenDialog(null);
-
-        if (file == null) {
-            return;
-        }
-
-        try {
-            ImportedUsageReportSummary usageSummary = usageReportImportService.importUsageReport(file);
-            ProductionReportSummary productionSummary =
-                    productionReportService.generateReport(usageSummary);
-
-            showAlert(
-                    Alert.AlertType.INFORMATION,
-                    "Usage Report Imported",
-                    "Imported " + usageSummary.getTotalRows()
-                            + " configured POS item rows from " + usageSummary.getSheetName() + ".\n"
-                            + "Weekly quantity sold: " + formatNumber(usageSummary.getWeeklyQuantitySold())
-                            + "\nProduction items generated: " + productionSummary.getLineCount()
-            );
-
-            new ProductionReportDialog(productionSummary).showAndWait();
-
-        } catch (RuntimeException e) {
-            showAlert(
-                    Alert.AlertType.ERROR,
-                    "Import Failed",
-                    e.getMessage()
-            );
-        }
-    }
-
     private void importMenuItems() {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Import POS Catalog — Name in A, PLU in B");
@@ -391,14 +327,6 @@ public class PosMenuItemsView extends ProductionModuleView<PosMenuItem> {
                     e.getMessage()
             );
         }
-    }
-
-    private String formatNumber(double value) {
-        if (value == Math.rint(value)) {
-            return String.valueOf((long) value);
-        }
-
-        return String.valueOf(value);
     }
 
     private void saveItem(PosMenuItem item) {

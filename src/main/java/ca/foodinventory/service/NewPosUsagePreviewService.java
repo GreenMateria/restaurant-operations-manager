@@ -11,7 +11,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
 
-/** Reads a weekday report for review only. No database writes or production generation. */
+/** Parses and validates a new POS weekday report without writing to the database. */
 public class NewPosUsagePreviewService {
     private static final Set<String> DAY_PARTS = Set.of("breakfast", "lunch", "dinner", "late night", "snack");
     private static final List<String> DAYS = List.of("monday", "tuesday", "wednesday", "thursday",

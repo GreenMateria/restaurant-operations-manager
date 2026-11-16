@@ -1,10 +1,13 @@
 package ca.foodinventory.service;
 
 import ca.foodinventory.dao.AlcoholSalesMappingDao;
+import ca.foodinventory.dao.NewPosMenuItemDao;
 import ca.foodinventory.dao.AlcoholProductProfileDao;
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholProductProfile;
 import ca.foodinventory.model.AlcoholSalesMapping;
+import ca.foodinventory.model.NewPosMenuItem;
+import ca.foodinventory.model.NewPosUsagePreview;
 import ca.foodinventory.model.AlcoholVarianceRow;
 import ca.foodinventory.model.ImportedUsageReportLine;
 import ca.foodinventory.model.ImportedUsageReportSummary;
@@ -31,6 +34,7 @@ public class AlcoholVarianceService {
     private final AlcoholProductProfileApiClient profileApiClient = new AlcoholProductProfileApiClient();
     private final AlcoholSalesMappingApiClient mappingApiClient = new AlcoholSalesMappingApiClient();
     private final InventoryApiClient inventoryApiClient = new InventoryApiClient();
+    private final ProductionApiClient productionApiClient = new ProductionApiClient();
     private final OrderGuideService orderGuideService = new OrderGuideService();
     private final InventoryValuationService valuationService = new InventoryValuationService();
     private final ReportingApiClient reportingApiClient = new ReportingApiClient();
@@ -43,14 +47,28 @@ public class AlcoholVarianceService {
             String category,
             File usageReportFile
     ) {
-        List<AlcoholSalesMapping> mappings = loadActiveMappings(category);
-        ImportedUsageReportSummary usageSummary = usageImportService.importUsageReport(
-                usageReportFile,
-                mappings.stream().map(AlcoholSalesMapping::getPosSku)
-                        .collect(java.util.stream.Collectors.toSet())
-        );
+        boolean newPosReport = NewPosWeekdayReportDetector.matches(usageReportFile);
+        List<AlcoholSalesMapping> mappings = loadActiveMappings(category).stream()
+                .filter(mapping -> NewPosAlcoholKey.isNewPos(mapping.getPosSku()) == newPosReport)
+                .toList();
+        Map<String, Double> soldByPosSku;
+        int importedRows;
+        if (newPosReport) {
+            List<NewPosMenuItem> catalog = DatabaseManager.isApiDatabase()
+                    ? productionApiClient.findNewPosMenuItems() : new NewPosMenuItemDao().findAll();
+            NewPosUsagePreview preview = new NewPosUsagePreviewService().preview(usageReportFile, catalog);
+            soldByPosSku = weeklySoldByNewPosName(preview, mappings, catalog);
+            importedRows = preview.rows().size();
+        } else {
+            ImportedUsageReportSummary usageSummary = usageImportService.importUsageReport(
+                    usageReportFile,
+                    mappings.stream().map(AlcoholSalesMapping::getPosSku)
+                            .collect(java.util.stream.Collectors.toSet())
+            );
+            soldByPosSku = weeklySoldByPosSku(usageSummary);
+            importedRows = usageSummary.getTotalRows();
+        }
         Map<Integer, AlcoholProductProfile> profilesByProductId = loadProfiles();
-        Map<String, Double> soldByPosSku = weeklySoldByPosSku(usageSummary);
         Map<Integer, ProductSalesUsage> salesUsageByProduct =
                 salesUsageByProduct(mappings, soldByPosSku, profilesByProductId);
         List<OrderGuideRow> actualUsageRows =
@@ -124,9 +142,27 @@ public class AlcoholVarianceService {
 
         return new AlcoholVarianceResult(
                 rows,
-                usageSummary.getTotalRows(),
+                importedRows,
                 mappings.size()
         );
+    }
+
+    private Map<String, Double> weeklySoldByNewPosName(NewPosUsagePreview preview,
+            List<AlcoholSalesMapping> mappings, List<NewPosMenuItem> catalog) {
+        Map<String, NewPosMenuItem> catalogByKey = new HashMap<>();
+        for (NewPosMenuItem item : catalog) catalogByKey.put(NewPosAlcoholKey.of(item.name()), item);
+        Map<String, Double> sold = new HashMap<>();
+        for (NewPosUsagePreview.Row row : preview.rows()) {
+            String key = NewPosAlcoholKey.of(row.name());
+            if (mappings.stream().noneMatch(mapping -> key.equals(mapping.getPosSku()))) continue;
+            NewPosMenuItem item = catalogByKey.get(key);
+            if (item == null || !item.active()) continue;
+            if ("Conflicting repeated rows".equals(row.status()) || "Daily/WTD mismatch".equals(row.status())) {
+                throw new IllegalArgumentException("New POS alcohol item has conflicting usage totals: " + row.name());
+            }
+            sold.put(normalizeSku(key), row.weekToDate());
+        }
+        return sold;
     }
 
     private List<AlcoholSalesMapping> loadActiveMappings(String category) {

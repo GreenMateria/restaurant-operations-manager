@@ -276,8 +276,8 @@ public class MainView {
                         "Administration",
                         createDashboardCard(
                                 "POS Catalog / PLUs",
-                                "Import and maintain shared POS items for alcohol mappings and production.",
-                                () -> showView(new PosMenuItemsView())
+                                "Choose MICROS or SYMPHONY to maintain POS items and mappings.",
+                                this::showPosCatalogMenu
                         ),
                         createDashboardCard(
                                 "System",
@@ -479,6 +479,22 @@ public class MainView {
         );
     }
 
+    private void showPosCatalogMenu() {
+        showSectionMenu(
+                "POS Catalog / PLUs",
+                createDashboardCard(
+                        "MICROS",
+                        "Legacy PLUs, catalog import, and production-profile assignments.",
+                        () -> showView(new PosMenuItemsView())
+                ),
+                createDashboardCard(
+                        "SYMPHONY",
+                        "POS item names, production profiles, and alcohol-product mappings.",
+                        () -> new NewPosCatalogDialog().showAndWait()
+                )
+        );
+    }
+
     private void showProductionMenu() {
 
         showSectionMenu(
@@ -494,12 +510,6 @@ public class MainView {
                         "Production Stations",
                         "Organize prep work by station for clearer production sheets.",
                         () -> showView(new ProductionStationsView())
-                ),
-
-                createDashboardCard(
-                        "POS Production Mappings",
-                        "Assign shared POS catalog items to production profiles.",
-                        () -> showView(new PosMenuItemsView(true))
                 ),
 
                 createDashboardCard(
@@ -633,6 +643,7 @@ public class MainView {
             case "Production" -> "Maintain production setup and generate prep planning from POS usage.";
             case "Labour Management" -> "Track hours, labour cost, tip pool allocation, and payout breakdowns.";
             case "Reporting" -> "Review invoices, import sales, and produce cost-control reporting.";
+            case "POS Catalog / PLUs" -> "Choose the POS system whose catalog you want to maintain.";
             default -> "Choose a workflow to continue.";
         };
     }

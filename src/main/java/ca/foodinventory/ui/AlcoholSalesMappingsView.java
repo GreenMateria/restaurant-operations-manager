@@ -1,9 +1,13 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.AlcoholSalesMappingDao;
+import ca.foodinventory.dao.NewPosMenuItemDao;
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholSalesMapping;
+import ca.foodinventory.model.NewPosMenuItem;
 import ca.foodinventory.service.AlcoholSalesMappingApiClient;
+import ca.foodinventory.service.NewPosAlcoholKey;
+import ca.foodinventory.service.ProductionApiClient;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
@@ -44,7 +48,9 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
 
     private void setupTable() {
         TableColumn<AlcoholSalesMapping, String> posSkuCol = new TableColumn<>("POS SKU / PLU");
-        posSkuCol.setCellValueFactory(new PropertyValueFactory<>("posSku"));
+        posSkuCol.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(
+                NewPosAlcoholKey.isNewPos(cell.getValue().getPosSku())
+                        ? "New POS" : cell.getValue().getPosSku()));
 
         TableColumn<AlcoholSalesMapping, String> posNameCol = new TableColumn<>("POS Item");
         posNameCol.setCellValueFactory(new PropertyValueFactory<>("posItemName"));
@@ -203,7 +209,15 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
     }
 
     private void editMapping(AlcoholSalesMapping mapping) {
-        AlcoholSalesMappingDialog dialog = new AlcoholSalesMappingDialog(mapping);
+        NewPosMenuItem newPosItem = null;
+        if (NewPosAlcoholKey.isNewPos(mapping.getPosSku())) {
+            var catalog = DatabaseManager.isApiDatabase()
+                    ? new ProductionApiClient().findNewPosMenuItems() : new NewPosMenuItemDao().findAll();
+            newPosItem = catalog.stream()
+                    .filter(item -> NewPosAlcoholKey.of(item.name()).equals(mapping.getPosSku()))
+                    .findFirst().orElse(null);
+        }
+        AlcoholSalesMappingDialog dialog = new AlcoholSalesMappingDialog(mapping, newPosItem);
         Optional<AlcoholSalesMapping> result = dialog.showAndWait();
 
         result.ifPresent(updated -> {
@@ -223,7 +237,9 @@ public class AlcoholSalesMappingsView extends ProductionModuleView<AlcoholSalesM
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Deactivate Alcohol Sales Mapping");
         confirm.setHeaderText(null);
-        confirm.setContentText("Deactivate mapping for " + selected.getPosSku() + "?");
+        confirm.setContentText("Deactivate mapping for "
+                + (NewPosAlcoholKey.isNewPos(selected.getPosSku())
+                ? selected.getPosItemName() : selected.getPosSku()) + "?");
 
         confirm.showAndWait().ifPresent(button -> {
             if (button == ButtonType.OK) {

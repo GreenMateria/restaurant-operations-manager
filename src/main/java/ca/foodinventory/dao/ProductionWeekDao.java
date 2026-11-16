@@ -203,18 +203,20 @@ public class ProductionWeekDao {
                 int productionWeekId = insertWeek(connection, weekStartDate, weekEndDate, parMultiplier);
 
                 for (int dayIndex = 0; dayIndex < DAY_NAMES.length; dayIndex++) {
+                    LocalDate productionDate = weekStartDate.plusDays(dayIndex);
+                    int weekdayIndex = productionDate.getDayOfWeek().getValue() - 1;
                     int productionWeekDayId = insertDay(
                             connection,
                             productionWeekId,
-                            weekStartDate.plusDays(dayIndex),
-                            DAY_NAMES[dayIndex],
+                            productionDate,
+                            DAY_NAMES[weekdayIndex],
                             dayIndex + 1
                     );
 
                     insertLinesForDay(
                             connection,
                             productionWeekDayId,
-                            dayIndex,
+                            weekdayIndex,
                             parMultiplier,
                             reportLines,
                             includeAllActiveProductionItems,

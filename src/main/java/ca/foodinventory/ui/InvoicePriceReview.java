@@ -94,9 +94,14 @@ final class InvoicePriceReview {
 
     static ReviewResult reviewBeforeSave(List<InvoiceLine> lines, String date,
                                          String supplier, String invoiceNumber) {
+        return reviewBeforeSave(lines, date, supplier, invoiceNumber, null);
+    }
+
+    static ReviewResult reviewBeforeSave(List<InvoiceLine> lines, String date,
+                                         String supplier, String invoiceNumber, List<Flag> alreadyReviewed) {
         try {
             List<Flag> flags = findFlags(lines, date, supplier, invoiceNumber);
-            return new ReviewResult(confirmBeforeSave(flags), flags);
+            return new ReviewResult(flags.equals(alreadyReviewed) || confirmBeforeSave(flags), flags);
         } catch (RuntimeException e) {
             ButtonType continueButton = new ButtonType("Save Without Price Review");
             ButtonType cancelButton = new ButtonType("Cancel");

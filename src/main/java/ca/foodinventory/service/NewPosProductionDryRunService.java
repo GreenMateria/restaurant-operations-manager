@@ -59,7 +59,7 @@ public class NewPosProductionDryRunService {
                 line.getStationName() == null ? "" : line.getStationName(), String.CASE_INSENSITIVE_ORDER)
                 .thenComparingInt(ProductionReportLine::getPrintOrder)
                 .thenComparing(ProductionReportLine::getProductionItemName, String.CASE_INSENSITIVE_ORDER));
-        return new ProductionReportSummary(new ImportedUsageReportSummary("New POS dry run "
+        return new ProductionReportSummary(new ImportedUsageReportSummary("New POS usage "
                 + preview.startDate() + " to " + preview.endDate(), included), sorted, skipped);
     }
 

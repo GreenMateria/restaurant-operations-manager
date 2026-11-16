@@ -4,10 +4,12 @@ import ca.foodinventory.dao.ProductDao;
 import ca.foodinventory.dao.PosMenuItemDao;
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.AlcoholSalesMapping;
+import ca.foodinventory.model.NewPosMenuItem;
 import ca.foodinventory.model.PosMenuItem;
 import ca.foodinventory.model.Product;
 import ca.foodinventory.service.PosMenuItemApiClient;
 import ca.foodinventory.service.ProductApiClient;
+import ca.foodinventory.service.NewPosAlcoholKey;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -39,6 +41,7 @@ public class AlcoholSalesMappingDialog extends Dialog<AlcoholSalesMapping> {
     private final PosMenuItemApiClient posMenuItemApiClient = new PosMenuItemApiClient();
     private final ProductApiClient productApiClient = new ProductApiClient();
     private final AlcoholSalesMapping existingMapping;
+    private final NewPosMenuItem newPosItem;
 
     private final ComboBox<PosMenuItem> posMenuItemComboBox = new ComboBox<>();
     private final TextField posSkuField = new TextField();
@@ -50,16 +53,28 @@ public class AlcoholSalesMappingDialog extends Dialog<AlcoholSalesMapping> {
     private final CheckBox activeCheckBox = new CheckBox("Active");
 
     public AlcoholSalesMappingDialog(AlcoholSalesMapping existingMapping) {
+        this(existingMapping, null);
+    }
+
+    public AlcoholSalesMappingDialog(AlcoholSalesMapping existingMapping, NewPosMenuItem newPosItem) {
         this.existingMapping = existingMapping;
+        this.newPosItem = newPosItem;
 
         setTitle(existingMapping == null ? "Add Alcohol Sales Mapping" : "Edit Alcohol Sales Mapping");
         setHeaderText("Map a POS item to the alcohol inventory product it consumes.\n"
                 + "Maintain POS items in Administration > POS Catalog / PLUs.");
 
         buildDialog();
-        loadPosMenuItems();
+        if (newPosItem == null) loadPosMenuItems();
         loadProducts();
         populateFields();
+        if (newPosItem != null) {
+            posMenuItemComboBox.setDisable(true);
+            posSkuField.setText(NewPosAlcoholKey.of(newPosItem.name()));
+            posSkuField.setDisable(true);
+            posItemNameField.setText(newPosItem.name());
+            posItemNameField.setDisable(true);
+        }
 
         setResultConverter(button -> {
             if (button.getButtonData() == ButtonBar.ButtonData.OK_DONE) {
@@ -88,22 +103,19 @@ public class AlcoholSalesMappingDialog extends Dialog<AlcoholSalesMapping> {
         grid.setVgap(12);
         grid.setPadding(new Insets(20));
 
-        grid.add(new Label("POS Menu Item:"), 0, 0);
-        grid.add(posMenuItemComboBox, 1, 0);
-        grid.add(new Label("POS SKU / PLU:"), 0, 1);
-        grid.add(posSkuField, 1, 1);
-        grid.add(new Label("POS Item Name:"), 0, 2);
-        grid.add(posItemNameField, 1, 2);
-        grid.add(new Label("Category:"), 0, 3);
-        grid.add(reportingCategoryBox, 1, 3);
-        grid.add(new Label("Inventory Product:"), 0, 4);
-        grid.add(productComboBox, 1, 4);
-        grid.add(new Label("Qty Used Per Sale:"), 0, 5);
-        grid.add(quantityPerSaleField, 1, 5);
-        grid.add(new Label("Usage Unit:"), 0, 6);
-        grid.add(unitBox, 1, 6);
-        grid.add(new Label("Status:"), 0, 7);
-        grid.add(activeCheckBox, 1, 7);
+        int row = 0;
+        if (newPosItem == null) {
+            grid.addRow(row++, new Label("POS Menu Item:"), posMenuItemComboBox);
+            grid.addRow(row++, new Label("POS SKU / PLU:"), posSkuField);
+            grid.addRow(row++, new Label("POS Item Name:"), posItemNameField);
+        } else {
+            grid.addRow(row++, new Label("New POS Item:"), new Label(newPosItem.name()));
+        }
+        grid.addRow(row++, new Label("Category:"), reportingCategoryBox);
+        grid.addRow(row++, new Label("Inventory Product:"), productComboBox);
+        grid.addRow(row++, new Label("Qty Used Per Sale:"), quantityPerSaleField);
+        grid.addRow(row++, new Label("Usage Unit:"), unitBox);
+        grid.addRow(row, new Label("Status:"), activeCheckBox);
 
         getDialogPane().setContent(grid);
 

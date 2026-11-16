@@ -43,6 +43,7 @@ class NewPosUsagePreviewServiceTest {
             try (OutputStream output = Files.newOutputStream(file)) { workbook.write(output); }
         }
 
+        assertTrue(NewPosWeekdayReportDetector.matches(file.toFile()));
         var preview = new NewPosUsagePreviewService().preview(file.toFile(), List.of());
         assertEquals(LocalDate.of(2026, 10, 23), preview.startDate());
         assertEquals(LocalDate.of(2026, 10, 29), preview.endDate());

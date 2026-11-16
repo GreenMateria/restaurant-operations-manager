@@ -324,3 +324,8 @@ Date: 2026-10-26 11:41
 Date: 2026-10-26 14:28
 
 - Updated Suppliers, Updated Price alerts. Fixed order guide padding
+
+## v5.0.1
+Date: 2026-11-15 19:31
+
+- Fixed Pricing Alerts, Fixed Inventory Template editors. Seperated legacy pos subsystems from new subsystems. Removed duplicated POS catalogs. Upgraded Alcohol Mappings, Food Mappings.Added Active/Inactive filter for employees in Labour Management. Fixed API crash when parsing Symphony files. Fixed API crashes when importing supplier invoices. Updated weekly producton to work on non- linear weeks. 

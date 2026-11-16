@@ -42,6 +42,7 @@ public class ImportInvoiceView {
 
     private final TableView<InvoiceLine> table = new TableView<>();
     private List<InvoicePriceReview.Flag> priceFlags = List.of();
+    private List<InvoicePriceReview.Flag> reviewedImportPriceFlags;
     private final Button priceReviewButton = new Button();
     private final TableColumn<InvoiceLine, String> priceColumn =
             InvoicePriceReview.markerColumn(InvoiceLine::getSku, () -> priceFlags);
@@ -52,6 +53,8 @@ public class ImportInvoiceView {
 
     private GfsCsvImportService.InvoiceImportResult currentInvoice;
     private List<InvoiceLine> currentLines;
+    private String previewInvoiceDate;
+    private String previewInvoiceNumber;
 
     public BorderPane getView() {
         BorderPane root = new BorderPane();
@@ -241,9 +244,58 @@ public class ImportInvoiceView {
             return;
         }
         currentLines = currentInvoice.getLines();
+        previewInvoiceDate = currentInvoice.getInvoiceDate();
+        previewInvoiceNumber = currentInvoice.getInvoiceNumber();
 
         table.setItems(FXCollections.observableArrayList(currentLines));
         updateSummary();
+        if (ensurePreviewInvoiceDetails()) {
+            reviewImportedPrices();
+        }
+    }
+
+    private boolean ensurePreviewInvoiceDetails() {
+        if (previewInvoiceDate != null && !previewInvoiceDate.isBlank()
+                && previewInvoiceNumber != null && !previewInvoiceNumber.isBlank()) {
+            return true;
+        }
+        Dialog<PreviewInvoiceDetails> dialog = new Dialog<>();
+        dialog.setTitle("Invoice Details for Price Review");
+        dialog.setHeaderText("Enter the invoice date and number from the paper invoice to check price changes now.");
+        ButtonType checkButton = new ButtonType("Check Prices", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(checkButton, ButtonType.CANCEL);
+        TextField dateField = new TextField(previewInvoiceDate == null ? "" : previewInvoiceDate);
+        dateField.setPromptText("YYYY-MM-DD");
+        TextField numberField = new TextField(previewInvoiceNumber == null ? "" : previewInvoiceNumber);
+        GridPane fields = new GridPane();
+        fields.setHgap(10);
+        fields.setVgap(10);
+        fields.addRow(0, new Label("Invoice Date:"), dateField);
+        fields.addRow(1, new Label("Invoice Number:"), numberField);
+        dialog.getDialogPane().setContent(fields);
+        Button check = (Button) dialog.getDialogPane().lookupButton(checkButton);
+        check.disableProperty().bind(dateField.textProperty().isEmpty().or(numberField.textProperty().isEmpty()));
+        dialog.setResultConverter(button -> button == checkButton
+                ? new PreviewInvoiceDetails(dateField.getText().trim(), numberField.getText().trim()) : null);
+        Optional<PreviewInvoiceDetails> details = dialog.showAndWait();
+        if (details.isEmpty()) return false;
+        previewInvoiceDate = details.get().date();
+        previewInvoiceNumber = details.get().number();
+        return true;
+    }
+
+    private void reviewImportedPrices() {
+        try {
+            List<InvoicePriceReview.Flag> flags = InvoicePriceReview.findFlags(
+                    currentLines, previewInvoiceDate, "GFS", previewInvoiceNumber);
+            setPriceFlags(flags);
+            reviewedImportPriceFlags = flags;
+            InvoicePriceReview.show(flags);
+        } catch (RuntimeException error) {
+            showAlert(Alert.AlertType.WARNING, "Price Review Unavailable",
+                    "Could not check recent purchase prices after import. The check will run again when you save.\n\n"
+                            + error.getMessage());
+        }
     }
 
     private BigDecimal correctZeroQuantity(int row, String sku, String description,
@@ -594,7 +646,8 @@ public class ImportInvoiceView {
 
         try {
             InvoicePriceReview.ReviewResult priceReview = InvoicePriceReview.reviewBeforeSave(
-                    currentLines, details.invoiceDate(), details.supplier(), details.invoiceNumber());
+                    currentLines, details.invoiceDate(), details.supplier(), details.invoiceNumber(),
+                    reviewedImportPriceFlags);
             setPriceFlags(priceReview.flags());
             if (!priceReview.proceed()) return;
             if (invoiceExists(details.supplier(), details.invoiceNumber())) {
@@ -769,8 +822,8 @@ public class ImportInvoiceView {
         SupplierFieldSupport.configure(supplierField, isFoodApiMode()
                 ? invoiceApiClient.findSupplierNames() : invoiceDao.findSupplierNames());
         supplierField.setPrefWidth(260);
-        TextField invoiceNumberField = new TextField(currentInvoice.getInvoiceNumber());
-        TextField invoiceDateField = new TextField(currentInvoice.getInvoiceDate());
+        TextField invoiceNumberField = new TextField(previewInvoiceNumber);
+        TextField invoiceDateField = new TextField(previewInvoiceDate);
         TextField paperInvoiceTotalField = new TextField(currentInvoice.getSupplierTotal() == null
                 ? "" : currentInvoice.getSupplierTotal().toPlainString());
         paperInvoiceTotalField.setPromptText("0.00");
@@ -972,6 +1025,7 @@ public class ImportInvoiceView {
     }
 
     private void updateSummary() {
+        reviewedImportPriceFlags = null;
         setPriceFlags(List.of());
         BigDecimal importedTotal = currentInvoice == null
                 ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
@@ -1218,6 +1272,9 @@ public class ImportInvoiceView {
             TextField amountField,
             HBox container
     ) {
+    }
+
+    private record PreviewInvoiceDetails(String date, String number) {
     }
 
     private record ConfirmedInvoiceDetails(

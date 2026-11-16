@@ -13,6 +13,9 @@ import ca.foodinventory.service.ProductionReportService;
 import ca.foodinventory.service.ProductionUsageReportImportService;
 import ca.foodinventory.service.ProductionApiClient;
 import ca.foodinventory.service.NewPosUsagePreviewService;
+import ca.foodinventory.service.NewPosWeekdayReportDetector;
+import ca.foodinventory.service.NewPosProductionDryRunService;
+import ca.foodinventory.model.NewPosUsagePreview;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -115,10 +118,6 @@ public class WeeklyProductionView extends BorderPane {
         configureToolbarButton(importButton);
         importButton.setOnAction(e -> importUsageReport());
 
-        Button previewNewPosButton = new Button("Preview New POS Report");
-        configureToolbarButton(previewNewPosButton);
-        previewNewPosButton.setOnAction(e -> previewNewPosReport());
-
         Button refreshButton = new Button("Refresh Week");
         configureToolbarButton(refreshButton);
         refreshButton.setOnAction(e -> refreshSelectedWeek());
@@ -154,7 +153,6 @@ public class WeeklyProductionView extends BorderPane {
                 parMultiplierSpinner,
                 includeAllProductionItemsCheckBox,
                 importButton,
-                previewNewPosButton,
                 refreshButton,
                 saveButton,
                 savePermanentOverrideButton,
@@ -363,31 +361,6 @@ public class WeeklyProductionView extends BorderPane {
         };
     }
 
-    private void previewNewPosReport() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Select New POS Weekday Usage Report");
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"));
-        File file = chooser.showOpenDialog(getScene() == null ? null : getScene().getWindow());
-        if (file == null) return;
-
-        Task<NewPosPreviewResult> task = new Task<>() {
-            @Override
-            protected NewPosPreviewResult call() {
-                var catalog = DatabaseManager.isApiDatabase()
-                        ? productionApiClient.findNewPosMenuItems() : new NewPosMenuItemDao().findAll();
-                var preview = new NewPosUsagePreviewService().preview(file, catalog);
-                return new NewPosPreviewResult(preview, catalog);
-            }
-        };
-        task.setOnSucceeded(event -> new NewPosUsagePreviewDialog(
-                task.getValue().preview(), task.getValue().catalog()).showAndWait());
-        task.setOnFailed(event -> showAlert(Alert.AlertType.ERROR, "Preview Failed",
-                task.getException() == null ? "Could not read report." : task.getException().getMessage()));
-        Thread thread = new Thread(task, "new-pos-preview");
-        thread.setDaemon(true);
-        thread.start();
-    }
-
     private void importUsageReport() {
         LocalDate weekStartDate = weekStartDatePicker.getValue();
 
@@ -420,19 +393,47 @@ public class WeeklyProductionView extends BorderPane {
         Task<ProductionImportResult> task = new Task<>() {
             @Override
             protected ProductionImportResult call() {
-                ImportedUsageReportSummary usageSummary = usageReportImportService.importUsageReport(file);
-                ProductionReportSummary productionSummary =
-                        productionReportService.generateReport(usageSummary);
+                boolean newPos = NewPosWeekdayReportDetector.matches(file);
+                LocalDate saveDate = weekStartDate;
+                ProductionReportSummary productionSummary;
+                if (newPos) {
+                    var catalog = DatabaseManager.isApiDatabase()
+                            ? productionApiClient.findNewPosMenuItems() : new NewPosMenuItemDao().findAll();
+                    NewPosUsagePreview preview = new NewPosUsagePreviewService().preview(file, catalog);
+                    List<String> invalidMappedItems = preview.rows().stream()
+                            .filter(row -> "Conflicting repeated rows".equals(row.status())
+                                    || "Daily/WTD mismatch".equals(row.status()))
+                            .filter(row -> catalog.stream().anyMatch(item -> item.active()
+                                    && item.productionProfileId() > 0
+                                    && ca.foodinventory.service.NewPosNameKey.of(item.name())
+                                    .equals(ca.foodinventory.service.NewPosNameKey.of(row.name()))))
+                            .map(row -> row.name() + " (" + row.status() + ")")
+                            .toList();
+                    if (!invalidMappedItems.isEmpty()) {
+                        throw new IllegalArgumentException("Mapped items have conflicting or mismatched totals: "
+                                + String.join(", ", invalidMappedItems)
+                                + ". No week was changed.");
+                    }
+                    productionSummary = new NewPosProductionDryRunService().generate(preview, catalog);
+                    if (productionSummary.getLines().isEmpty()) {
+                        throw new IllegalArgumentException("No mapped, active new POS items produced a prep quantity. "
+                                + "Assign production profiles in the New POS Catalog before importing; no week was changed.");
+                    }
+                    saveDate = preview.startDate();
+                } else {
+                    ImportedUsageReportSummary usageSummary = usageReportImportService.importUsageReport(file);
+                    productionSummary = productionReportService.generateReport(usageSummary);
+                }
 
                 int productionWeekId = DatabaseManager.isApiDatabase()
                         ? productionApiClient.saveGeneratedWeek(
-                        weekStartDate,
+                        saveDate,
                         parMultiplier,
                         productionSummary,
                         includeAllProductionItems
                 )
                         : productionWeekDao.saveGeneratedWeek(
-                        weekStartDate,
+                        saveDate,
                         parMultiplier,
                         productionSummary,
                         includeAllProductionItems
@@ -440,6 +441,7 @@ public class WeeklyProductionView extends BorderPane {
 
                 return new ProductionImportResult(
                         productionWeekId,
+                        saveDate,
                         DatabaseManager.isApiDatabase()
                                 ? productionApiClient.findWeeks()
                                 : productionWeekDao.findAll()
@@ -450,6 +452,7 @@ public class WeeklyProductionView extends BorderPane {
         task.setOnSucceeded(event -> {
             setDisable(false);
             ProductionImportResult result = task.getValue();
+            weekStartDatePicker.setValue(result.weekStartDate());
             weekComboBox.setItems(FXCollections.observableArrayList(result.weeks()));
             selectWeek(result.productionWeekId());
 
@@ -1125,13 +1128,8 @@ public class WeeklyProductionView extends BorderPane {
 
     private record ProductionImportResult(
             int productionWeekId,
+            LocalDate weekStartDate,
             List<ProductionWeek> weeks
-    ) {
-    }
-
-    private record NewPosPreviewResult(
-            ca.foodinventory.model.NewPosUsagePreview preview,
-            List<ca.foodinventory.model.NewPosMenuItem> catalog
     ) {
     }
 

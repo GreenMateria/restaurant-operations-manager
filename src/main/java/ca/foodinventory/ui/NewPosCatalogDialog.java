@@ -1,12 +1,16 @@
 package ca.foodinventory.ui;
 
 import ca.foodinventory.dao.NewPosMenuItemDao;
+import ca.foodinventory.dao.AlcoholSalesMappingDao;
 import ca.foodinventory.dao.ProductionProfileDao;
 import ca.foodinventory.database.DatabaseManager;
 import ca.foodinventory.model.NewPosMenuItem;
+import ca.foodinventory.model.AlcoholSalesMapping;
 import ca.foodinventory.model.ProductionProfile;
 import ca.foodinventory.service.NewPosCatalogDiscoveryService;
 import ca.foodinventory.service.ProductionApiClient;
+import ca.foodinventory.service.AlcoholSalesMappingApiClient;
+import ca.foodinventory.service.NewPosAlcoholKey;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -17,18 +21,24 @@ import javafx.util.StringConverter;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class NewPosCatalogDialog extends Dialog<Void> {
     private final NewPosMenuItemDao dao = new NewPosMenuItemDao();
     private final ProductionApiClient api = new ProductionApiClient();
     private final NewPosCatalogDiscoveryService discovery = new NewPosCatalogDiscoveryService();
     private final TableView<NewPosMenuItem> table = new TableView<>();
+    private final AlcoholSalesMappingDao alcoholDao = new AlcoholSalesMappingDao();
+    private final AlcoholSalesMappingApiClient alcoholApi = new AlcoholSalesMappingApiClient();
+    private Map<String, AlcoholSalesMapping> alcoholMappings = Map.of();
 
     public NewPosCatalogDialog() {
-        setTitle("New POS Catalog");
-        setHeaderText("New POS names and production profiles");
+        setTitle("SYMPHONY POS Catalog");
+        setHeaderText("SYMPHONY item names, production profiles, and alcohol products");
         getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        getDialogPane().setPrefSize(900, 650);
+        getDialogPane().setPrefSize(1080, 650);
 
         TableColumn<NewPosMenuItem, String> name = new TableColumn<>("New POS Item Name");
         name.setCellValueFactory(value -> new javafx.beans.property.SimpleStringProperty(value.getValue().name()));
@@ -37,7 +47,14 @@ public class NewPosCatalogDialog extends Dialog<Void> {
         profile.setCellValueFactory(value -> new javafx.beans.property.SimpleStringProperty(
                 value.getValue().productionProfileName() == null ? "" : value.getValue().productionProfileName()));
         profile.setPrefWidth(320);
-        table.getColumns().addAll(name, profile);
+        TableColumn<NewPosMenuItem, String> alcohol = new TableColumn<>("Alcohol Product");
+        alcohol.setCellValueFactory(value -> {
+            AlcoholSalesMapping mapping = alcoholMappings.get(NewPosAlcoholKey.of(value.getValue().name()));
+            return new javafx.beans.property.SimpleStringProperty(mapping == null || !mapping.isActive()
+                    ? "" : mapping.getProductDescription());
+        });
+        alcohol.setPrefWidth(240);
+        table.getColumns().addAll(name, profile, alcohol);
         table.setPlaceholder(new Label("Import a new POS report or add an item name."));
 
         Button importButton = new Button("Discover from Usage Report");
@@ -46,8 +63,10 @@ public class NewPosCatalogDialog extends Dialog<Void> {
         addButton.setOnAction(event -> addName());
         Button mapButton = new Button("Assign Profile");
         mapButton.setOnAction(event -> assignProfile());
+        Button alcoholButton = new Button("Assign Alcohol Product");
+        alcoholButton.setOnAction(event -> assignAlcohol());
         VBox content = new VBox(12, new Label("These names are separate from legacy PLUs. Review candidates before adding them."),
-                new HBox(10, importButton, addButton, mapButton), table);
+                new HBox(10, importButton, addButton, mapButton, alcoholButton), table);
         content.setPadding(new Insets(12));
         VBox.setVgrow(table, javafx.scene.layout.Priority.ALWAYS);
         getDialogPane().setContent(content);
@@ -57,6 +76,10 @@ public class NewPosCatalogDialog extends Dialog<Void> {
     private void refresh() {
         try {
             List<NewPosMenuItem> items = DatabaseManager.isApiDatabase() ? api.findNewPosMenuItems() : dao.findAll();
+            List<AlcoholSalesMapping> mappings = DatabaseManager.isApiDatabase()
+                    ? alcoholApi.findAll() : alcoholDao.findAll();
+            alcoholMappings = mappings.stream().filter(mapping -> NewPosAlcoholKey.isNewPos(mapping.getPosSku()))
+                    .collect(Collectors.toMap(AlcoholSalesMapping::getPosSku, Function.identity(), (first, second) -> first));
             table.setItems(FXCollections.observableArrayList(items));
         } catch (RuntimeException e) {
             error(e);
@@ -147,6 +170,25 @@ public class NewPosCatalogDialog extends Dialog<Void> {
             if (DatabaseManager.isApiDatabase()) api.assignNewPosProfile(item.id(), profileId);
             else dao.assignProfile(item.id(), profileId);
             refresh();
+        } catch (RuntimeException e) {
+            error(e);
+        }
+    }
+
+    private void assignAlcohol() {
+        NewPosMenuItem item = table.getSelectionModel().getSelectedItem();
+        if (item == null) {
+            new Alert(Alert.AlertType.WARNING, "Select a new POS item first.").showAndWait();
+            return;
+        }
+        try {
+            AlcoholSalesMapping existing = alcoholMappings.get(NewPosAlcoholKey.of(item.name()));
+            AlcoholSalesMappingDialog dialog = new AlcoholSalesMappingDialog(existing, item);
+            dialog.showAndWait().ifPresent(mapping -> {
+                if (DatabaseManager.isApiDatabase()) alcoholApi.save(mapping);
+                else alcoholDao.save(mapping);
+                refresh();
+            });
         } catch (RuntimeException e) {
             error(e);
         }

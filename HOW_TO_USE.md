@@ -32,13 +32,12 @@ The most common manager workflows are:
 - **Reporting** - invoice history, sales entry, and inventory valuation.
 - **Production** - weekly production and prep sheets.
 - **System** - backup, restore, API connection checks, and administrator tools.
-- **POS Catalog / PLUs** - shared POS item import and maintenance under Administration, used by Alcohol Sales Mappings and Production.
-- **New POS Catalog** - available from Administration -> POS Catalog / PLUs in the next desktop update. It stores new POS item names separately from legacy PLUs. Use **Discover from Usage Report** to review candidate names, select the ones to add, then select an item and **Assign Profile** to reuse an existing production profile. Type part of a profile name in the picker to search. Use **Add Name** for items the report does not discover. This catalog does not yet import new POS quantities into Weekly Production.
-- **Preview New POS Report** - in Weekly Production, choose a new POS weekday workbook to inspect its selected dates, candidate item quantities, repeated rows, and profile matches. Use **Preview Production Impact** to calculate mapped production items by weekday without saving. Both previews are read-only; they do not create or replace a production week. Their totals are provisional while report grouping is being validated.
+- **POS Catalog / PLUs** - under Administration, choose **MICROS** for legacy PLUs or **SYMPHONY** for new POS item names. Both catalogs support production-profile assignments; SYMPHONY also has **Assign Alcohol Product** for new POS alcohol variance.
+- **SYMPHONY catalog** - use **Discover from Usage Report** to review candidate names, select the ones to add, then select an item and **Assign Profile** to reuse an existing production profile. Use **Assign Alcohol Product** to map a sold alcohol item to its inventory product, amount used per sale, and unit. The two assignments are independent. Type part of a profile name in the picker to search. Use **Add Name** for items the report does not discover. Weekly Production imports mapped SYMPHONY quantities through **Import Usage Report**.
 
 - **About** - version, database mode, signed-in store, and application scope.
 
-The manager has checked the new POS catalog, usage preview, and production dry run in the dev app. Keep using the legacy POS import for saved production until a completed new POS week has been reconciled and generated prep sheets have been tested in the TEST store. The planned release will keep one Weekly Production workflow, with clear report-source selection and separate legacy PLU/new-POS name catalog views.
+The manager reports that the implemented new POS catalog and unified Weekly Production workflow have been tested and work properly. The desktop update is being held for a larger release.
 
 ## Important Safety Rules
 
@@ -408,7 +407,7 @@ Use Sales Mappings to connect sold POS alcohol items to the inventory product th
 8. Choose the usage unit.
 9. Save the mapping.
 
-The POS Menu Item dropdown uses the shared catalog maintained in **Administration -> POS Catalog / PLUs**. If a POS item is missing, import or add it there first. Catalog XLSX files use **column A for item names** and **column B for PLUs**. Production profile assignments are available under **Production -> POS Production Mappings**.
+The legacy POS Menu Item dropdown uses the **MICROS** catalog under **Administration -> POS Catalog / PLUs**. If a PLU is missing, import or add it there first. MICROS catalog XLSX files use **column A for item names** and **column B for PLUs**. Production profile assignments are maintained there.
 
 Catalog import skips rows between **KDS DNU.ESM** and **X41 Note.ESM**, regardless of their row numbers. **Delete KDS Items** uses the same headings to identify previously imported KDS PLUs and asks for confirmation before deleting them. If the KDS start heading is found without the end heading, cleanup refuses to delete items.
 
@@ -422,7 +421,7 @@ Catalog import skips rows between **KDS DNU.ESM** and **X41 Note.ESM**, regardle
 
 Actual usage is opening inventory plus period purchases minus closing inventory. Sold usage uses weekly quantities from the selected report and active Alcohol Sales Mappings, with bottle/keg portion conversion where configured. Variance is actual usage minus sold usage; positive values display red and negative values display green. Variance dollars use the closing count's valuation average cost.
 
-Alcohol reads its mapped PLUs throughout the report, including wine rows inside the section Production excludes. The shared POS catalog is a picker for mapping setup; an existing active alcohol mapping does not require an active catalog entry when generating the report.
+For MICROS reports, Alcohol reads its mapped PLUs throughout the report, including wine rows inside the section Production excludes. For a SYMPHONY weekday workbook, assign its item names to alcohol products under Administration → POS Catalog / PLUs → SYMPHONY first; Alcohol Variance uses those name mappings and does not require a production profile. Review the selected report's dates against the count period. Validate a completed SYMPHONY alcohol week in the TEST store before live use.
 
 Mapped products keep their Sales Mapping category even when sold usage is zero. For example, mapped wines remain under WINE regardless of RED/WHITE count-sheet sections. Products without an active mapping fall back to their count-sheet section.
 
@@ -562,7 +561,7 @@ If every line is matched:
 
 In the save dialog, select an existing supplier name or type a new one, then verify the invoice number, invoice date, HST, and **Paper Invoice Grand Total** against the paper copy. InvoicesList pre-fills the invoice details; LineItemList requires manual entry. Enter shipping and any other charges from the paper invoice. The calculated grand total is merchandise plus those adjustments. Save is enabled only when the supplier is entered and the difference is zero. The InvoicesList billed weight is shown for reference and does not yet replace product-based inventory quantity conversion.
 
-When saving an invoice, the app checks for notable item price increases against purchases in the previous four weeks. If it flags an item, choose **Review Items** to see the old and new prices and the percentage increase, or **Save Anyway** if the billed price is correct. A small **▲ Increase** marker and Review button remain on the entry screen so you can inspect the flagged items. For products without a purchase in the last four weeks, the latest purchase within 180 days is used and labelled as such. Credits are ignored. The Invoice History report is unchanged.
+After importing a finalized invoice CSV, the app checks for notable item price increases against purchases in the previous four weeks and immediately shows flagged items for review. For LineItemList files without an invoice date or number, enter those details from the paper invoice when prompted; they carry into the save dialog. A small **▲ Increase** marker and Review button remain on the entry screen. If the invoice lines or reconciliation details change, Save checks again and asks for review only when the flagged prices differ. For products without a purchase in the last four weeks, the latest purchase within 180 days is used and labelled as such. Credits are ignored. The Invoice History report is unchanged.
 
 The preview labels mean:
 
@@ -652,7 +651,7 @@ The normal production workflow is:
 Open Weekly Production
 -> Import POS usage report
 -> Generate the week
--> Review Monday through Sunday
+-> Review the seven dated production days
 -> Enter overrides
 -> Save overrides
 -> Preview prep sheets
@@ -671,13 +670,13 @@ You should see a week selector, import controls, day tabs, and a production tabl
 
 ## PRODUCTION 2 - Import The POS Usage Report
 
-1. On the Weekly Production screen, click the POS usage import button.
+1. On the Weekly Production screen, click **Import Usage Report**.
 2. Choose the POS usage `.xlsx` file.
-3. Confirm the selected file is the correct week.
-4. Continue the import.
-5. Wait for the program to finish processing.
+3. Wait for the program to finish processing.
 
 The program uses POS menu items and production profiles to turn sales into prep quantities.
+The import detects legacy and new POS usage reports from the workbook. A new POS report can cover any seven consecutive days; its actual dates become the production period and each day's quantities stay with its calendar date. Conflicting or mismatched totals on mapped production items stop the import before saving. Unmapped items do not contribute to prep quantities.
+The separate **Preview New POS Report** button was removed. Identical repeated item rows are counted once. When an unmapped item has conflicting repeated rows or a daily/Week to Date mismatch, it is excluded from prep quantities; a mapped item's conflict stops the import and its name appears in the error. New POS catalog discovery and profile assignment remain under **POS Catalog / PLUs**.
 
 ![POS usage import](docs/images/pos-usage-import.png)
 
@@ -691,7 +690,7 @@ Do not print prep sheets until the correct week is selected.
 
 ## PRODUCTION 4 - Review Each Day
 
-1. Click **Monday**.
+1. Click the first dated day tab.
 2. Review the production rows.
 3. Click **Tuesday**.
 4. Review the production rows.
@@ -805,7 +804,7 @@ Use Labour Setup to maintain the employee and position information used by the l
 2. Click **Labour Setup**.
 3. Enter the Labour Setup password if asked.
 4. If this is the first Labour Setup login for this store, enter the temporary password and then create a new Labour Setup password when prompted.
-5. Set up positions, hourly wages, labour groups, tip-pool eligibility, uniform-deduction applicability, and active employees.
+5. Set up positions, hourly wages, labour groups, tip-pool eligibility, uniform-deduction applicability, and active employees. The Employees screen opens on the Active tab; use Inactive to find former employees and edit one to reactivate them.
 6. Save changes.
 
 ## Labour Hours

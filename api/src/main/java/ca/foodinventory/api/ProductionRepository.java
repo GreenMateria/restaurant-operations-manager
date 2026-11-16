@@ -702,8 +702,10 @@ class ProductionRepository {
                 deleteExistingWeek(connection, locationId, weekStart, weekEnd);
                 int weekId = insertWeek(connection, locationId, weekStart, weekEnd, parMultiplier);
                 for (int i = 0; i < DAY_NAMES.length; i++) {
-                    int dayId = insertDay(connection, locationId, weekId, weekStart.plusDays(i), DAY_NAMES[i], i + 1);
-                    insertLinesForDay(connection, locationId, dayId, i, parMultiplier, reportLinesByItemId,
+                    LocalDate productionDate = weekStart.plusDays(i);
+                    int weekdayIndex = productionDate.getDayOfWeek().getValue() - 1;
+                    int dayId = insertDay(connection, locationId, weekId, productionDate, DAY_NAMES[weekdayIndex], i + 1);
+                    insertLinesForDay(connection, locationId, dayId, weekdayIndex, parMultiplier, reportLinesByItemId,
                             includeAll, permanentOverrides);
                 }
                 connection.commit();

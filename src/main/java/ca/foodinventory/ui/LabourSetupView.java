@@ -46,6 +46,8 @@ public class LabourSetupView extends BorderPane {
 
     private final TableView<LabourPosition> positionTable = new TableView<>();
     private final TableView<LabourEmployee> employeeTable = new TableView<>();
+    private final TableView<LabourEmployee> inactiveEmployeeTable = new TableView<>();
+    private final TabPane employeeStatusTabs = new TabPane();
     private final TextField positionSearchField = new TextField();
     private final TextField employeeSearchField = new TextField();
     private final TextField uniformDeductionField = new TextField();
@@ -53,6 +55,7 @@ public class LabourSetupView extends BorderPane {
 
     private FilteredList<LabourPosition> filteredPositions;
     private FilteredList<LabourEmployee> filteredEmployees;
+    private FilteredList<LabourEmployee> filteredInactiveEmployees;
 
     public LabourSetupView() {
         getStyleClass().add("root-dark");
@@ -114,7 +117,17 @@ public class LabourSetupView extends BorderPane {
     }
 
     private VBox buildEmployeesTab() {
-        setupEmployeeTable();
+        setupEmployeeTable(employeeTable);
+        setupEmployeeTable(inactiveEmployeeTable);
+        Tab activeTab = new Tab("Active", employeeTable);
+        Label reactivationHelp = new Label("To reactivate an employee, select Edit and check Active.");
+        VBox inactiveContent = new VBox(8, reactivationHelp, inactiveEmployeeTable);
+        inactiveContent.setPadding(new Insets(8));
+        VBox.setVgrow(inactiveEmployeeTable, Priority.ALWAYS);
+        Tab inactiveTab = new Tab("Inactive", inactiveContent);
+        activeTab.setClosable(false);
+        inactiveTab.setClosable(false);
+        employeeStatusTabs.getTabs().setAll(activeTab, inactiveTab);
 
         employeeSearchField.setPromptText("Search employees...");
         employeeSearchField.setPrefWidth(300);
@@ -124,6 +137,10 @@ public class LabourSetupView extends BorderPane {
         Button editButton = primaryButton("Edit", this::editSelectedEmployee);
         Button deactivateButton = primaryButton("Deactivate", this::deactivateSelectedEmployee);
         Button refreshButton = primaryButton("Refresh", this::loadAll);
+        addButton.disableProperty().bind(
+                employeeStatusTabs.getSelectionModel().selectedItemProperty().isNotEqualTo(activeTab));
+        deactivateButton.disableProperty().bind(
+                employeeStatusTabs.getSelectionModel().selectedItemProperty().isNotEqualTo(activeTab));
 
         HBox toolbar = new HBox(
                 10,
@@ -135,10 +152,10 @@ public class LabourSetupView extends BorderPane {
         );
         toolbar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox content = new VBox(10, toolbar, employeeTable);
+        VBox content = new VBox(10, toolbar, employeeStatusTabs);
         content.setPadding(new Insets(20));
         content.getStyleClass().add("content-area");
-        VBox.setVgrow(employeeTable, Priority.ALWAYS);
+        VBox.setVgrow(employeeStatusTabs, Priority.ALWAYS);
         return content;
     }
 
@@ -192,7 +209,7 @@ public class LabourSetupView extends BorderPane {
         });
     }
 
-    private void setupEmployeeTable() {
+    private void setupEmployeeTable(TableView<LabourEmployee> table) {
         TableColumn<LabourEmployee, String> nameCol = new TableColumn<>("Employee");
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
 
@@ -215,21 +232,17 @@ public class LabourSetupView extends BorderPane {
         TableColumn<LabourEmployee, Boolean> uniformCol = new TableColumn<>("Uniform Deduction");
         uniformCol.setCellValueFactory(new PropertyValueFactory<>("uniformDeductionApplicable"));
 
-        TableColumn<LabourEmployee, Boolean> activeCol = new TableColumn<>("Active");
-        activeCol.setCellValueFactory(new PropertyValueFactory<>("active"));
-
-        employeeTable.getColumns().setAll(
+        table.getColumns().setAll(
                 nameCol,
                 positionCol,
                 groupCol,
                 wageCol,
                 effectiveDateCol,
                 tipCol,
-                uniformCol,
-                activeCol
+                uniformCol
         );
-        employeeTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        employeeTable.setRowFactory(tv -> {
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setRowFactory(tv -> {
             TableRow<LabourEmployee> row = new TableRow<>();
             row.itemProperty().addListener((obs, oldItem, newItem) ->
                     row.setStyle(newItem == null || newItem.isActive() ? "" : "-fx-opacity: 0.45;"));
@@ -269,12 +282,12 @@ public class LabourSetupView extends BorderPane {
                     FXCollections.observableArrayList(data.positions()),
                     position -> true
             );
-            filteredEmployees = new FilteredList<>(
-                    FXCollections.observableArrayList(data.employees()),
-                    employee -> true
-            );
+            var employees = FXCollections.observableArrayList(data.employees());
+            filteredEmployees = new FilteredList<>(employees, employee -> true);
+            filteredInactiveEmployees = new FilteredList<>(employees, employee -> false);
             positionTable.setItems(filteredPositions);
             employeeTable.setItems(filteredEmployees);
+            inactiveEmployeeTable.setItems(filteredInactiveEmployees);
             uniformDeductionField.setText(formatDecimal(data.settings().getDefaultUniformDeduction()));
             applyPositionSearch();
             applyEmployeeSearch();
@@ -380,7 +393,7 @@ public class LabourSetupView extends BorderPane {
     }
 
     private void editSelectedEmployee() {
-        LabourEmployee selected = employeeTable.getSelectionModel().getSelectedItem();
+        LabourEmployee selected = selectedEmployeeTable().getSelectionModel().getSelectedItem();
         if (selected == null) {
             showAlert(Alert.AlertType.WARNING, "No Selection", "Please select a labour employee.");
             return;
@@ -528,18 +541,24 @@ public class LabourSetupView extends BorderPane {
     }
 
     private void applyEmployeeSearch() {
-        if (filteredEmployees == null) {
+        if (filteredEmployees == null || filteredInactiveEmployees == null) {
             return;
         }
         String search = employeeSearchField.getText();
-        filteredEmployees.setPredicate(employee -> {
-            if (search == null || search.isBlank()) {
-                return true;
-            }
-            return containsIgnoreCase(employee.getName(), search)
+        filteredEmployees.setPredicate(employee -> employee.isActive() && matchesEmployeeSearch(employee, search));
+        filteredInactiveEmployees.setPredicate(employee -> !employee.isActive() && matchesEmployeeSearch(employee, search));
+    }
+
+    private TableView<LabourEmployee> selectedEmployeeTable() {
+        return employeeStatusTabs.getSelectionModel().getSelectedIndex() == 1
+                ? inactiveEmployeeTable : employeeTable;
+    }
+
+    private boolean matchesEmployeeSearch(LabourEmployee employee, String search) {
+        return search == null || search.isBlank()
+                || containsIgnoreCase(employee.getName(), search)
                     || containsIgnoreCase(employee.getPositionName(), search)
                     || containsIgnoreCase(employee.getLabourGroup(), search);
-        });
     }
 
     private Button primaryButton(String text, Runnable action) {

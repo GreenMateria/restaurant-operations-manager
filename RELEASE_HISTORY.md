@@ -2,6 +2,22 @@
 
 ## Unreleased after v5.0.0
 
+- Administration → POS Catalog / PLUs now opens prominent MICROS and SYMPHONY choices. MICROS opens the legacy PLU editor; SYMPHONY opens the name-based catalog. Removed the nested New POS Catalog shortcut from the MICROS editor. Desktop navigation only.
+
+- New POS Catalog now has **Assign Alcohol Product** alongside production-profile assignment. Alcohol Variance detects the weekday workbook, uses mapped new POS names and validated week totals, and keeps legacy PLU mappings separate. A focused test covers the new source, repeated rows, and legacy behavior. Desktop-only; no API or schema change. Manager validation with a completed alcohol week is pending.
+
+- Labour Setup now separates employees into Active and Inactive tabs. Active employees open by default; inactive employees remain searchable and editable for reactivation. No API or schema change.
+
+- Food CSV invoice import now shows notable price increases immediately after the imported lines load. LineItemList imports prompt for the missing invoice date and number before checking prices and carry those details into reconciliation. Save checks again for edits or changed invoice details, but skips the repeat prompt when the flagged prices are unchanged. If the import-time check is unavailable, the existing save-time review remains available. The manager tested the corrected dev-app import and reported it working perfectly. Desktop-only; no API or schema change.
+
+- Removed the redundant Production → POS Production Mappings card and its older usage-report action. Administration → POS Catalog / PLUs remains the entry point for POS item and production-profile mappings; Production → Weekly Production remains the usage-report workflow. No data or API change.
+
+- November 15, 2026 dev source: Fixed Food/Alcohol/Supplies count-template line add and edit in the Cloud API. PostgreSQL stores `paired_packaging` as an integer; the API sent a boolean and returned HTTP 500 on add. The desktop now shows a save error and selects the newly added line after reload. Repository tests pass. The API fix has not been deployed; hold it with the planned larger update.
+
+- November 12, 2026 dev source: Weekly Production's single **Import Usage Report** action now detects legacy PLU and new POS weekday workbooks automatically. Removed the separate new POS preview button. New POS import uses report footer dates for any seven-day range, deduplicates identical item rows, validates mapped items, generates profile-based quantities, and saves through the existing week path. Desktop SQLite and API source label days and read quantities by actual weekday for rolling periods. Conflicting or daily/Week to Date mismatched mapped items block save with their names; unmapped items are excluded. Desktop tests pass and API source builds. On November 15 the manager reported that the implemented workflow had been tested and was working properly. The desktop update is being held for a larger release. Mixed-source overlap handling remains future work; deployment status of the latest API source was not specified.
+
+The October 2026 entries below record the earlier preview-only implementation and are superseded for current Weekly Production behavior.
+
 - Manager tested the new POS catalog import and searchable profile picker, then confirmed the usage preview's names, dates, quantities, and mapping status looked accurate. The manager also reviewed the production-impact dry run and reported that it looked good. Saved new-POS production, prep sheets, a full-week report, and mixed-source periods remain untested and unreleased.
 - Planned completion: one uncluttered Weekly Production workflow with report-format detection and review, store preference, source-aware catalog maintenance, date-based legacy/new-POS combination without overlap, TEST-store save/prep-sheet checks, and separate new-POS sales and alcohol import work after representative reports arrive. See `POS_TRANSITION.md` for details.
 - Added a separate read-only Production Impact dry run to the New POS usage preview. It calculates production quantities by actual weekday for mapped names using existing profile lines and yield factors. It never saves a production week. A focused database test verifies weekday mapping and absence of saved weeks. Desktop-only.

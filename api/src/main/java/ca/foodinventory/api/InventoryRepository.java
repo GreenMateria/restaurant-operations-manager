@@ -208,7 +208,7 @@ class InventoryRepository {
             statement.setString(5, stringValue(body.get("countUnit")));
             statement.setDouble(6, requireDouble(body, "conversionFactorToBase"));
             statement.setString(7, stringValue(body.get("displayName")));
-            statement.setBoolean(8, Boolean.TRUE.equals(body.get("pairedPackaging")));
+            statement.setInt(8, Boolean.TRUE.equals(body.get("pairedPackaging")) ? 1 : 0);
             statement.setInt(9, locationId);
             statement.executeUpdate();
         }
@@ -234,7 +234,7 @@ class InventoryRepository {
             statement.setString(3, stringValue(body.get("countUnit")));
             statement.setDouble(4, requireDouble(body, "conversionFactorToBase"));
             statement.setString(5, stringValue(body.get("displayName")));
-            statement.setBoolean(6, Boolean.TRUE.equals(body.get("pairedPackaging")));
+            statement.setInt(6, Boolean.TRUE.equals(body.get("pairedPackaging")) ? 1 : 0);
             statement.setInt(7, lineId);
             statement.setInt(8, locationId);
             return statement.executeUpdate() > 0;
